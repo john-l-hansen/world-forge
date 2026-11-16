@@ -23,7 +23,12 @@ export class AudioEngine {
     }
     const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!Ctor) return;
-    const ctx = new Ctor();
+    let ctx: AudioContext;
+    try {
+      ctx = new Ctor();
+    } catch {
+      return; // Audio is unavailable here; the game plays on in silence.
+    }
     this.ctx = ctx;
     this.master = ctx.createGain();
     this.master.gain.value = this.muted ? 0 : 0.6;

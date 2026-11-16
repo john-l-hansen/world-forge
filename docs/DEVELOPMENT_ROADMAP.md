@@ -1,0 +1,289 @@
+DEVELOPMENT ROADMAP — WORLD FORGE
+Status (2026-11-15)
+Phase 0 and Phase 1 are complete, and The Forgotten Mines is complete as the golden reference adventure. See DEVELOPMENT_LOG.md for the milestone reports.
+The code lives at https://github.com/john-l-hansen/world-forge.
+Next: Phase 2 (combat).
+Two phases were added on 2026-11-15: Phase 3b (co-op play) and Phase 6b (dynamic world simulation).
+The world schema and world validation were brought forward from Phase 4, so that The Forgotten Mines loads from world data and is not hard-coded. The schema is at version 0.2.0 (rooms, doors, locks, secret doors, enemies, encounters, bosses, objects, chests, pickups, items, characters, quests).
+1. Development philosophy
+Build incrementally.
+Every milestone must produce functioning software.
+Do not attempt to build the complete product in one code-generation operation.
+Prioritize a playable vertical slice.
+Keep the application runnable throughout development.
+2. Phase 0: Project foundation (complete)
+Objectives
+Establish the development environment.
+Tasks
+Inspect available repository.
+Inspect existing tooling.
+Establish React and TypeScript.
+Configure Vite.
+Configure Three.js.
+Configure testing.
+Establish Git.
+Create project documentation.
+Define world schema.
+Define engine boundaries.
+Acceptance criteria
+Application starts.
+Production build works.
+TypeScript checks pass.
+Project structure is documented.
+Initial tests run.
+3. Phase 1: Playable foundation (complete)
+Objectives
+Create a recognizable retro first-person dungeon crawler.
+Tasks
+Three.js renderer.
+Low-resolution rendering.
+First-person camera.
+Grid-based movement.
+Dungeon geometry.
+Room connections.
+Collision.
+Player health.
+One enemy.
+Basic attacks.
+Enemy health.
+Basic enemy behaviour.
+Basic sound effects.
+Demonstration
+The Forgotten Mines.
+Five connected rooms.
+Acceptance criteria
+Player can navigate all rooms.
+Walls block movement.
+Enemy can be encountered.
+Player can damage enemy.
+Enemy can damage player.
+Health updates correctly.
+Game remains playable.
+Visual style matches the project.
+Added to The Forgotten Mines in milestone 2 (complete), from the golden reference adventure and GAMEPLAY_DESIGN.md section 18
+One locked door.
+One key.
+One treasure chest.
+One secret room.
+One boss encounter.
+One simple quest.
+The full adventure is played from start to finish by an automated test (tests/adventure.test.ts), which is the standing regression test for the engine.
+4. Phase 2: Combat (next)
+Objectives
+Establish satisfying real-time combat.
+Tasks
+Light attacks.
+Heavy attacks.
+Attack timing.
+Stamina.
+Blocking.
+Parrying.
+Dodging.
+Enemy telegraphs.
+Hit reactions.
+Stagger.
+Damage feedback.
+Sound integration.
+Acceptance criteria
+Attacks have distinct characteristics.
+Enemy attacks are readable.
+Defensive actions work.
+Stamina rules work.
+Combat feedback is clear.
+Combat is tested.
+Already in place from Phases 1 and 2 groundwork
+Light attack with wind-up and recovery.
+Enemy telegraphs that can be side-stepped.
+Hit-stop, hit flash, stagger and damage numbers.
+5. Phase 3: RPG systems
+Objectives
+Establish the basic RPG framework.
+Tasks
+Character attributes.
+Character classes.
+Inventory.
+Equipment.
+Weapons.
+Armour.
+Consumables.
+Experience.
+Progression.
+Spells.
+Party switching.
+Basic party AI.
+Acceptance criteria
+Character data is structured.
+Equipment changes statistics.
+Inventory updates correctly.
+Progression works.
+Party members can be managed.
+Already in place
+A shared party inventory, keys, treasure and one consumable (a healing draught).
+5b. Phase 3b: Co-op play (added 2026-11-15)
+Objectives
+Let two to four people each control one party member in the same dungeon.
+This phase starts only once single-player combat and the party systems are solid.
+Tasks
+Server that owns the game state.
+Session creation and joining.
+One controller per party member (local player, party AI or remote player).
+Command transport from each player to the server.
+State updates from the server to each player.
+Lag handling for movement and combat timing.
+Disconnection and reconnection.
+Party AI takes over a character whose player leaves.
+Replace the screens that pause the game (journal, victory) with ones that do not stop other players.
+Acceptance criteria
+Two players can join the same adventure and each control one character.
+Both players see the same dungeon, enemies and outcomes.
+Combat timing (attacks, parries, dodges) remains fair with ordinary network delay.
+A player can drop out and rejoin without ending the session.
+The single-player game still runs with no server.
+Groundwork already in place
+See the co-op principles in ENGINE_PRINCIPLES.md: inputs are commands, the simulation is deterministic, session state is serializable, and every party member has a controller.
+6. Phase 4: World engine
+Objectives
+Separate world definitions from the playable engine.
+Tasks
+World schema.
+Region definitions.
+Room definitions.
+Connection handling.
+Room generation.
+Object placement.
+Enemy placement.
+Encounter definitions.
+World loading.
+World validation.
+Acceptance criteria
+Multiple different worlds can load.
+World data is validated.
+Room references resolve.
+Room connections work.
+Invalid worlds fail safely.
+7. Phase 5: AI world creator
+Objectives
+Create adventures through conversation.
+Tasks
+Guided questions.
+Adventure concept.
+World structure generation.
+Room graph generation.
+Encounter generation.
+NPC generation.
+Quest generation.
+Item generation.
+Validation.
+Deterministic fallback generator.
+Provider abstraction.
+Acceptance criteria
+User can describe an adventure.
+System generates structured world data.
+World validates.
+Engine loads generated world.
+No external AI key is required for demo mode.
+8. Phase 6: Visual world editor
+Objectives
+Allow manual customization.
+Tasks
+Top-down map.
+Room selection.
+Room properties.
+Connections.
+Object placement.
+Enemy placement.
+Encounter editing.
+Quest editing.
+Undo/redo.
+Version history.
+Natural-language changes.
+Acceptance criteria
+Users can modify rooms.
+Changes update the canonical world data.
+Undo and redo work.
+Playtest reflects editor changes.
+8b. Phase 6b: Dynamic world simulation (added 2026-11-15)
+Objectives
+Persistent NPC relationships, factions, reputation and world consequences, as specified in DYNAMIC_WORLD_SYSTEM.md.
+Tasks
+Follow the three versions in DYNAMIC_WORLD_SYSTEM.md section 24: initial, second and third.
+Acceptance criteria
+As listed in DYNAMIC_WORLD_SYSTEM.md section 25.
+9. Phase 7: Playtest and persistence
+Objectives
+Make projects persistent.
+Tasks
+Playtest mode.
+Return to editor.
+Local saving.
+JSON export.
+JSON import.
+Autosave.
+Project management.
+Acceptance criteria
+Projects survive refresh.
+Worlds can be exported.
+Worlds can be imported.
+Editor and player share the same world definition.
+10. Phase 8: Cloud and publishing
+Objectives
+Prepare the platform for external users.
+Tasks
+Supabase integration.
+User accounts.
+Cloud projects.
+Project permissions.
+Published adventures.
+Sharing links.
+Acceptance criteria
+Users can save projects.
+Users can retrieve projects.
+Published worlds can be accessed.
+Permissions are enforced.
+11. Testing requirements
+Test:
+TypeScript.
+Builds.
+World schemas.
+Room connections.
+Collision.
+Combat calculations.
+Enemy state transitions.
+Inventory.
+Quest completion.
+Serialization.
+World regeneration.
+Editor/playtest synchronization.
+Use automated tests where possible.
+Use browser-based tests for actual interaction.
+12. Git workflow
+Create commits after each stable milestone.
+Do not overwrite known working versions without a recoverable commit.
+Use clear commit messages.
+Maintain a development log.
+13. Milestone reporting
+After each milestone, report:
+What was implemented.
+Files changed.
+Tests executed.
+Build status.
+Known limitations.
+Remaining work.
+Recommended next milestone.
+Do not report untested functionality as complete.
+14. Scope control
+Do not prioritize:
+Marketplace.
+Open-world simulation.
+Advanced crafting.
+Complex physics.
+Voice acting.
+Large-scale asset generation.
+These belong to future development.
+Multiplayer was on this list until 2026-11-15. Co-op play is now Phase 3b. Other forms of multiplayer (competitive play, large shared worlds) remain out of scope.
+15. Immediate priority
+The immediate goal is Phase 2: combat.
+Do not spend the initial development effort building the entire creator platform.
+Build a playable retro dungeon first.
+Then make it extensible.
+Then build the AI creator around it.

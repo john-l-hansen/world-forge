@@ -9,10 +9,12 @@
  *          boss encounters with an introduction, quests
  *   0.3.0  light and heavy weapon attacks with stamina costs, character
  *          stamina, enemy poise, and a list of attacks per enemy
+ *   0.4.0  character attributes and level (health and stamina are now
+ *          derived from them), and experience awarded by enemies
  */
 import { z } from 'zod';
 
-export const SCHEMA_VERSION = '0.3.0';
+export const SCHEMA_VERSION = '0.4.0';
 
 const id = z.string().regex(/^[a-z][a-z0-9_]*$/, 'ids are lower_snake_case');
 const cell = z.object({ x: z.number().int().min(1), y: z.number().int().min(1) });
@@ -138,6 +140,8 @@ export const EnemySchema = z.object({
   /** The attacks this enemy chooses between, by weight. */
   attacks: z.array(EnemyAttackSchema).min(1),
   staggerTicks: ticks,
+  /** Experience each party member earns when this enemy dies. */
+  xp: z.number().int().min(0).default(0),
   /** Names an engine-supported behaviour. Never code. */
   behaviour: z.enum(['melee_aggressive']),
   visualAssetId: z.enum(['goblin', 'goblin_chief']),
@@ -232,12 +236,26 @@ export const ItemSchema = z.discriminatedUnion('category', [
   }),
 ]);
 
+const attribute = z.number().int().min(3).max(20);
+export const AttributesSchema = z.object({
+  strength: attribute,
+  dexterity: attribute,
+  constitution: attribute,
+  intelligence: attribute,
+  wisdom: attribute,
+});
+
 export const CharacterSchema = z.object({
   id,
   name: z.string().min(1),
   classId: z.enum(['fighter', 'rogue', 'mage', 'cleric']),
-  maxHealth: z.number().int().min(1),
-  maxStamina: z.number().int().min(1).default(40),
+  level: z.number().int().min(1).max(20).default(1),
+  /**
+   * Health, stamina, mana, damage bonus and critical chance are all worked
+   * out from class, level and these five numbers (see engine/stats.ts).
+   * Left out, the class's usual starting attributes are used.
+   */
+  attributes: AttributesSchema.optional(),
   equipment: z.object({ mainHand: id }),
   portraitAssetId: z.enum(['fighter']),
 });

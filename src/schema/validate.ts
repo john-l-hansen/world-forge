@@ -79,6 +79,20 @@ export function migrateWorld(input: unknown): unknown {
       }),
     };
   }
+  if (data.schemaVersion === '0.3.0') {
+    // 0.4.0 derives health and stamina from class, level and attributes, so
+    // the fixed numbers on a character are dropped. Enemies gain an xp field
+    // with a default.
+    const characters = Array.isArray(data.characters) ? data.characters : [];
+    data = {
+      ...data,
+      schemaVersion: '0.4.0',
+      characters: characters.map((raw) => {
+        const { maxHealth: _health, maxStamina: _stamina, ...rest } = raw as Record<string, unknown>;
+        return rest;
+      }),
+    };
+  }
   return data;
 }
 

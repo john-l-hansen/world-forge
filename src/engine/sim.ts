@@ -13,7 +13,9 @@ import {
   type CompiledWorld,
 } from '../world/compile';
 import type { EnemyAttackDef, EnemyDef, WeaponDef } from '../schema/world';
+import { CLASSES } from './classes';
 import { randomInt } from './rng';
+import { CRITICAL_MULTIPLIER, criticalChance, damageBonus, levelForExperience, maxHealth, maxStamina, experienceForLevel } from './stats';
 import {
   BLOCK_DAMAGE_SHARE,
   BLOCK_STAMINA_COST,
@@ -51,13 +53,21 @@ export function createSession(world: CompiledWorld, seed = 1): SessionState {
   const def = world.def;
   const members: PartyMember[] = def.settings.startingPartyIds.map((charId) => {
     const c = def.characters.find((ch) => ch.id === charId)!;
+    const attributes = { ...(c.attributes ?? CLASSES[c.classId].defaults) };
+    const health = maxHealth(c.classId, c.level, attributes);
+    const stamina = maxStamina(c.classId, c.level, attributes);
     return {
       id: c.id,
       controller: 'local',
-      hp: c.maxHealth,
-      maxHp: c.maxHealth,
-      stamina: c.maxStamina,
-      maxStamina: c.maxStamina,
+      classId: c.classId,
+      level: c.level,
+      // A character who starts above level 1 starts with that level's experience.
+      xp: experienceForLevel(c.level),
+      attributes,
+      hp: health,
+      maxHp: health,
+      stamina,
+      maxStamina: stamina,
       staminaRegenFrom: 0,
       blocking: false,
       blockStart: NEVER,
@@ -97,7 +107,7 @@ export function createSession(world: CompiledWorld, seed = 1): SessionState {
 
   const startRoom = roomAtCell(world, world.start.x, world.start.y);
   const state: SessionState = {
-    stateVersion: 3,
+    stateVersion: 4,
     worldId: def.world.id,
     tick: 0,
     rng: seed | 0,
@@ -142,7 +152,7 @@ export function serializeSession(state: SessionState): string {
 
 export function deserializeSession(json: string): SessionState {
   const state = JSON.parse(json) as SessionState;
-  if (state.stateVersion !== 3) throw new Error(`Unsupported session version ${String(state.stateVersion)}`);
+  if (state.stateVersion !== 4) throw new Error(`Unsupported session version ${String(state.stateVersion)}`);
   return state;
 }
 
@@ -511,14 +521,15 @@ function resolvePartyAttacks(state: SessionState, world: CompiledWorld, events: 
       if (enemy) {
         const attack = weaponOf(world, member).weapon[action.attack];
         const def = enemyDef(world, enemy);
-        const rolled = randomInt(state, attack.damage.min, attack.damage.max);
-        const damage = Math.max(1, rolled - def.defence);
+        const rolled = randomInt(state, attack.damage.min, attack.damage.max) + damageBonus(member.attributes);
+        const critical = randomInt(state, 1, 100) <= criticalChance(member.attributes);
+        const damage = Math.max(1, Math.round(rolled * (critical ? CRITICAL_MULTIPLIER : 1)) - def.defence);
         const heavy = attack.impact >= 3;
         enemy.hp = Math.max(0, enemy.hp - damage);
         enemy.lastHitTick = state.tick;
         if (!enemy.alerted) alertEnemy(state, world, enemy, events);
         const killed = enemy.hp === 0;
-        events.push({ type: 'attack.hit', actor: member.id, enemyId: enemy.id, damage, killed, kind: action.attack });
+        events.push({ type: 'attack.hit', actor: member.id, enemyId: enemy.id, damage, killed, kind: action.attack, critical });
         state.hitStop = heavy ? HIT_STOP_TICKS + 3 : HIT_STOP_TICKS;
         const staggerTicks = def.staggerTicks * (heavy ? 2 : 1);
         if (killed) {
@@ -574,10 +585,36 @@ function killEnemy(state: SessionState, world: CompiledWorld, enemy: EnemyState,
   enemy.aiStart = state.tick;
   enemy.aiEnd = state.tick;
   events.push({ type: 'enemy.died', enemyId: enemy.id });
+  awardExperience(state, enemyDef(world, enemy).xp, enemy.id, events);
   const encounterId = enemy.id.split('#')[0];
   const remaining = state.enemies.some((e) => e.ai !== 'dead' && e.id.split('#')[0] === encounterId);
   if (!remaining && world.def.encounters.some((enc) => enc.id === encounterId)) {
     events.push({ type: 'encounter.cleared', encounterId });
+  }
+}
+
+/** Every living member earns the full amount. Levels are gained at once. */
+function awardExperience(state: SessionState, amount: number, enemyId: string, events: GameEvent[]) {
+  if (amount <= 0) return;
+  events.push({ type: 'xp.gained', amount, enemyId });
+  for (const member of state.party.members) {
+    if (member.hp <= 0) continue;
+    member.xp += amount;
+    while (member.level < levelForExperience(member.xp)) {
+      member.level += 1;
+      // Each level sharpens what the class is best at.
+      member.attributes[CLASSES[member.classId].primary] += 1;
+      const health = maxHealth(member.classId, member.level, member.attributes);
+      const stamina = maxStamina(member.classId, member.level, member.attributes);
+      const healthGained = health - member.maxHp;
+      const staminaGained = stamina - member.maxStamina;
+      // The new health and stamina arrive filled, on top of what was left.
+      member.maxHp = health;
+      member.hp += healthGained;
+      member.maxStamina = stamina;
+      member.stamina += staminaGained;
+      events.push({ type: 'level.up', actor: member.id, level: member.level, healthGained, staminaGained });
+    }
   }
 }
 

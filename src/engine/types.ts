@@ -3,6 +3,8 @@
  * session can be saved, hashed, replayed or (later) sent to another player.
  */
 
+import type { Attributes, ClassId } from './classes';
+
 export const TICKS_PER_SECOND = 60;
 export const MOVE_TICKS = 14;
 export const TURN_TICKS = 10;
@@ -59,6 +61,12 @@ export interface PartyMember {
   /** Character ID from the world definition. */
   id: string;
   controller: Controller;
+  classId: ClassId;
+  level: number;
+  /** Total experience earned. */
+  xp: number;
+  /** A copy of the character's attributes. These grow as levels are gained. */
+  attributes: Attributes;
   hp: number;
   maxHp: number;
   stamina: number;
@@ -124,7 +132,7 @@ export interface QuestProgress {
 }
 
 export interface SessionState {
-  stateVersion: 3;
+  stateVersion: 4;
   worldId: string;
   tick: number;
   rng: number;
@@ -179,7 +187,9 @@ export type GameEvent =
   | { type: 'guard.broken'; enemyId: string; target: string; damage: number }
   | { type: 'enemy.attack.dodged'; enemyId: string }
   | { type: 'enemy.interrupted'; enemyId: string }
-  | { type: 'attack.hit'; actor: string; enemyId: string; damage: number; killed: boolean; kind: AttackKind }
+  | { type: 'attack.hit'; actor: string; enemyId: string; damage: number; killed: boolean; kind: AttackKind; critical: boolean }
+  | { type: 'xp.gained'; amount: number; enemyId: string }
+  | { type: 'level.up'; actor: string; level: number; healthGained: number; staminaGained: number }
   | { type: 'attack.miss'; actor: string }
   | { type: 'attack.clang'; actor: string }
   | { type: 'enemy.alerted'; enemyId: string }

@@ -327,7 +327,13 @@ describe('progression checks in validation', () => {
     }
     // Weapons had a single attack and enemies a single blow before 0.3.0.
     for (const item of old.items) item.weapon = { damage: item.weapon.light.damage, windupTicks: 6, recoveryTicks: 20 };
-    for (const c of old.characters) delete c.maxStamina;
+    for (const c of old.characters) {
+      delete c.level;
+      delete c.attributes;
+      c.maxHealth = 40;
+    }
+    for (const e of old.enemies) delete e.xp;
+    for (const item of old.items) item.weapon.damage = { min: 4, max: 7 };
     for (const e of old.enemies) {
       e.damage = e.attacks[0].damage;
       e.attack = { telegraphTicks: e.attacks[0].telegraphTicks, recoverTicks: e.attacks[0].recoverTicks };
@@ -337,7 +343,7 @@ describe('progression checks in validation', () => {
     const migrated = validateWorld(old);
     expect(migrated.ok ? [] : migrated.issues).toEqual([]);
     if (!migrated.ok) throw new Error('migration failed');
-    expect(migrated.world.schemaVersion).toBe('0.3.0');
+    expect(migrated.world.schemaVersion).toBe('0.4.0');
     expect(migrated.world.settings.startingQuestIds).toEqual([]);
     const sword = migrated.world.items[0];
     if (sword.category !== 'weapon') throw new Error('not a weapon');
@@ -346,7 +352,10 @@ describe('progression checks in validation', () => {
     expect(sword.weapon.heavy.damage.min).toBeGreaterThan(sword.weapon.light.damage.max);
     expect(migrated.world.enemies[0].attacks).toHaveLength(1);
     expect(migrated.world.enemies[0].attacks[0]).toMatchObject({ id: 'strike', pattern: 'front', blockable: true, telegraphTicks: 34 });
-    expect(migrated.world.characters[0].maxStamina).toBe(40);
+    // Health and stamina now come from class, level and attributes.
+    expect(migrated.world.characters[0]).toMatchObject({ classId: 'fighter', level: 1 });
+    expect(migrated.world.characters[0]).not.toHaveProperty('maxHealth');
+    expect(migrated.world.enemies[0].xp).toBe(0);
 
     const future = minesData();
     future.schemaVersion = '9.9.9';

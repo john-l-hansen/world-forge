@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "0.3.0",
+  "schemaVersion": "0.4.0",
   "world": {
     "id": "world_forgotten_mines",
     "name": "The Forgotten Mines",
@@ -288,7 +288,8 @@
           "blockable": true,
           "weight": 1
         }
-      ]
+      ],
+      "xp": 40
     },
     {
       "id": "enemy_goblin_chief",
@@ -330,7 +331,8 @@
           "blockable": false,
           "weight": 1
         }
-      ]
+      ],
+      "xp": 150
     }
   ],
   "encounters": [
@@ -562,8 +564,8 @@
       "weapon": {
         "light": {
           "damage": {
-            "min": 4,
-            "max": 7
+            "min": 2,
+            "max": 5
           },
           "windupTicks": 6,
           "recoveryTicks": 20,
@@ -572,8 +574,8 @@
         },
         "heavy": {
           "damage": {
-            "min": 9,
-            "max": 13
+            "min": 7,
+            "max": 11
           },
           "windupTicks": 16,
           "recoveryTicks": 30,
@@ -615,12 +617,18 @@
       "id": "char_fighter",
       "name": "Brannoc",
       "classId": "fighter",
-      "maxHealth": 40,
       "equipment": {
         "mainHand": "item_short_sword"
       },
       "portraitAssetId": "fighter",
-      "maxStamina": 40
+      "level": 1,
+      "attributes": {
+        "strength": 14,
+        "dexterity": 12,
+        "constitution": 14,
+        "intelligence": 9,
+        "wisdom": 10
+      }
     }
   ],
   "quests": [

@@ -1,0 +1,167 @@
+{
+  "schemaVersion": "0.1.0",
+  "world": {
+    "id": "world_forgotten_mines",
+    "name": "The Forgotten Mines",
+    "description": "An abandoned mine beneath the hills. Something has moved into the old workings.",
+    "theme": "dark_fantasy",
+    "difficulty": "classic",
+    "author": "World Forge"
+  },
+  "settings": {
+    "movementMode": "grid",
+    "startRoomId": "room_mine_entrance",
+    "startCell": { "x": 5, "y": 14 },
+    "startFacing": "north",
+    "startingPartyIds": ["char_fighter"]
+  },
+  "regions": [
+    {
+      "id": "region_forgotten_mines",
+      "name": "The Forgotten Mines",
+      "description": "Timbered tunnels and worked-out halls.",
+      "environment": "mine",
+      "roomIds": [
+        "room_mine_entrance",
+        "room_timbered_tunnel",
+        "room_mine_hall",
+        "room_storeroom",
+        "room_old_shaft"
+      ]
+    }
+  ],
+  "rooms": [
+    {
+      "id": "room_mine_entrance",
+      "regionId": "region_forgotten_mines",
+      "name": "Mine Entrance",
+      "type": "entrance",
+      "description": "Cold air follows you in from the hillside.",
+      "layout": { "x": 3, "y": 12, "width": 5, "height": 4 },
+      "connections": [{ "targetRoomId": "room_timbered_tunnel", "doorId": "door_entrance_tunnel" }],
+      "encounterIds": [],
+      "objectIds": ["object_torch_entrance_w", "object_torch_entrance_e", "object_entrance_rubble"]
+    },
+    {
+      "id": "room_timbered_tunnel",
+      "regionId": "region_forgotten_mines",
+      "name": "Timbered Tunnel",
+      "type": "corridor",
+      "description": "Old props hold up the roof. Most of them.",
+      "layout": { "x": 5, "y": 7, "width": 1, "height": 4 },
+      "connections": [
+        { "targetRoomId": "room_mine_entrance", "doorId": "door_entrance_tunnel" },
+        { "targetRoomId": "room_mine_hall", "doorId": "door_tunnel_hall" },
+        { "targetRoomId": "room_old_shaft", "doorId": "door_tunnel_shaft" }
+      ],
+      "encounterIds": [],
+      "objectIds": ["object_torch_tunnel"]
+    },
+    {
+      "id": "room_mine_hall",
+      "regionId": "region_forgotten_mines",
+      "name": "The Mine Hall",
+      "type": "combat",
+      "description": "A wide hall where the seam once ran. It smells of smoke and old meat.",
+      "layout": { "x": 2, "y": 1, "width": 7, "height": 5 },
+      "connections": [
+        { "targetRoomId": "room_timbered_tunnel", "doorId": "door_tunnel_hall" },
+        { "targetRoomId": "room_storeroom", "doorId": "door_hall_storeroom" }
+      ],
+      "encounterIds": ["encounter_goblin_patrol"],
+      "objectIds": ["object_torch_hall_w", "object_torch_hall_n", "object_torch_hall_e", "object_hall_crate"]
+    },
+    {
+      "id": "room_storeroom",
+      "regionId": "region_forgotten_mines",
+      "name": "Storeroom",
+      "type": "treasure",
+      "description": "Barrels and crates, long since picked over.",
+      "layout": { "x": 10, "y": 1, "width": 4, "height": 4 },
+      "connections": [{ "targetRoomId": "room_mine_hall", "doorId": "door_hall_storeroom" }],
+      "encounterIds": [],
+      "objectIds": ["object_torch_storeroom", "object_store_barrel_a", "object_store_barrel_b", "object_store_crate"]
+    },
+    {
+      "id": "room_old_shaft",
+      "regionId": "region_forgotten_mines",
+      "name": "The Old Shaft",
+      "type": "story",
+      "description": "The floor falls away into the dark at the far wall.",
+      "layout": { "x": 1, "y": 7, "width": 3, "height": 4 },
+      "connections": [{ "targetRoomId": "room_timbered_tunnel", "doorId": "door_tunnel_shaft" }],
+      "encounterIds": [],
+      "objectIds": ["object_torch_shaft", "object_shaft_rubble"]
+    }
+  ],
+  "doors": [
+    { "id": "door_entrance_tunnel", "name": "Tunnel mouth", "kind": "archway", "cell": { "x": 5, "y": 11 } },
+    { "id": "door_tunnel_hall", "name": "Hall door", "kind": "door", "cell": { "x": 5, "y": 6 } },
+    { "id": "door_hall_storeroom", "name": "Storeroom door", "kind": "door", "cell": { "x": 9, "y": 3 } },
+    { "id": "door_tunnel_shaft", "name": "Shaft passage", "kind": "archway", "cell": { "x": 4, "y": 9 } }
+  ],
+  "enemies": [
+    {
+      "id": "enemy_goblin",
+      "name": "Goblin",
+      "description": "Quick, mean and never as alone as it looks.",
+      "archetype": "goblin",
+      "health": 24,
+      "damage": { "min": 4, "max": 7 },
+      "defence": 0,
+      "moveTicks": 26,
+      "sightRange": 6,
+      "attack": { "telegraphTicks": 34, "recoverTicks": 40 },
+      "staggerTicks": 14,
+      "behaviour": "melee_aggressive",
+      "visualAssetId": "goblin"
+    }
+  ],
+  "encounters": [
+    {
+      "id": "encounter_goblin_patrol",
+      "name": "Goblin patrol",
+      "roomId": "room_mine_hall",
+      "placements": [{ "enemyId": "enemy_goblin", "cell": { "x": 5, "y": 2 }, "facing": "south" }]
+    }
+  ],
+  "objects": [
+    { "id": "object_torch_entrance_w", "type": "torch", "roomId": "room_mine_entrance", "cell": { "x": 3, "y": 13 }, "wall": "west" },
+    { "id": "object_torch_entrance_e", "type": "torch", "roomId": "room_mine_entrance", "cell": { "x": 7, "y": 13 }, "wall": "east" },
+    { "id": "object_entrance_rubble", "type": "prop", "name": "Rubble", "roomId": "room_mine_entrance", "cell": { "x": 3, "y": 15 }, "visualAssetId": "rubble" },
+    { "id": "object_torch_tunnel", "type": "torch", "roomId": "room_timbered_tunnel", "cell": { "x": 5, "y": 8 }, "wall": "east", "radius": 3 },
+    { "id": "object_torch_hall_w", "type": "torch", "roomId": "room_mine_hall", "cell": { "x": 2, "y": 4 }, "wall": "west" },
+    { "id": "object_torch_hall_n", "type": "torch", "roomId": "room_mine_hall", "cell": { "x": 5, "y": 1 }, "wall": "north" },
+    { "id": "object_torch_hall_e", "type": "torch", "roomId": "room_mine_hall", "cell": { "x": 8, "y": 1 }, "wall": "east" },
+    { "id": "object_hall_crate", "type": "prop", "name": "Crate", "roomId": "room_mine_hall", "cell": { "x": 2, "y": 1 }, "visualAssetId": "crate" },
+    { "id": "object_torch_storeroom", "type": "torch", "roomId": "room_storeroom", "cell": { "x": 12, "y": 1 }, "wall": "north" },
+    { "id": "object_store_barrel_a", "type": "prop", "name": "Barrel", "roomId": "room_storeroom", "cell": { "x": 13, "y": 1 }, "visualAssetId": "barrel" },
+    { "id": "object_store_barrel_b", "type": "prop", "name": "Barrel", "roomId": "room_storeroom", "cell": { "x": 13, "y": 2 }, "visualAssetId": "barrel" },
+    { "id": "object_store_crate", "type": "prop", "name": "Crate", "roomId": "room_storeroom", "cell": { "x": 10, "y": 4 }, "visualAssetId": "crate" },
+    { "id": "object_torch_shaft", "type": "torch", "roomId": "room_old_shaft", "cell": { "x": 1, "y": 8 }, "wall": "west", "radius": 3 },
+    { "id": "object_shaft_rubble", "type": "prop", "name": "Rubble", "roomId": "room_old_shaft", "cell": { "x": 1, "y": 10 }, "visualAssetId": "rubble" }
+  ],
+  "items": [
+    {
+      "id": "item_short_sword",
+      "name": "Short sword",
+      "description": "Notched, but it holds an edge.",
+      "category": "weapon",
+      "weapon": { "damage": { "min": 4, "max": 7 }, "windupTicks": 6, "recoveryTicks": 20 },
+      "visualAssetId": "short_sword"
+    }
+  ],
+  "characters": [
+    {
+      "id": "char_fighter",
+      "name": "Brannoc",
+      "classId": "fighter",
+      "maxHealth": 40,
+      "equipment": { "mainHand": "item_short_sword" },
+      "portraitAssetId": "fighter"
+    }
+  ],
+  "npcs": [],
+  "quests": [],
+  "factions": []
+}

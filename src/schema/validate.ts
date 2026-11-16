@@ -1,0 +1,283 @@
+/**
+ * World validation. Shape is checked by Zod; this file checks meaning:
+ * references resolve, geometry is consistent and every room can be reached.
+ * A world that fails here must never reach the engine.
+ */
+import { SCHEMA_VERSION, WorldSchema, type RoomDef, type WorldDefinition } from './world';
+
+export interface ValidationIssue {
+  code:
+    | 'not_an_object'
+    | 'unsupported_version'
+    | 'shape'
+    | 'duplicate_id'
+    | 'missing_reference'
+    | 'geometry'
+    | 'connection'
+    | 'placement'
+    | 'unreachable';
+  message: string;
+  path?: string;
+}
+
+export type ValidationResult =
+  | { ok: true; world: WorldDefinition }
+  | { ok: false; issues: ValidationIssue[] };
+
+const inRoom = (room: RoomDef, x: number, y: number) =>
+  x >= room.layout.x &&
+  x < room.layout.x + room.layout.width &&
+  y >= room.layout.y &&
+  y < room.layout.y + room.layout.height;
+
+/** True when (x, y) is orthogonally next to a floor cell of the room. */
+const touchesRoom = (room: RoomDef, x: number, y: number) =>
+  inRoom(room, x + 1, y) || inRoom(room, x - 1, y) || inRoom(room, x, y + 1) || inRoom(room, x, y - 1);
+
+export function validateWorld(input: unknown): ValidationResult {
+  if (typeof input !== 'object' || input === null) {
+    return { ok: false, issues: [{ code: 'not_an_object', message: 'World data must be an object.' }] };
+  }
+  const version = (input as { schemaVersion?: unknown }).schemaVersion;
+  if (version !== SCHEMA_VERSION) {
+    return {
+      ok: false,
+      issues: [
+        {
+          code: 'unsupported_version',
+          message: `Unsupported schema version ${JSON.stringify(version)}. This engine reads ${SCHEMA_VERSION}.`,
+        },
+      ],
+    };
+  }
+
+  const parsed = WorldSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      issues: parsed.error.issues.map((i) => ({
+        code: 'shape' as const,
+        message: i.message,
+        path: i.path.join('.'),
+      })),
+    };
+  }
+
+  const world = parsed.data;
+  const issues: ValidationIssue[] = [];
+  const add = (code: ValidationIssue['code'], message: string, path?: string) =>
+    issues.push({ code, message, path });
+
+  // ---- Unique IDs across the whole world -----------------------------------
+  const seen = new Map<string, string>();
+  const claim = (entityId: string, kind: string) => {
+    const prior = seen.get(entityId);
+    if (prior) add('duplicate_id', `ID "${entityId}" is used by both a ${prior} and a ${kind}.`);
+    else seen.set(entityId, kind);
+  };
+  claim(world.world.id, 'world');
+  world.regions.forEach((r) => claim(r.id, 'region'));
+  world.rooms.forEach((r) => claim(r.id, 'room'));
+  world.doors.forEach((d) => claim(d.id, 'door'));
+  world.enemies.forEach((e) => claim(e.id, 'enemy'));
+  world.encounters.forEach((e) => claim(e.id, 'encounter'));
+  world.objects.forEach((o) => claim(o.id, 'object'));
+  world.items.forEach((i) => claim(i.id, 'item'));
+  world.characters.forEach((c) => claim(c.id, 'character'));
+
+  const regions = new Map(world.regions.map((r) => [r.id, r]));
+  const rooms = new Map(world.rooms.map((r) => [r.id, r]));
+  const doors = new Map(world.doors.map((d) => [d.id, d]));
+  const enemies = new Map(world.enemies.map((e) => [e.id, e]));
+  const encounters = new Map(world.encounters.map((e) => [e.id, e]));
+  const objects = new Map(world.objects.map((o) => [o.id, o]));
+  const items = new Map(world.items.map((i) => [i.id, i]));
+  const characters = new Map(world.characters.map((c) => [c.id, c]));
+
+  // ---- Regions and rooms ----------------------------------------------------
+  for (const region of world.regions) {
+    for (const roomId of region.roomIds) {
+      const room = rooms.get(roomId);
+      if (!room) add('missing_reference', `Region "${region.id}" lists missing room "${roomId}".`);
+      else if (room.regionId !== region.id)
+        add('missing_reference', `Room "${roomId}" is listed in region "${region.id}" but belongs to "${room.regionId}".`);
+    }
+  }
+  for (const room of world.rooms) {
+    const region = regions.get(room.regionId);
+    if (!region) add('missing_reference', `Room "${room.id}" refers to missing region "${room.regionId}".`);
+    else if (!region.roomIds.includes(room.id))
+      add('missing_reference', `Room "${room.id}" is not listed in its region "${region.id}".`);
+  }
+
+  // Rooms must not overlap or share a wall-less edge: at least one wall cell apart.
+  for (let i = 0; i < world.rooms.length; i++) {
+    for (let j = i + 1; j < world.rooms.length; j++) {
+      const a = world.rooms[i].layout;
+      const b = world.rooms[j].layout;
+      const apart =
+        a.x + a.width < b.x || b.x + b.width < a.x || a.y + a.height < b.y || b.y + b.height < a.y;
+      // Diagonal-only contact is fine (a wall corner separates them).
+      const cornerOnly =
+        (a.x + a.width === b.x || b.x + b.width === a.x) && (a.y + a.height === b.y || b.y + b.height === a.y);
+      if (!apart && !cornerOnly)
+        add('geometry', `Rooms "${world.rooms[i].id}" and "${world.rooms[j].id}" overlap or touch without a wall between them.`);
+    }
+  }
+
+  // ---- Doors and connections ------------------------------------------------
+  const doorUsers = new Map<string, Set<string>>();
+  for (const room of world.rooms) {
+    for (const conn of room.connections) {
+      const target = rooms.get(conn.targetRoomId);
+      const door = doors.get(conn.doorId);
+      if (!target) {
+        add('missing_reference', `Room "${room.id}" connects to missing room "${conn.targetRoomId}".`);
+        continue;
+      }
+      if (!door) {
+        add('missing_reference', `Room "${room.id}" uses missing door "${conn.doorId}".`);
+        continue;
+      }
+      if (target.id === room.id) add('connection', `Room "${room.id}" connects to itself.`);
+      const back = target.connections.some((c) => c.targetRoomId === room.id && c.doorId === conn.doorId);
+      if (!back)
+        add('connection', `Room "${room.id}" connects to "${target.id}" through "${door.id}", but "${target.id}" does not connect back.`);
+      if (!touchesRoom(room, door.cell.x, door.cell.y) || !touchesRoom(target, door.cell.x, door.cell.y))
+        add('connection', `Door "${door.id}" at (${door.cell.x}, ${door.cell.y}) does not sit between "${room.id}" and "${target.id}".`);
+      if (!doorUsers.has(door.id)) doorUsers.set(door.id, new Set());
+      doorUsers.get(door.id)!.add(room.id).add(target.id);
+    }
+  }
+  for (const door of world.doors) {
+    const users = doorUsers.get(door.id);
+    if (!users) add('connection', `Door "${door.id}" is not used by any room connection.`);
+    else if (users.size !== 2) add('connection', `Door "${door.id}" must join exactly two rooms.`);
+    if (world.rooms.some((r) => inRoom(r, door.cell.x, door.cell.y)))
+      add('geometry', `Door "${door.id}" sits inside a room instead of in the wall between rooms.`);
+  }
+  const doorCells = new Set<string>();
+  for (const door of world.doors) {
+    const key = `${door.cell.x},${door.cell.y}`;
+    if (doorCells.has(key)) add('geometry', `Two doors share the cell (${key}).`);
+    doorCells.add(key);
+  }
+
+  // ---- Encounters -----------------------------------------------------------
+  const occupied = new Map<string, string>();
+  const occupy = (x: number, y: number, who: string) => {
+    const key = `${x},${y}`;
+    const prior = occupied.get(key);
+    if (prior) add('placement', `"${who}" and "${prior}" are both placed at (${key}).`);
+    else occupied.set(key, who);
+  };
+
+  for (const room of world.rooms) {
+    for (const encId of room.encounterIds) {
+      const enc = encounters.get(encId);
+      if (!enc) add('missing_reference', `Room "${room.id}" lists missing encounter "${encId}".`);
+      else if (enc.roomId !== room.id)
+        add('missing_reference', `Encounter "${encId}" is listed by room "${room.id}" but is set in "${enc.roomId}".`);
+    }
+    for (const objId of room.objectIds) {
+      const obj = objects.get(objId);
+      if (!obj) add('missing_reference', `Room "${room.id}" lists missing object "${objId}".`);
+      else if (obj.roomId !== room.id)
+        add('missing_reference', `Object "${objId}" is listed by room "${room.id}" but is set in "${obj.roomId}".`);
+    }
+  }
+  for (const enc of world.encounters) {
+    const room = rooms.get(enc.roomId);
+    if (!room) {
+      add('missing_reference', `Encounter "${enc.id}" is set in missing room "${enc.roomId}".`);
+      continue;
+    }
+    if (!room.encounterIds.includes(enc.id))
+      add('missing_reference', `Encounter "${enc.id}" is not listed by its room "${room.id}".`);
+    for (const p of enc.placements) {
+      if (!enemies.has(p.enemyId))
+        add('missing_reference', `Encounter "${enc.id}" places missing enemy "${p.enemyId}".`);
+      if (!inRoom(room, p.cell.x, p.cell.y))
+        add('placement', `Encounter "${enc.id}" places "${p.enemyId}" at (${p.cell.x}, ${p.cell.y}), outside room "${room.id}".`);
+      occupy(p.cell.x, p.cell.y, `${enc.id}/${p.enemyId}`);
+    }
+  }
+
+  // ---- Objects --------------------------------------------------------------
+  for (const obj of world.objects) {
+    const room = rooms.get(obj.roomId);
+    if (!room) {
+      add('missing_reference', `Object "${obj.id}" is set in missing room "${obj.roomId}".`);
+      continue;
+    }
+    if (!room.objectIds.includes(obj.id))
+      add('missing_reference', `Object "${obj.id}" is not listed by its room "${room.id}".`);
+    if (!inRoom(room, obj.cell.x, obj.cell.y)) {
+      add('placement', `Object "${obj.id}" at (${obj.cell.x}, ${obj.cell.y}) is outside room "${room.id}".`);
+      continue;
+    }
+    if (obj.type === 'torch') {
+      const dx = obj.wall === 'east' ? 1 : obj.wall === 'west' ? -1 : 0;
+      const dy = obj.wall === 'south' ? 1 : obj.wall === 'north' ? -1 : 0;
+      const nx = obj.cell.x + dx;
+      const ny = obj.cell.y + dy;
+      const open = world.rooms.some((r) => inRoom(r, nx, ny)) || doorCells.has(`${nx},${ny}`);
+      if (open) add('placement', `Torch "${obj.id}" has no ${obj.wall} wall to hang on.`);
+    } else if (obj.blocking) {
+      occupy(obj.cell.x, obj.cell.y, obj.id);
+    }
+  }
+
+  // ---- Characters, items and start position ---------------------------------
+  for (const c of world.characters) {
+    const item = items.get(c.equipment.mainHand);
+    if (!item) add('missing_reference', `Character "${c.id}" holds missing item "${c.equipment.mainHand}".`);
+    else if (item.category !== 'weapon') add('missing_reference', `Character "${c.id}" holds "${item.id}", which is not a weapon.`);
+  }
+  for (const pid of world.settings.startingPartyIds) {
+    if (!characters.has(pid)) add('missing_reference', `Starting party lists missing character "${pid}".`);
+  }
+  const startRoom = rooms.get(world.settings.startRoomId);
+  if (!startRoom) {
+    add('missing_reference', `Start room "${world.settings.startRoomId}" does not exist.`);
+  } else {
+    const { x, y } = world.settings.startCell;
+    if (!inRoom(startRoom, x, y)) add('placement', `Start cell (${x}, ${y}) is outside the start room "${startRoom.id}".`);
+    const blocker = occupied.get(`${x},${y}`);
+    if (blocker) add('placement', `Start cell (${x}, ${y}) is occupied by "${blocker}".`);
+
+    // ---- Reachability over the room graph -----------------------------------
+    const reached = new Set<string>([startRoom.id]);
+    const queue = [startRoom];
+    while (queue.length) {
+      const room = queue.shift()!;
+      for (const conn of room.connections) {
+        const target = rooms.get(conn.targetRoomId);
+        if (target && doors.has(conn.doorId) && !reached.has(target.id)) {
+          reached.add(target.id);
+          queue.push(target);
+        }
+      }
+    }
+    for (const room of world.rooms) {
+      if (!reached.has(room.id)) add('unreachable', `Room "${room.id}" cannot be reached from the start room.`);
+    }
+  }
+
+  return issues.length ? { ok: false, issues } : { ok: true, world };
+}
+
+/** Parse a JSON string into a validated world. Never throws. */
+export function deserializeWorld(json: string): ValidationResult {
+  let data: unknown;
+  try {
+    data = JSON.parse(json);
+  } catch (err) {
+    return { ok: false, issues: [{ code: 'not_an_object', message: `Not valid JSON: ${(err as Error).message}` }] };
+  }
+  return validateWorld(data);
+}
+
+export function serializeWorld(world: WorldDefinition): string {
+  return JSON.stringify(world, null, 2);
+}

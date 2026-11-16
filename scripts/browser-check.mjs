@@ -51,6 +51,9 @@ const state = () =>
       y: s.party.y,
       facing: s.party.facing,
       hp: s.party.members[0].hp,
+      maxHp: s.party.members[0].maxHp,
+      level: s.party.members[0].level,
+      xp: s.party.members[0].xp,
       stamina: s.party.members[0].stamina,
       blocking: s.party.members[0].blocking,
       busy: s.party.members[0].action.kind !== 'idle',
@@ -293,7 +296,19 @@ check(s.enemies[0].alerted === true, 'the goblin notices the party through the o
 await fight(0, () => shot('08-goblin-telegraph'));
 s = await state();
 check(s.enemies[0].ai === 'dead' && s.status === 'playing', `the goblin patrol can be beaten (party hp ${s.hp})`);
+check(s.level === 2 && s.xp === 40 && s.maxHp === 48, `the kill brings experience and level 2 (level ${s.level}, ${s.xp} xp, ${s.maxHp} max health)`);
+h = await hud();
+check(/reaches level 2/i.test(h.text) && /LV 2/i.test(h.text), 'the level-up is announced and shown on the party card');
 const hpAfterGoblin = s.hp;
+const maxAfterGoblin = s.maxHp;
+
+// --- Character sheet -----------------------------------------------------------
+await key('KeyC', 300);
+h = await hud();
+check(/STRENGTH/i.test(h.overlay ?? '') && /level 2/i.test(h.overlay ?? '') && /15/.test(h.overlay ?? ''), 'C opens the character sheet with attributes and level');
+await shot('08b-character-sheet');
+await key('KeyC', 300);
+check((await hud()).overlay === null, 'C closes the character sheet');
 
 // --- Key -----------------------------------------------------------------------
 await walkTo(8, 3);
@@ -309,10 +324,10 @@ check(h.belt.includes('Iron key'), 'the key appears on the belt');
 check(/Slay the chief/i.test(h.objective), `the objective moves on ("${h.objective}")`);
 
 // --- Draught -------------------------------------------------------------------
-if (hpAfterGoblin < 40) {
+if (hpAfterGoblin < maxAfterGoblin) {
   await key('KeyH', 400);
   s = await state();
-  check(s.hp === Math.min(40, hpAfterGoblin + 20) && !s.inventory.item_healing_draught, `H drinks the draught (${hpAfterGoblin} to ${s.hp})`);
+  check(s.hp === Math.min(maxAfterGoblin, hpAfterGoblin + 20) && !s.inventory.item_healing_draught, `H drinks the draught (${hpAfterGoblin} to ${s.hp})`);
 } else {
   await key('KeyH', 400);
   s = await state();
@@ -336,7 +351,8 @@ check(s.quest.completed === true, 'the quest is complete');
 await page.waitForTimeout(2600);
 h = await hud();
 check(/QUEST COMPLETE/i.test(h.overlay ?? ''), 'the victory screen appears');
-check(new RegExp(`${s.hp} of 40`).test(h.overlay ?? ''), 'the victory screen reports the health left');
+check(new RegExp(`${s.hp} of ${s.maxHp}`).test(h.overlay ?? ''), 'the victory screen reports the health left');
+check(s.level === 3, `the adventure ends at level 3 (level ${s.level})`);
 await shot('12-victory');
 await key('Enter', 400);
 check((await hud()).overlay === null, 'Enter carries on exploring');
@@ -375,7 +391,7 @@ await page.keyboard.down('KeyL');
 await page.waitForTimeout(150);
 s = await state();
 h = await hud();
-check(s.blocking === true && /GUARD UP/i.test(h.text), 'holding L raises the guard');
+check(s.blocking === true && /GUARD/i.test(h.text), 'holding L raises the guard');
 await shot('16-guard');
 await page.keyboard.up('KeyL');
 await page.waitForTimeout(150);

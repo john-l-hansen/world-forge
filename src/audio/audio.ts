@@ -78,6 +78,10 @@ export class AudioEngine {
           this.noiseHit({ dur: 0.16, freq: 700, to: 2600, q: 2.5, gain: 0.3, type: 'bandpass', attack: 0.04 });
         }
         break;
+      case 'level.up':
+        [523, 659, 784, 1047, 1319].forEach((f, i) => this.tone({ wave: 'triangle', from: f, to: f, dur: 0.3, gain: 0.12, delay: 0.7 + i * 0.09 }));
+        this.tone({ wave: 'sine', from: 131, to: 131, dur: 0.9, gain: 0.2, delay: 0.7 });
+        break;
       case 'stamina.low':
         this.tone({ wave: 'sine', from: 140, to: 90, dur: 0.12, gain: 0.2 });
         this.noiseHit({ dur: 0.14, freq: 500, q: 0.6, gain: 0.12, type: 'lowpass', attack: 0.04 });

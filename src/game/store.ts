@@ -14,7 +14,7 @@ export interface LogEntry {
 export interface Floater {
   id: number;
   text: string;
-  kind: 'dealt' | 'heavy' | 'taken' | 'healed' | 'parry' | 'block';
+  kind: 'dealt' | 'heavy' | 'taken' | 'healed' | 'parry' | 'block' | 'level';
 }
 
 export interface BeltItem {
@@ -33,8 +33,27 @@ export interface QuestView {
   objectives: { id: string; text: string; done: boolean; optional: boolean }[];
 }
 
+/** Everything the character sheet shows, worked out by the game layer. */
+export interface SheetView {
+  name: string;
+  className: string;
+  role: string;
+  level: number;
+  xp: number;
+  /** Experience at which the current level began and the next begins. */
+  levelStart: number;
+  nextLevel: number;
+  attributes: { label: string; value: number; modifier: number; primary: boolean }[];
+  health: string;
+  stamina: string;
+  light: string;
+  heavy: string;
+  critical: string;
+  weapon: string;
+}
+
 export interface HudState {
-  screen: 'title' | 'playing' | 'journal' | 'victory' | 'dead';
+  screen: 'title' | 'playing' | 'journal' | 'sheet' | 'victory' | 'dead';
   heroName: string;
   heroClass: string;
   weaponName: string;
@@ -43,6 +62,10 @@ export interface HudState {
   stamina: number;
   maxStamina: number;
   guarding: boolean;
+  level: number;
+  /** Progress through the current level, 0 to 1. */
+  xpProgress: number;
+  sheet: SheetView | null;
   facing: number;
   roomName: string;
   log: LogEntry[];
@@ -68,6 +91,9 @@ export const useHud = create<HudState>(() => ({
   stamina: 0,
   maxStamina: 1,
   guarding: false,
+  level: 1,
+  xpProgress: 0,
+  sheet: null,
   facing: 0,
   roomName: '',
   log: [],
@@ -85,8 +111,8 @@ export function pushLog(text: string, tone: Tone) {
   useHud.setState((s) => ({ log: [...s.log.slice(-39), { id: nextId++, text, tone }] }));
 }
 
-export function pushFloater(text: string, kind: Floater['kind']) {
+export function pushFloater(text: string, kind: Floater['kind'], lifeMs = 800) {
   const id = nextId++;
   useHud.setState((s) => ({ floaters: [...s.floaters, { id, text, kind }] }));
-  setTimeout(() => useHud.setState((s) => ({ floaters: s.floaters.filter((f) => f.id !== id) })), 800);
+  setTimeout(() => useHud.setState((s) => ({ floaters: s.floaters.filter((f) => f.id !== id) })), lifeMs);
 }

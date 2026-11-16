@@ -88,6 +88,7 @@ html, body, #root {
 .floater.heavy { top: 70px; color: #fff2a8; font-size: 24px; line-height: 24px; }
 .floater.parry { top: 96px; color: var(--gold-hi); }
 .floater.block { top: 150px; color: var(--bone); }
+.floater.level { top: 40px; color: var(--quest); animation-duration: 1.6s; }
 @keyframes rise { from { transform: translateY(0); opacity: 1; } 70% { opacity: 1; } to { transform: translateY(-24px); opacity: 0; } }
 
 .side { position: absolute; left: 332px; top: 4px; width: 144px; height: 262px; display: flex; flex-direction: column; gap: 4px; }
@@ -107,6 +108,9 @@ html, body, #root {
 .hp-row .bar.stamina { height: 5px; background: #2a210d; }
 .hp-row .bar > i { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -1px 0 rgba(0, 0, 0, 0.35); }
 .hp-row .num { min-width: 30px; text-align: right; color: var(--dim); }
+.hp-row .num.guard { color: #e8f2f6; }
+.hp-row .bar.xp { height: 3px; background: #14182a; }
+.hp-row .bar.xp > i { background: #6f8fd0; box-shadow: none; }
 .weapon { display: flex; align-items: center; gap: 3px; color: var(--bone); white-space: nowrap; overflow: hidden; }
 .weapon img { width: 12px; height: 12px; }
 
@@ -178,6 +182,12 @@ html, body, #root {
 .overlay.journal li.done { color: var(--good); }
 .overlay.journal li em { font-style: normal; color: var(--dim); }
 .overlay.journal .tick { display: inline-block; width: 10px; color: var(--gold); }
+.overlay.sheet { background: rgba(5, 4, 6, 0.92); gap: 6px; }
+.overlay.sheet h2 { max-width: 290px; }
+.overlay.sheet .columns { display: flex; gap: 22px; }
+.overlay.sheet dd { text-align: right; }
+.overlay.sheet dd em { font-style: normal; color: var(--dim); }
+.overlay.sheet dt.primary { color: var(--gold-hi); }
 .overlay.victory { background: rgba(5, 4, 6, 0.72); }
 .overlay.victory h1 { font-size: 16px; line-height: 18px; max-width: 300px; }
 .overlay.victory h2 { color: var(--good); }

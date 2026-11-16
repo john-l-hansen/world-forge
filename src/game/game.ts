@@ -10,7 +10,9 @@ import { DungeonRenderer } from '../renderer/renderer';
 import { DIR_X, DIR_Y, roomAtCell, type CompiledWorld } from '../world/compile';
 import { InputState, commandFor, type Action } from './input';
 import { describeEvent } from './messages';
-import { pushFloater, pushLog, useHud, type BeltItem, type QuestView } from './store';
+import { CLASSES, ATTRIBUTES } from '../engine/classes';
+import { criticalChance, damageBonus, experienceForLevel, modifier } from '../engine/stats';
+import { pushFloater, pushLog, useHud, type BeltItem, type QuestView, type SheetView } from './store';
 
 const TICK_MS = 1000 / TICKS_PER_SECOND;
 
@@ -90,6 +92,17 @@ export class Game {
       this.pending.push({ type: 'block', actor: this.state.party.members[0].id, held: false });
       useHud.setState({ screen: 'journal' });
     } else if (screen === 'journal') useHud.setState({ screen: 'playing' });
+  }
+
+  /** Open or close the character sheet. The game waits while it is open. */
+  toggleSheet() {
+    const screen = useHud.getState().screen;
+    if (screen === 'playing') {
+      this.input.clear();
+      this.pending.push({ type: 'block', actor: this.state.party.members[0].id, held: false });
+      this.syncPack();
+      useHud.setState({ screen: 'sheet' });
+    } else if (screen === 'sheet') useHud.setState({ screen: 'playing' });
   }
 
   /** Carry on exploring after the victory screen. */
@@ -186,7 +199,14 @@ export class Game {
 
     switch (event.type) {
       case 'attack.hit':
-        pushFloater(String(event.damage), event.kind === 'heavy' ? 'heavy' : 'dealt');
+        pushFloater(`${event.damage}${event.critical ? '!' : ''}`, event.kind === 'heavy' || event.critical ? 'heavy' : 'dealt');
+        break;
+      case 'level.up':
+        pushFloater('Level up!', 'level', 1600);
+        this.syncPack();
+        break;
+      case 'xp.gained':
+        this.syncPack();
         break;
       case 'attack.parried':
         pushFloater('Parry!', 'parry');
@@ -314,6 +334,33 @@ export class Game {
         objectives: questDef.objectives.map((o) => ({ id: o.id, text: o.description, done: progress.done[o.id] === true, optional: o.optional })),
       };
     }
-    useHud.setState({ belt, quest });
+    // The character sheet and the level readout.
+    const member = this.state.party.members[0];
+    const character = def.characters.find((c) => c.id === member.id)!;
+    const cls = CLASSES[member.classId];
+    const weapon = def.items.find((i) => i.id === character.equipment.mainHand);
+    const bonus = damageBonus(member.attributes);
+    const range = (d: { min: number; max: number }) => `${d.min + bonus}-${d.max + bonus}`;
+    const levelStart = experienceForLevel(member.level);
+    const nextLevel = experienceForLevel(member.level + 1);
+    const label: Record<string, string> = { strength: 'Strength', dexterity: 'Dexterity', constitution: 'Constitution', intelligence: 'Intelligence', wisdom: 'Wisdom' };
+    const sheet: SheetView = {
+      name: character.name,
+      className: cls.name,
+      role: cls.role,
+      level: member.level,
+      xp: member.xp,
+      levelStart,
+      nextLevel,
+      attributes: ATTRIBUTES.map((a) => ({ label: label[a], value: member.attributes[a], modifier: modifier(member.attributes[a]), primary: a === cls.primary })),
+      health: `${member.hp}/${member.maxHp}`,
+      stamina: `${member.stamina}/${member.maxStamina}`,
+      light: weapon?.category === 'weapon' ? range(weapon.weapon.light.damage) : '-',
+      heavy: weapon?.category === 'weapon' ? range(weapon.weapon.heavy.damage) : '-',
+      critical: `${criticalChance(member.attributes)}%`,
+      weapon: weapon?.name ?? 'Unarmed',
+    };
+    const xpProgress = Math.max(0, Math.min(1, (member.xp - levelStart) / Math.max(1, nextLevel - levelStart)));
+    useHud.setState({ belt, quest, sheet, level: member.level, xpProgress });
   }
 }

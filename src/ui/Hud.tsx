@@ -42,12 +42,13 @@ export function PartyCard() {
   const art = uiArt();
   const name = useHud((s) => s.heroName);
   const cls = useHud((s) => s.heroClass);
-  const weapon = useHud((s) => s.weaponName);
   const hp = useHud((s) => s.hp);
   const maxHp = useHud((s) => s.maxHp);
   const stamina = useHud((s) => s.stamina);
   const maxStamina = useHud((s) => s.maxStamina);
   const guarding = useHud((s) => s.guarding);
+  const level = useHud((s) => s.level);
+  const xpProgress = useHud((s) => s.xpProgress);
   const hurtPulse = useHud((s) => s.hurtPulse);
   const ratio = hp / maxHp;
   const colour = ratio > 0.5 ? '#4f9a3a' : ratio > 0.25 ? '#c9952a' : '#b02a22';
@@ -61,7 +62,9 @@ export function PartyCard() {
       <div className="card-body">
         <div className="title-row">
           <span className="name">{name}</span>
-          <span className="class">{cls}</span>
+          <span className="class" title={cls}>
+            Lv {level}
+          </span>
         </div>
         <div className="hp-row" title="Health">
           <span>HP</span>
@@ -79,9 +82,12 @@ export function PartyCard() {
           </div>
           <span className="num">{stamina}</span>
         </div>
-        <div className="weapon">
-          <img src={art.sword} alt="" />
-          {guarding ? 'Guard up' : weapon}
+        <div className="hp-row" title="Experience towards the next level">
+          <span>XP</span>
+          <div className="bar xp">
+            <i style={{ width: `${xpProgress * 100}%` }} />
+          </div>
+          <span className="num guard">{guarding ? 'Guard' : ''}</span>
         </div>
       </div>
     </div>
@@ -241,6 +247,48 @@ export function JournalOverlay() {
   );
 }
 
+export function SheetOverlay() {
+  const sheet = useHud((s) => s.sheet);
+  if (!sheet) return null;
+  const sign = (n: number) => (n >= 0 ? `+${n}` : String(n));
+  return (
+    <div className="overlay sheet">
+      <h3>{sheet.name}</h3>
+      <h2>
+        {sheet.className}, level {sheet.level}. {sheet.role}
+      </h2>
+      <div className="columns">
+        <dl className="keys">
+          {sheet.attributes.map((a) => (
+            <Fragment key={a.label}>
+              <dt className={a.primary ? 'primary' : ''}>{a.label}</dt>
+              <dd>
+                {a.value} <em>{sign(a.modifier)}</em>
+              </dd>
+            </Fragment>
+          ))}
+        </dl>
+        <dl className="keys">
+          <dt>Health</dt>
+          <dd>{sheet.health}</dd>
+          <dt>Stamina</dt>
+          <dd>{sheet.stamina}</dd>
+          <dt>{sheet.weapon}</dt>
+          <dd>{sheet.light}</dd>
+          <dt>Heavy blow</dt>
+          <dd>{sheet.heavy}</dd>
+          <dt>Critical</dt>
+          <dd>{sheet.critical}</dd>
+        </dl>
+      </div>
+      <h2>
+        Experience {sheet.xp}. Level {sheet.level + 1} at {sheet.nextLevel}.
+      </h2>
+      <div className="blink">Press C to close</div>
+    </div>
+  );
+}
+
 export function VictoryOverlay({ world }: { world: string }) {
   const quest = useHud((s) => s.quest);
   const hp = useHud((s) => s.hp);
@@ -378,8 +426,8 @@ export function TitleOverlay({ title }: { title: string }) {
         <dd>Open, search</dd>
         <dt>H</dt>
         <dd>Drink</dd>
-        <dt>B</dt>
-        <dd>Journal</dd>
+        <dt>B / C</dt>
+        <dd>Journal, character</dd>
         <dt>M</dt>
         <dd>Sound</dd>
       </dl>

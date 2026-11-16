@@ -73,7 +73,14 @@ export function describeEvent(event: GameEvent, state: SessionState, world: Comp
     case 'attack.hit':
       return event.killed
         ? { text: `You strike the ${enemyName(event.enemyId)} down!`, tone: 'good' }
-        : { text: `You ${event.kind === 'heavy' ? 'cleave' : 'hit'} the ${enemyName(event.enemyId)} for ${event.damage}.`, tone: 'good' };
+        : {
+            text: `${event.critical ? 'Critical! ' : ''}You ${event.kind === 'heavy' ? 'cleave' : 'hit'} the ${enemyName(event.enemyId)} for ${event.damage}.`,
+            tone: event.critical ? 'quest' : 'good',
+          };
+    case 'xp.gained':
+      return { text: `You gain ${event.amount} experience.`, tone: 'plain' };
+    case 'level.up':
+      return { text: `${heroName(event.actor)} reaches level ${event.level}! +${event.healthGained} health, +${event.staminaGained} stamina.`, tone: 'quest' };
     case 'attack.clang':
       return { text: 'Your blade rings off the stone.', tone: 'plain' };
     case 'enemy.alerted':

@@ -1,5 +1,57 @@
 # Development log — World Forge
 
+## Milestone 4 — Phase 3, part 1: attributes, levels and experience (2026-11-15)
+
+### What was implemented
+
+- **World schema 0.4.0.** A character has a `level` and five `attributes` (strength,
+  dexterity, constitution, intelligence, wisdom). Fixed health and stamina numbers are
+  gone: they are derived. Enemies have an `xp` value. `0.3.0` worlds are migrated.
+- **Classes** (`src/engine/classes.ts`). Fighter, rogue, mage and cleric as plain data:
+  base health, stamina and mana, growth per level, a primary attribute and default
+  starting attributes.
+- **Stat formulas** (`src/engine/stats.ts`). One file of pure functions: attribute
+  modifier, maximum health, stamina and mana, damage bonus from strength, critical
+  chance from dexterity, and the experience curve (40, 120, 240, 400, ...).
+- **Critical hits.** A chance from dexterity (5% for the fighter) to hit half again as
+  hard, rolled from the session's seed.
+- **Experience and levels.** Every living party member earns an enemy's experience when
+  it dies. A level raises the class's primary attribute by one and adds health and
+  stamina, which arrive filled. The goblin takes the fighter to level 2 and the chief to
+  level 3.
+- **Interface.** Level and an experience bar on the party card, a character sheet (C)
+  with attributes, modifiers, damage ranges and critical chance, "Critical!" and
+  "Level up!" call-outs, and a level-up fanfare.
+
+### Decisions made
+
+- **Classes are engine data, not world data**, for now. A world picks a class by ID and
+  may override the starting attributes.
+- **The fighter's numbers were kept the same at level 1** (40 health, 40 stamina, 4 to 7
+  damage) by moving 2 points of damage from the sword to his strength bonus.
+- **Levels are automatic**: no points to spend yet. GAMEPLAY_DESIGN asks for no
+  complicated skill trees at first.
+
+### Tests executed
+
+- `npm run typecheck` and `npm run build` — pass.
+- `npm test` — 112 unit tests pass. New: 15 in `tests/progression.test.ts` (formulas for
+  all four classes, derived stats in a session, starting above level 1, experience,
+  multiple levels from one kill, the dead earning nothing, and critical-hit frequency
+  and damage over 400 blows).
+- `npm run test:browser` — 64 checks pass in headless Chrome, including the level-up
+  after the goblin, the character sheet, and finishing the adventure at level 3.
+
+### Known limitations
+
+- Mana is calculated but nothing uses it yet: there are no spells.
+- Only the fighter is playable. The other three classes exist as numbers only.
+- Levelling makes the chief easier than before; balance has not been revisited.
+
+### Recommended next milestone
+
+Equipment and armour, then spells and mana, then a second party member with basic AI.
+
 ## Milestone 3 — Phase 2: Combat (2026-11-15)
 
 Combat now has a light and a heavy attack, stamina, blocking, parrying, dodging, and

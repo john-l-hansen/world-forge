@@ -1,12 +1,33 @@
 # World Forge
 
-A browser-based retro first-person RPG engine. Phase 1: **The Forgotten Mines**.
+A browser-based retro first-person RPG engine and, later, an AI-assisted world creator.
+This repository currently holds Phase 1: **The Forgotten Mines**, a small playable
+dungeon that the engine loads from validated world data.
 
 ```
 npm install
-npm run dev        # play at http://localhost:5173
-npm test           # unit tests
-npm run build      # type check + production build in dist/
+npm run dev            # play at http://localhost:5173
+npm test               # unit tests
+npm run build          # type check + production build in dist/
+npm run preview        # serve the production build at http://localhost:4173
+npm run test:browser   # browser playthrough (needs Chrome and a running preview)
+npm run art            # write the generated art to .art/ for review
 ```
 
-See `docs/DEVELOPMENT_LOG.md` for what is built and how it is structured.
+## Controls
+
+| Key | Action |
+| --- | --- |
+| W A S D | Step forward, left, back, right |
+| Q E (or left/right arrows) | Turn |
+| Space or left click | Attack |
+| F or Enter | Open and close doors |
+| M | Sound on or off |
+| R | Try again after a defeat |
+
+Watch the goblin: when it rears back, step away and its blow misses.
+
+## Layout
+
+See `docs/DEVELOPMENT_LOG.md` for the structure, decisions, test results and known
+limitations.

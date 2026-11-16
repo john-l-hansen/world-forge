@@ -6,8 +6,8 @@
 import { BLOOD, BONE, EYE_RED, EYE_YELLOW, FLAME, GOBLIN, GOLD, HIDE, INK, IRON, SKIN, STONE, WOOD } from './palette';
 import { Pix, hash2, type Ramp } from './pixel';
 
-export type GoblinPose = 'idle0' | 'idle1' | 'walk0' | 'walk1' | 'telegraph' | 'attack' | 'hurt' | 'dead';
-export const GOBLIN_POSES: readonly GoblinPose[] = ['idle0', 'idle1', 'walk0', 'walk1', 'telegraph', 'attack', 'hurt', 'dead'];
+export type GoblinPose = 'idle0' | 'idle1' | 'walk0' | 'walk1' | 'telegraph' | 'attack' | 'hurt' | 'dead' | 'sweep';
+export const GOBLIN_POSES: readonly GoblinPose[] = ['idle0', 'idle1', 'walk0', 'walk1', 'telegraph', 'attack', 'hurt', 'dead', 'sweep'];
 export const GOBLIN_W = 64;
 export const GOBLIN_H = 72;
 
@@ -140,14 +140,14 @@ export function drawGoblin(pose: GoblinPose, variant: GoblinVariant = 'goblin'):
   }
 
   const bob = pose === 'idle1' ? 1 : 0;
-  const crouch = pose === 'attack' ? 4 : pose === 'telegraph' ? -1 : 0;
+  const crouch = pose === 'attack' ? 4 : pose === 'telegraph' ? -1 : pose === 'sweep' ? 3 : 0;
   const lean = pose === 'hurt' ? -2 : 0;
   const y = (v: number) => v + bob + crouch;
 
   // Legs and feet.
   const liftL = pose === 'walk0' ? 3 : 0;
   const liftR = pose === 'walk1' ? 3 : 0;
-  const spread = pose === 'attack' ? 3 : 0;
+  const spread = pose === 'attack' || pose === 'sweep' ? 3 : 0;
   p.limb(cx - 6 - spread, y(50), cx - 8 - spread, 64 - liftL, limbRamp(), 6);
   p.limb(cx + 6 + spread, y(50), cx + 8 + spread, 64 - liftR, limbRamp(), 6);
   p.ellipse(cx - 9 - spread, 67 - liftL, 5.5, 2.6, look.g[1]);
@@ -156,11 +156,12 @@ export function drawGoblin(pose: GoblinPose, variant: GoblinVariant = 'goblin'):
   p.set(cx + 13 + spread, 68 - liftR, BONE);
 
   // Off-hand arm (viewer's left), behind the torso.
-  if (pose === 'telegraph') p.limb(cx - 10, y(36), cx - 18, y(30), limbRamp(), 5);
+  if (pose === 'sweep') p.limb(cx - 10, y(37), cx - 17, y(44), limbRamp(), 5);
+  else if (pose === 'telegraph') p.limb(cx - 10, y(36), cx - 18, y(30), limbRamp(), 5);
   else if (pose === 'attack') p.limb(cx - 10, y(37), cx - 19, y(46), limbRamp(), 5);
   else p.limb(cx - 10 + lean, y(37), cx - 16 + lean, y(49), limbRamp(), 5);
   const handL: [number, number] =
-    pose === 'telegraph' ? [cx - 19, y(28)] : pose === 'attack' ? [cx - 20, y(48)] : [cx - 17 + lean, y(51)];
+    pose === 'sweep' ? [cx - 18, y(46)] : pose === 'telegraph' ? [cx - 19, y(28)] : pose === 'attack' ? [cx - 20, y(48)] : [cx - 17 + lean, y(51)];
   p.shaded(handL[0], handL[1], 3, 3, limbRamp());
 
   // Torso: a ragged hide jerkin with a belt.
@@ -181,7 +182,7 @@ export function drawGoblin(pose: GoblinPose, variant: GoblinVariant = 'goblin'):
 
   // Head.
   const headY = pose === 'attack' ? y(22) : y(21);
-  goblinHead(p, cx + lean * 1.5, headY, pose === 'telegraph' || pose === 'attack' ? 'rage' : pose === 'hurt' ? 'pain' : 'calm', pose === 'attack' ? 1.08 : 1);
+  goblinHead(p, cx + lean * 1.5, headY, pose === 'telegraph' || pose === 'attack' || pose === 'sweep' ? 'rage' : pose === 'hurt' ? 'pain' : 'calm', pose === 'attack' ? 1.08 : 1);
 
   // Weapon arm (viewer's right), in front of everything.
   if (pose === 'telegraph') {
@@ -190,6 +191,12 @@ export function drawGoblin(pose: GoblinPose, variant: GoblinVariant = 'goblin'):
     p.limb(cx + 19, y(28), cx + 17, y(16), limbRamp(), 5);
     cleaver(p, cx + 17, y(14), cx + 27, 1);
     p.shaded(cx + 17, y(15), 3.2, 3.2, limbRamp());
+  } else if (pose === 'sweep') {
+    // Both hands haul the blade back low at the hip, coiled for a wide swing.
+    p.limb(cx + 10, y(37), cx + 2, y(45), limbRamp(), 5);
+    p.limb(cx + 2, y(45), cx - 14, y(46), limbRamp(), 5);
+    cleaver(p, cx - 15, y(46), cx - 31, y(30));
+    p.shaded(cx - 15, y(46), 3.4, 3.4, limbRamp());
   } else if (pose === 'attack') {
     // Chopped down and across the body.
     p.limb(cx + 11, y(37), cx + 8, y(47), limbRamp(), 5);

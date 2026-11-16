@@ -46,6 +46,13 @@
 - R reads a scroll during play and restarts after a defeat or victory. The two never
   overlap, but the key is doing two jobs.
 
+### Also in this milestone
+
+- **The great sweep has its own wind-up pose.** The chief hauls the blade back low at
+  the hip for a sweep and raises it overhead for a cleave, so the two can be told apart
+  by silhouette as well as by the red glow. This closes a limitation noted in
+  milestone 3. Checked by eye on the sprite sheet; not yet seen in play by a person.
+
 ### Open decision before the rest of Phase 3: how the party works
 
 Party switching and party AI are the remaining Phase 3 tasks, and they depend on a

@@ -429,7 +429,8 @@ export class DungeonRenderer {
       x -= DIR_X[enemy.facing] * knock;
       z -= DIR_Y[enemy.facing] * knock;
     } else if (enemy.ai === 'telegraph') {
-      pose = 'telegraph';
+      // A sweep is wound up low at the hip; everything else overhead.
+      pose = def.attacks.find((a) => a.id === enemy.attackId)?.pattern === 'sweep' ? 'sweep' : 'telegraph';
       // Rears up, then trembles just before the blow.
       const t = clamp01((now - enemy.aiStart) / Math.max(1, enemy.aiEnd - enemy.aiStart));
       scale = 1 + 0.05 * smooth(t);

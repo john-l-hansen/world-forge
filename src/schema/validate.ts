@@ -15,7 +15,8 @@ export interface ValidationIssue {
     | 'geometry'
     | 'connection'
     | 'placement'
-    | 'unreachable';
+    | 'unreachable'
+    | 'quest';
   message: string;
   path?: string;
 }
@@ -34,10 +35,28 @@ const inRoom = (room: RoomDef, x: number, y: number) =>
 const touchesRoom = (room: RoomDef, x: number, y: number) =>
   inRoom(room, x + 1, y) || inRoom(room, x - 1, y) || inRoom(room, x, y + 1) || inRoom(room, x, y - 1);
 
+/**
+ * Bring a world written for an older schema up to the current one. Only
+ * known versions are migrated, one explicit step at a time; anything else is
+ * returned untouched and then rejected by the version check.
+ */
+export function migrateWorld(input: unknown): unknown {
+  if (typeof input !== 'object' || input === null) return input;
+  let data = input as Record<string, unknown>;
+  if (data.schemaVersion === '0.1.0') {
+    // 0.2.0 added quests, locks, chests and pickups. All of them are optional,
+    // so an older world only needs its new settings field and version stamp.
+    const settings = (typeof data.settings === 'object' && data.settings !== null ? data.settings : {}) as Record<string, unknown>;
+    data = { ...data, schemaVersion: '0.2.0', settings: { startingQuestIds: [], ...settings }, quests: data.quests ?? [] };
+  }
+  return data;
+}
+
 export function validateWorld(input: unknown): ValidationResult {
   if (typeof input !== 'object' || input === null) {
     return { ok: false, issues: [{ code: 'not_an_object', message: 'World data must be an object.' }] };
   }
+  input = migrateWorld(input);
   const version = (input as { schemaVersion?: unknown }).schemaVersion;
   if (version !== SCHEMA_VERSION) {
     return {
@@ -84,6 +103,7 @@ export function validateWorld(input: unknown): ValidationResult {
   world.objects.forEach((o) => claim(o.id, 'object'));
   world.items.forEach((i) => claim(i.id, 'item'));
   world.characters.forEach((c) => claim(c.id, 'character'));
+  world.quests.forEach((q) => claim(q.id, 'quest'));
 
   const regions = new Map(world.regions.map((r) => [r.id, r]));
   const rooms = new Map(world.rooms.map((r) => [r.id, r]));
@@ -156,6 +176,13 @@ export function validateWorld(input: unknown): ValidationResult {
     if (world.rooms.some((r) => inRoom(r, door.cell.x, door.cell.y)))
       add('geometry', `Door "${door.id}" sits inside a room instead of in the wall between rooms.`);
   }
+  for (const door of world.doors) {
+    if (!door.lock) continue;
+    if (door.kind !== 'door') add('connection', `Only a door can be locked, but "${door.id}" is a ${door.kind}.`);
+    const key = world.items.find((i) => i.id === door.lock!.keyItemId);
+    if (!key) add('missing_reference', `Door "${door.id}" needs missing key item "${door.lock.keyItemId}".`);
+    else if (key.category !== 'key') add('missing_reference', `Door "${door.id}" is locked by "${key.id}", which is not a key.`);
+  }
   const doorCells = new Set<string>();
   for (const door of world.doors) {
     const key = `${door.cell.x},${door.cell.y}`;
@@ -223,8 +250,45 @@ export function validateWorld(input: unknown): ValidationResult {
       const ny = obj.cell.y + dy;
       const open = world.rooms.some((r) => inRoom(r, nx, ny)) || doorCells.has(`${nx},${ny}`);
       if (open) add('placement', `Torch "${obj.id}" has no ${obj.wall} wall to hang on.`);
-    } else if (obj.blocking) {
+    } else if (obj.type === 'prop') {
+      if (obj.blocking) occupy(obj.cell.x, obj.cell.y, obj.id);
+    } else if (obj.type === 'chest') {
       occupy(obj.cell.x, obj.cell.y, obj.id);
+      for (const itemId of obj.contents) {
+        if (!items.has(itemId)) add('missing_reference', `Chest "${obj.id}" holds missing item "${itemId}".`);
+      }
+    } else {
+      occupy(obj.cell.x, obj.cell.y, obj.id);
+      if (!items.has(obj.itemId)) add('missing_reference', `Pickup "${obj.id}" is missing item "${obj.itemId}".`);
+    }
+  }
+
+  // ---- Quests ---------------------------------------------------------------
+  const quests = new Map(world.quests.map((q) => [q.id, q]));
+  for (const questId of world.settings.startingQuestIds) {
+    if (!quests.has(questId)) add('missing_reference', `Starting quests list missing quest "${questId}".`);
+  }
+  for (const quest of world.quests) {
+    const objectiveIds = new Set<string>();
+    if (!quest.objectives.some((o) => !o.optional)) add('quest', `Quest "${quest.id}" has no required objective, so it can never be finished.`);
+    for (const objective of quest.objectives) {
+      if (objectiveIds.has(objective.id)) add('duplicate_id', `Quest "${quest.id}" has two objectives called "${objective.id}".`);
+      objectiveIds.add(objective.id);
+      const t = objective.targetId;
+      const where = `Quest "${quest.id}" objective "${objective.id}"`;
+      if (objective.type === 'collect_item') {
+        if (!items.has(t)) add('quest', `${where} asks for missing item "${t}".`);
+        else {
+          const obtainable = world.objects.some((o) => (o.type === 'pickup' && o.itemId === t) || (o.type === 'chest' && o.contents.includes(t)));
+          if (!obtainable) add('quest', `${where} asks for "${t}", but nothing in the world gives that item.`);
+        }
+      } else if (objective.type === 'defeat_encounter') {
+        if (!encounters.has(t)) add('quest', `${where} targets missing encounter "${t}".`);
+      } else if (objective.type === 'open_chest') {
+        if (objects.get(t)?.type !== 'chest') add('quest', `${where} targets "${t}", which is not a chest.`);
+      } else if (!rooms.has(t)) {
+        add('quest', `${where} targets missing room "${t}".`);
+      }
     }
   }
 
@@ -246,21 +310,38 @@ export function validateWorld(input: unknown): ValidationResult {
     const blocker = occupied.get(`${x},${y}`);
     if (blocker) add('placement', `Start cell (${x}, ${y}) is occupied by "${blocker}".`);
 
-    // ---- Reachability over the room graph -----------------------------------
+    // ---- Reachability, respecting locks --------------------------------------
+    // Walk the room graph from the start. A locked door only opens once its
+    // key has been found in a room already reached, so a key shut behind its
+    // own door leaves rooms unreachable.
     const reached = new Set<string>([startRoom.id]);
-    const queue = [startRoom];
-    while (queue.length) {
-      const room = queue.shift()!;
-      for (const conn of room.connections) {
-        const target = rooms.get(conn.targetRoomId);
-        if (target && doors.has(conn.doorId) && !reached.has(target.id)) {
-          reached.add(target.id);
-          queue.push(target);
+    const keys = new Set<string>();
+    let grew = true;
+    while (grew) {
+      grew = false;
+      for (const obj of world.objects) {
+        if (!reached.has(obj.roomId)) continue;
+        const found = obj.type === 'pickup' ? [obj.itemId] : obj.type === 'chest' ? obj.contents : [];
+        for (const itemId of found) {
+          if (!keys.has(itemId)) {
+            keys.add(itemId);
+            grew = true;
+          }
+        }
+      }
+      for (const room of world.rooms) {
+        if (!reached.has(room.id)) continue;
+        for (const conn of room.connections) {
+          const door = doors.get(conn.doorId);
+          if (!door || !rooms.has(conn.targetRoomId) || reached.has(conn.targetRoomId)) continue;
+          if (door.lock && !keys.has(door.lock.keyItemId)) continue;
+          reached.add(conn.targetRoomId);
+          grew = true;
         }
       }
     }
     for (const room of world.rooms) {
-      if (!reached.has(room.id)) add('unreachable', `Room "${room.id}" cannot be reached from the start room.`);
+      if (!reached.has(room.id)) add('unreachable', `Room "${room.id}" cannot be reached from the start room. Check its connections and where the keys are.`);
     }
   }
 

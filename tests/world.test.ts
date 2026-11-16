@@ -31,6 +31,7 @@ describe('world compiler', () => {
       door_tunnel_hall: 'ns',
       door_hall_storeroom: 'ew',
       door_tunnel_shaft: 'ew',
+      door_tunnel_cache: 'ew',
     });
   });
 
@@ -63,8 +64,18 @@ describe('world compiler', () => {
     expect(at(2, 13)).toBe(0);
   });
 
-  it('places the goblin and the blocking props', () => {
-    expect(world.spawns).toHaveLength(1);
+  it('does not let torchlight shine through the secret door', () => {
+    const at = (x: number, y: number) => world.light[y * world.width + x];
+    // The cache torch at (8, 8) lights its own room but not the door cell.
+    expect(at(7, 9)).toBeGreaterThan(0);
+    expect(at(6, 9)).toBe(0);
+  });
+
+  it('places the enemies, chest, key and blocking props', () => {
+    expect(world.spawns).toHaveLength(2);
+    expect(world.chests).toHaveLength(1);
+    expect(world.pickups).toHaveLength(1);
+    expect(world.blocked[10 * world.width + 8]).toBe(1);
     expect(world.spawns[0]).toMatchObject({ instanceId: 'encounter_goblin_patrol#0', x: 5, y: 2 });
     expect(world.blocked[1 * world.width + 13]).toBe(1);
     expect(world.blocked[14 * world.width + 5]).toBe(0);

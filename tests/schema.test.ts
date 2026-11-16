@@ -13,9 +13,9 @@ describe('world validation', () => {
     expect(r.ok ? [] : r.issues).toEqual([]);
   });
 
-  it('has five connected rooms', () => {
+  it('has five connected rooms and one secret room', () => {
     const r = validateWorld(minesData());
-    expect(r.ok && r.world.rooms.length).toBe(5);
+    expect(r.ok && r.world.rooms.length).toBe(6);
   });
 
   it('rejects an unknown schema version without guessing', () => {

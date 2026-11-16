@@ -22,7 +22,8 @@ export type Command =
   | { type: 'move'; actor: string; dir: MoveDir }
   | { type: 'turn'; actor: string; dir: 'left' | 'right' }
   | { type: 'attack'; actor: string }
-  | { type: 'interact'; actor: string };
+  | { type: 'interact'; actor: string }
+  | { type: 'use'; actor: string; itemId: string };
 
 export type Controller = 'local' | 'ai' | 'remote';
 
@@ -77,8 +78,14 @@ export interface EnemyState {
   lastHitTick: number;
 }
 
+export interface QuestProgress {
+  /** Objective ID to done flag. */
+  done: Record<string, boolean>;
+  completed: boolean;
+}
+
 export interface SessionState {
-  stateVersion: 1;
+  stateVersion: 2;
   worldId: string;
   tick: number;
   rng: number;
@@ -89,6 +96,16 @@ export interface SessionState {
   enemies: EnemyState[];
   /** Door ID to open flag. Archways are always true. */
   doorsOpen: Record<string, boolean>;
+  /** Locked doors the party has unlocked. */
+  doorsUnlocked: Record<string, boolean>;
+  chestsOpened: Record<string, boolean>;
+  pickupsTaken: Record<string, boolean>;
+  /** Items the party carries, shared by all members: item ID to count. */
+  inventory: Record<string, number>;
+  /** Quests the party holds, by quest ID. */
+  quests: Record<string, QuestProgress>;
+  /** Encounters whose enemies have noticed the party. */
+  encountersStarted: string[];
   /** 1 for every cell the party has seen up close. */
   explored: number[];
   currentRoomId: string | null;
@@ -104,6 +121,16 @@ export type GameEvent =
   | { type: 'room.entered'; roomId: string; firstVisit: boolean }
   | { type: 'door.opened'; doorId: string }
   | { type: 'door.closed'; doorId: string }
+  | { type: 'door.locked'; doorId: string }
+  | { type: 'door.unlocked'; doorId: string; itemId: string }
+  | { type: 'secret.found'; doorId: string }
+  | { type: 'chest.opened'; objectId: string }
+  | { type: 'item.gained'; itemId: string; from: 'pickup' | 'chest' }
+  | { type: 'item.used'; itemId: string; actor: string; healed: number }
+  | { type: 'item.refused'; itemId: string; reason: 'full_health' | 'none_left' | 'not_usable' }
+  | { type: 'encounter.started'; encounterId: string }
+  | { type: 'quest.objective'; questId: string; objectiveId: string }
+  | { type: 'quest.completed'; questId: string }
   | { type: 'interact.nothing' }
   | { type: 'attack.swing'; actor: string }
   | { type: 'attack.hit'; actor: string; enemyId: string; damage: number; killed: boolean }

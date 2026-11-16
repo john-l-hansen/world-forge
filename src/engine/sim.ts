@@ -12,7 +12,7 @@ import {
   roomAtCell,
   type CompiledWorld,
 } from '../world/compile';
-import type { EnemyDef, ItemDef } from '../schema/world';
+import type { EnemyDef, WeaponDef } from '../schema/world';
 import { randomInt } from './rng';
 import {
   BUMP_TICKS,
@@ -68,9 +68,12 @@ export function createSession(world: CompiledWorld, seed = 1): SessionState {
   const doorsOpen: Record<string, boolean> = {};
   for (const door of world.doors) doorsOpen[door.def.id] = door.def.kind === 'archway';
 
+  const quests: SessionState['quests'] = {};
+  for (const questId of def.settings.startingQuestIds) quests[questId] = { done: {}, completed: false };
+
   const startRoom = roomAtCell(world, world.start.x, world.start.y);
   const state: SessionState = {
-    stateVersion: 1,
+    stateVersion: 2,
     worldId: def.world.id,
     tick: 0,
     rng: seed | 0,
@@ -92,6 +95,12 @@ export function createSession(world: CompiledWorld, seed = 1): SessionState {
     buffered: null,
     enemies,
     doorsOpen,
+    doorsUnlocked: {},
+    chestsOpened: {},
+    pickupsTaken: {},
+    inventory: {},
+    quests,
+    encountersStarted: [],
     explored: new Array(world.width * world.height).fill(0),
     currentRoomId: startRoom ? startRoom.id : null,
     visitedRoomIds: startRoom ? [startRoom.id] : [],
@@ -106,7 +115,7 @@ export function serializeSession(state: SessionState): string {
 
 export function deserializeSession(json: string): SessionState {
   const state = JSON.parse(json) as SessionState;
-  if (state.stateVersion !== 1) throw new Error(`Unsupported session version ${String(state.stateVersion)}`);
+  if (state.stateVersion !== 2) throw new Error(`Unsupported session version ${String(state.stateVersion)}`);
   return state;
 }
 
@@ -220,6 +229,7 @@ export function step(state: SessionState, world: CompiledWorld, commands: readon
 
   resolvePartyAttacks(state, world, events);
   for (const enemy of state.enemies) updateEnemy(state, world, enemy, events);
+  trackQuests(state, world, events);
 
   return events;
 }
@@ -257,6 +267,11 @@ function runCommand(state: SessionState, world: CompiledWorld, command: Command,
       p.moveStart = state.tick;
       events.push({ type: 'party.moved', x: nx, y: ny });
       reveal(state, world);
+      for (const pickup of world.pickups) {
+        if (pickup.x !== nx || pickup.y !== ny || state.pickupsTaken[pickup.id]) continue;
+        state.pickupsTaken[pickup.id] = true;
+        gainItem(state, pickup.itemId, 'pickup', events);
+      }
       const room = roomAtCell(world, nx, ny);
       if (room && room.id !== state.currentRoomId) {
         const firstVisit = !state.visitedRoomIds.includes(room.id);
@@ -283,9 +298,32 @@ function runCommand(state: SessionState, world: CompiledWorld, command: Command,
     case 'interact': {
       const fx = p.x + DIR_X[p.facing];
       const fy = p.y + DIR_Y[p.facing];
-      const door = inBounds(world, fx, fy) ? world.doorAt.get(fy * world.width + fx) : undefined;
-      if (!door || door.def.kind !== 'door') {
+      const front = inBounds(world, fx, fy) ? fy * world.width + fx : -1;
+
+      const chest = world.chestAt.get(front);
+      if (chest) {
+        if (state.chestsOpened[chest.id]) {
+          events.push({ type: 'interact.nothing' });
+          return;
+        }
+        state.chestsOpened[chest.id] = true;
+        events.push({ type: 'chest.opened', objectId: chest.id });
+        for (const itemId of chest.contents) gainItem(state, itemId, 'chest', events);
+        return;
+      }
+
+      const door = world.doorAt.get(front);
+      if (!door || door.def.kind === 'archway') {
         events.push({ type: 'interact.nothing' });
+        return;
+      }
+      if (door.def.kind === 'secret') {
+        // A secret door opens once and stays open.
+        if (state.doorsOpen[door.def.id]) events.push({ type: 'interact.nothing' });
+        else {
+          state.doorsOpen[door.def.id] = true;
+          events.push({ type: 'secret.found', doorId: door.def.id });
+        }
         return;
       }
       if (state.doorsOpen[door.def.id]) {
@@ -296,28 +334,69 @@ function runCommand(state: SessionState, world: CompiledWorld, command: Command,
         }
         state.doorsOpen[door.def.id] = false;
         events.push({ type: 'door.closed', doorId: door.def.id });
-      } else {
-        state.doorsOpen[door.def.id] = true;
-        events.push({ type: 'door.opened', doorId: door.def.id });
+        return;
       }
+      const lock = door.def.lock;
+      if (lock && !state.doorsUnlocked[door.def.id]) {
+        if (!state.inventory[lock.keyItemId]) {
+          events.push({ type: 'door.locked', doorId: door.def.id });
+          return;
+        }
+        state.doorsUnlocked[door.def.id] = true;
+        events.push({ type: 'door.unlocked', doorId: door.def.id, itemId: lock.keyItemId });
+      }
+      state.doorsOpen[door.def.id] = true;
+      events.push({ type: 'door.opened', doorId: door.def.id });
+      return;
+    }
+    case 'use': {
+      const member = p.members.find((m) => m.id === command.actor);
+      const item = world.def.items.find((it) => it.id === command.itemId);
+      if (!member || member.hp <= 0) return;
+      if (!item || item.category !== 'consumable') {
+        events.push({ type: 'item.refused', itemId: command.itemId, reason: 'not_usable' });
+        return;
+      }
+      if (!state.inventory[item.id]) {
+        events.push({ type: 'item.refused', itemId: item.id, reason: 'none_left' });
+        return;
+      }
+      if (member.hp >= member.maxHp) {
+        events.push({ type: 'item.refused', itemId: item.id, reason: 'full_health' });
+        return;
+      }
+      const healed = Math.min(item.effect.amount, member.maxHp - member.hp);
+      member.hp += healed;
+      state.inventory[item.id] -= 1;
+      if (state.inventory[item.id] === 0) delete state.inventory[item.id];
+      events.push({ type: 'item.used', itemId: item.id, actor: member.id, healed });
       return;
     }
   }
+}
+
+function gainItem(state: SessionState, itemId: string, from: 'pickup' | 'chest', events: GameEvent[]) {
+  state.inventory[itemId] = (state.inventory[itemId] ?? 0) + 1;
+  events.push({ type: 'item.gained', itemId, from });
 }
 
 function blockReason(state: SessionState, world: CompiledWorld, x: number, y: number): BumpReason | null {
   if (!inBounds(world, x, y)) return 'wall';
   const i = y * world.width + x;
   if (world.tiles[i] === TILE_WALL) return 'wall';
-  if (world.tiles[i] === TILE_DOORWAY && !isDoorOpenAt(state, world, x, y)) return 'door';
+  if (world.tiles[i] === TILE_DOORWAY && !isDoorOpenAt(state, world, x, y)) {
+    // An undiscovered secret door feels exactly like the wall it pretends to be.
+    return world.doorAt.get(i)!.def.kind === 'secret' ? 'wall' : 'door';
+  }
   if (world.blocked[i]) return 'object';
   if (enemyAt(state, x, y)) return 'enemy';
   return null;
 }
 
-function weaponOf(world: CompiledWorld, member: PartyMember): ItemDef {
+function weaponOf(world: CompiledWorld, member: PartyMember): WeaponDef {
   const c = world.def.characters.find((ch) => ch.id === member.id)!;
-  return world.def.items.find((it) => it.id === c.equipment.mainHand)!;
+  // Validation guarantees the main hand holds a weapon.
+  return world.def.items.find((it) => it.id === c.equipment.mainHand) as WeaponDef;
 }
 
 function resolvePartyAttacks(state: SessionState, world: CompiledWorld, events: GameEvent[]) {
@@ -337,7 +416,7 @@ function resolvePartyAttacks(state: SessionState, world: CompiledWorld, events: 
         const damage = Math.max(1, rolled - def.defence);
         enemy.hp = Math.max(0, enemy.hp - damage);
         enemy.lastHitTick = state.tick;
-        enemy.alerted = true;
+        if (!enemy.alerted) alertEnemy(state, world, enemy, events);
         const killed = enemy.hp === 0;
         events.push({ type: 'attack.hit', actor: member.id, enemyId: enemy.id, damage, killed });
         state.hitStop = HIT_STOP_TICKS;
@@ -388,6 +467,18 @@ function killEnemy(state: SessionState, world: CompiledWorld, enemy: EnemyState,
   const remaining = state.enemies.some((e) => e.ai !== 'dead' && e.id.split('#')[0] === encounterId);
   if (!remaining && world.def.encounters.some((enc) => enc.id === encounterId)) {
     events.push({ type: 'encounter.cleared', encounterId });
+  }
+}
+
+const encounterOf = (enemy: EnemyState) => enemy.id.split('#')[0];
+
+function alertEnemy(state: SessionState, world: CompiledWorld, enemy: EnemyState, events: GameEvent[]) {
+  enemy.alerted = true;
+  events.push({ type: 'enemy.alerted', enemyId: enemy.id });
+  const encounterId = encounterOf(enemy);
+  if (!state.encountersStarted.includes(encounterId) && world.def.encounters.some((enc) => enc.id === encounterId)) {
+    state.encountersStarted.push(encounterId);
+    events.push({ type: 'encounter.started', encounterId });
   }
 }
 
@@ -445,8 +536,7 @@ function updateEnemy(state: SessionState, world: CompiledWorld, enemy: EnemyStat
         const dy = p.y - enemy.y;
         const near = dx * dx + dy * dy <= def.sightRange * def.sightRange;
         if (near && hasLineOfSight(state, world, enemy.x, enemy.y, p.x, p.y)) {
-          enemy.alerted = true;
-          events.push({ type: 'enemy.alerted', enemyId: enemy.id });
+          alertEnemy(state, world, enemy, events);
         }
         return;
       }
@@ -515,4 +605,40 @@ function nextStepToward(
   while (from[i] !== start) i = from[i];
   if (i === goal) return null; // already adjacent; the caller attacks instead
   return { x: i % w, y: Math.floor(i / w) };
+}
+
+// ---------------------------------------------------------------------------
+// Quests
+// ---------------------------------------------------------------------------
+
+/** Mark quest objectives that this tick's events have satisfied. */
+function trackQuests(state: SessionState, world: CompiledWorld, events: GameEvent[]) {
+  if (events.length === 0) return;
+  const happened = events.slice();
+  for (const quest of world.def.quests) {
+    const progress = state.quests[quest.id];
+    if (!progress || progress.completed) continue;
+    for (const objective of quest.objectives) {
+      if (progress.done[objective.id]) continue;
+      const met = happened.some((e) => {
+        switch (objective.type) {
+          case 'collect_item':
+            return e.type === 'item.gained' && e.itemId === objective.targetId;
+          case 'defeat_encounter':
+            return e.type === 'encounter.cleared' && e.encounterId === objective.targetId;
+          case 'open_chest':
+            return e.type === 'chest.opened' && e.objectId === objective.targetId;
+          case 'reach_room':
+            return e.type === 'room.entered' && e.roomId === objective.targetId;
+        }
+      });
+      if (!met) continue;
+      progress.done[objective.id] = true;
+      events.push({ type: 'quest.objective', questId: quest.id, objectiveId: objective.id });
+    }
+    if (quest.objectives.every((o) => o.optional || progress.done[o.id])) {
+      progress.completed = true;
+      events.push({ type: 'quest.completed', questId: quest.id });
+    }
+  }
 }

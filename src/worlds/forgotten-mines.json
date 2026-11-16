@@ -1,9 +1,9 @@
 {
-  "schemaVersion": "0.1.0",
+  "schemaVersion": "0.2.0",
   "world": {
     "id": "world_forgotten_mines",
     "name": "The Forgotten Mines",
-    "description": "An abandoned mine beneath the hills. Something has moved into the old workings.",
+    "description": "An abandoned mine beneath the hills. A goblin chief has made the old workings his hall.",
     "theme": "dark_fantasy",
     "difficulty": "classic",
     "author": "World Forge"
@@ -11,9 +11,17 @@
   "settings": {
     "movementMode": "grid",
     "startRoomId": "room_mine_entrance",
-    "startCell": { "x": 5, "y": 14 },
+    "startCell": {
+      "x": 5,
+      "y": 14
+    },
     "startFacing": "north",
-    "startingPartyIds": ["char_fighter"]
+    "startingPartyIds": [
+      "char_fighter"
+    ],
+    "startingQuestIds": [
+      "quest_clear_mines"
+    ]
   },
   "regions": [
     {
@@ -26,7 +34,8 @@
         "room_timbered_tunnel",
         "room_mine_hall",
         "room_storeroom",
-        "room_old_shaft"
+        "room_old_shaft",
+        "room_hidden_cache"
       ]
     }
   ],
@@ -37,10 +46,24 @@
       "name": "Mine Entrance",
       "type": "entrance",
       "description": "Cold air follows you in from the hillside.",
-      "layout": { "x": 3, "y": 12, "width": 5, "height": 4 },
-      "connections": [{ "targetRoomId": "room_timbered_tunnel", "doorId": "door_entrance_tunnel" }],
+      "layout": {
+        "x": 3,
+        "y": 12,
+        "width": 5,
+        "height": 4
+      },
+      "connections": [
+        {
+          "targetRoomId": "room_timbered_tunnel",
+          "doorId": "door_entrance_tunnel"
+        }
+      ],
       "encounterIds": [],
-      "objectIds": ["object_torch_entrance_w", "object_torch_entrance_e", "object_entrance_rubble"]
+      "objectIds": [
+        "object_torch_entrance_w",
+        "object_torch_entrance_e",
+        "object_entrance_rubble"
+      ]
     },
     {
       "id": "room_timbered_tunnel",
@@ -48,14 +71,34 @@
       "name": "Timbered Tunnel",
       "type": "corridor",
       "description": "Old props hold up the roof. Most of them.",
-      "layout": { "x": 5, "y": 7, "width": 1, "height": 4 },
+      "layout": {
+        "x": 5,
+        "y": 7,
+        "width": 1,
+        "height": 4
+      },
       "connections": [
-        { "targetRoomId": "room_mine_entrance", "doorId": "door_entrance_tunnel" },
-        { "targetRoomId": "room_mine_hall", "doorId": "door_tunnel_hall" },
-        { "targetRoomId": "room_old_shaft", "doorId": "door_tunnel_shaft" }
+        {
+          "targetRoomId": "room_mine_entrance",
+          "doorId": "door_entrance_tunnel"
+        },
+        {
+          "targetRoomId": "room_mine_hall",
+          "doorId": "door_tunnel_hall"
+        },
+        {
+          "targetRoomId": "room_old_shaft",
+          "doorId": "door_tunnel_shaft"
+        },
+        {
+          "targetRoomId": "room_hidden_cache",
+          "doorId": "door_tunnel_cache"
+        }
       ],
       "encounterIds": [],
-      "objectIds": ["object_torch_tunnel"]
+      "objectIds": [
+        "object_torch_tunnel"
+      ]
     },
     {
       "id": "room_mine_hall",
@@ -63,13 +106,31 @@
       "name": "The Mine Hall",
       "type": "combat",
       "description": "A wide hall where the seam once ran. It smells of smoke and old meat.",
-      "layout": { "x": 2, "y": 1, "width": 7, "height": 5 },
+      "layout": {
+        "x": 2,
+        "y": 1,
+        "width": 7,
+        "height": 5
+      },
       "connections": [
-        { "targetRoomId": "room_timbered_tunnel", "doorId": "door_tunnel_hall" },
-        { "targetRoomId": "room_storeroom", "doorId": "door_hall_storeroom" }
+        {
+          "targetRoomId": "room_timbered_tunnel",
+          "doorId": "door_tunnel_hall"
+        },
+        {
+          "targetRoomId": "room_storeroom",
+          "doorId": "door_hall_storeroom"
+        }
       ],
-      "encounterIds": ["encounter_goblin_patrol"],
-      "objectIds": ["object_torch_hall_w", "object_torch_hall_n", "object_torch_hall_e", "object_hall_crate"]
+      "encounterIds": [
+        "encounter_goblin_patrol"
+      ],
+      "objectIds": [
+        "object_torch_hall_w",
+        "object_torch_hall_n",
+        "object_torch_hall_e",
+        "object_hall_crate"
+      ]
     },
     {
       "id": "room_storeroom",
@@ -77,28 +138,127 @@
       "name": "Storeroom",
       "type": "treasure",
       "description": "Barrels and crates, long since picked over.",
-      "layout": { "x": 10, "y": 1, "width": 4, "height": 4 },
-      "connections": [{ "targetRoomId": "room_mine_hall", "doorId": "door_hall_storeroom" }],
+      "layout": {
+        "x": 10,
+        "y": 1,
+        "width": 4,
+        "height": 4
+      },
+      "connections": [
+        {
+          "targetRoomId": "room_mine_hall",
+          "doorId": "door_hall_storeroom"
+        }
+      ],
       "encounterIds": [],
-      "objectIds": ["object_torch_storeroom", "object_store_barrel_a", "object_store_barrel_b", "object_store_crate"]
+      "objectIds": [
+        "object_torch_storeroom",
+        "object_store_barrel_a",
+        "object_store_barrel_b",
+        "object_store_crate",
+        "object_shaft_key"
+      ]
     },
     {
       "id": "room_old_shaft",
       "regionId": "region_forgotten_mines",
       "name": "The Old Shaft",
-      "type": "story",
-      "description": "The floor falls away into the dark at the far wall.",
-      "layout": { "x": 1, "y": 7, "width": 3, "height": 4 },
-      "connections": [{ "targetRoomId": "room_timbered_tunnel", "doorId": "door_tunnel_shaft" }],
+      "type": "boss",
+      "description": "The floor falls away into the dark at the far wall. Something large is breathing.",
+      "layout": {
+        "x": 1,
+        "y": 7,
+        "width": 3,
+        "height": 4
+      },
+      "connections": [
+        {
+          "targetRoomId": "room_timbered_tunnel",
+          "doorId": "door_tunnel_shaft"
+        }
+      ],
+      "encounterIds": [
+        "encounter_pit_boss"
+      ],
+      "objectIds": [
+        "object_torch_shaft",
+        "object_shaft_rubble"
+      ]
+    },
+    {
+      "id": "room_hidden_cache",
+      "regionId": "region_forgotten_mines",
+      "name": "Hidden Cache",
+      "type": "secret",
+      "description": "A cramped cut behind the tunnel wall. Some miner kept his own counsel here.",
+      "layout": {
+        "x": 7,
+        "y": 8,
+        "width": 2,
+        "height": 3
+      },
+      "connections": [
+        {
+          "targetRoomId": "room_timbered_tunnel",
+          "doorId": "door_tunnel_cache"
+        }
+      ],
       "encounterIds": [],
-      "objectIds": ["object_torch_shaft", "object_shaft_rubble"]
+      "objectIds": [
+        "object_torch_cache",
+        "object_cache_chest"
+      ]
     }
   ],
   "doors": [
-    { "id": "door_entrance_tunnel", "name": "Tunnel mouth", "kind": "archway", "cell": { "x": 5, "y": 11 } },
-    { "id": "door_tunnel_hall", "name": "Hall door", "kind": "door", "cell": { "x": 5, "y": 6 } },
-    { "id": "door_hall_storeroom", "name": "Storeroom door", "kind": "door", "cell": { "x": 9, "y": 3 } },
-    { "id": "door_tunnel_shaft", "name": "Shaft passage", "kind": "archway", "cell": { "x": 4, "y": 9 } }
+    {
+      "id": "door_entrance_tunnel",
+      "name": "Tunnel mouth",
+      "kind": "archway",
+      "cell": {
+        "x": 5,
+        "y": 11
+      }
+    },
+    {
+      "id": "door_tunnel_hall",
+      "name": "Hall door",
+      "kind": "door",
+      "cell": {
+        "x": 5,
+        "y": 6
+      }
+    },
+    {
+      "id": "door_hall_storeroom",
+      "name": "Storeroom door",
+      "kind": "door",
+      "cell": {
+        "x": 9,
+        "y": 3
+      }
+    },
+    {
+      "id": "door_tunnel_shaft",
+      "name": "Shaft door",
+      "kind": "door",
+      "cell": {
+        "x": 4,
+        "y": 9
+      },
+      "lock": {
+        "keyItemId": "item_shaft_key"
+      }
+    },
+    {
+      "id": "door_tunnel_cache",
+      "name": "Loose stonework",
+      "kind": "secret",
+      "cell": {
+        "x": 6,
+        "y": 9
+      }
+    }
   ],
   "enemies": [
     {
@@ -107,14 +267,41 @@
       "description": "Quick, mean and never as alone as it looks.",
       "archetype": "goblin",
       "health": 24,
-      "damage": { "min": 4, "max": 7 },
+      "damage": {
+        "min": 4,
+        "max": 7
+      },
       "defence": 0,
       "moveTicks": 26,
       "sightRange": 6,
-      "attack": { "telegraphTicks": 34, "recoverTicks": 40 },
+      "attack": {
+        "telegraphTicks": 34,
+        "recoverTicks": 40
+      },
       "staggerTicks": 14,
       "behaviour": "melee_aggressive",
       "visualAssetId": "goblin"
+    },
+    {
+      "id": "enemy_goblin_chief",
+      "name": "Goblin Chief",
+      "description": "Twice the weight of his kin and three times as cruel.",
+      "archetype": "goblin_chief",
+      "health": 60,
+      "damage": {
+        "min": 7,
+        "max": 11
+      },
+      "defence": 1,
+      "moveTicks": 32,
+      "sightRange": 7,
+      "attack": {
+        "telegraphTicks": 44,
+        "recoverTicks": 46
+      },
+      "staggerTicks": 6,
+      "behaviour": "melee_aggressive",
+      "visualAssetId": "goblin_chief"
     }
   ],
   "encounters": [
@@ -122,24 +309,220 @@
       "id": "encounter_goblin_patrol",
       "name": "Goblin patrol",
       "roomId": "room_mine_hall",
-      "placements": [{ "enemyId": "enemy_goblin", "cell": { "x": 5, "y": 2 }, "facing": "south" }]
+      "placements": [
+        {
+          "enemyId": "enemy_goblin",
+          "cell": {
+            "x": 5,
+            "y": 2
+          },
+          "facing": "south"
+        }
+      ]
+    },
+    {
+      "id": "encounter_pit_boss",
+      "name": "Gnarl, chief of the pit",
+      "roomId": "room_old_shaft",
+      "boss": true,
+      "intro": "So. A little thief comes creeping into Gnarl's hall.",
+      "placements": [
+        {
+          "enemyId": "enemy_goblin_chief",
+          "cell": {
+            "x": 1,
+            "y": 9
+          },
+          "facing": "east"
+        }
+      ]
     }
   ],
   "objects": [
-    { "id": "object_torch_entrance_w", "type": "torch", "roomId": "room_mine_entrance", "cell": { "x": 3, "y": 13 }, "wall": "west" },
-    { "id": "object_torch_entrance_e", "type": "torch", "roomId": "room_mine_entrance", "cell": { "x": 7, "y": 13 }, "wall": "east" },
-    { "id": "object_entrance_rubble", "type": "prop", "name": "Rubble", "roomId": "room_mine_entrance", "cell": { "x": 3, "y": 15 }, "visualAssetId": "rubble" },
-    { "id": "object_torch_tunnel", "type": "torch", "roomId": "room_timbered_tunnel", "cell": { "x": 5, "y": 8 }, "wall": "east", "radius": 3 },
-    { "id": "object_torch_hall_w", "type": "torch", "roomId": "room_mine_hall", "cell": { "x": 2, "y": 4 }, "wall": "west" },
-    { "id": "object_torch_hall_n", "type": "torch", "roomId": "room_mine_hall", "cell": { "x": 5, "y": 1 }, "wall": "north" },
-    { "id": "object_torch_hall_e", "type": "torch", "roomId": "room_mine_hall", "cell": { "x": 8, "y": 1 }, "wall": "east" },
-    { "id": "object_hall_crate", "type": "prop", "name": "Crate", "roomId": "room_mine_hall", "cell": { "x": 2, "y": 1 }, "visualAssetId": "crate" },
-    { "id": "object_torch_storeroom", "type": "torch", "roomId": "room_storeroom", "cell": { "x": 12, "y": 1 }, "wall": "north" },
-    { "id": "object_store_barrel_a", "type": "prop", "name": "Barrel", "roomId": "room_storeroom", "cell": { "x": 13, "y": 1 }, "visualAssetId": "barrel" },
-    { "id": "object_store_barrel_b", "type": "prop", "name": "Barrel", "roomId": "room_storeroom", "cell": { "x": 13, "y": 2 }, "visualAssetId": "barrel" },
-    { "id": "object_store_crate", "type": "prop", "name": "Crate", "roomId": "room_storeroom", "cell": { "x": 10, "y": 4 }, "visualAssetId": "crate" },
-    { "id": "object_torch_shaft", "type": "torch", "roomId": "room_old_shaft", "cell": { "x": 1, "y": 8 }, "wall": "west", "radius": 3 },
-    { "id": "object_shaft_rubble", "type": "prop", "name": "Rubble", "roomId": "room_old_shaft", "cell": { "x": 1, "y": 10 }, "visualAssetId": "rubble" }
+    {
+      "id": "object_torch_entrance_w",
+      "type": "torch",
+      "roomId": "room_mine_entrance",
+      "cell": {
+        "x": 3,
+        "y": 13
+      },
+      "wall": "west"
+    },
+    {
+      "id": "object_torch_entrance_e",
+      "type": "torch",
+      "roomId": "room_mine_entrance",
+      "cell": {
+        "x": 7,
+        "y": 13
+      },
+      "wall": "east"
+    },
+    {
+      "id": "object_entrance_rubble",
+      "type": "prop",
+      "name": "Rubble",
+      "roomId": "room_mine_entrance",
+      "cell": {
+        "x": 3,
+        "y": 15
+      },
+      "visualAssetId": "rubble"
+    },
+    {
+      "id": "object_torch_tunnel",
+      "type": "torch",
+      "roomId": "room_timbered_tunnel",
+      "cell": {
+        "x": 5,
+        "y": 8
+      },
+      "wall": "east",
+      "radius": 3
+    },
+    {
+      "id": "object_torch_hall_w",
+      "type": "torch",
+      "roomId": "room_mine_hall",
+      "cell": {
+        "x": 2,
+        "y": 4
+      },
+      "wall": "west"
+    },
+    {
+      "id": "object_torch_hall_n",
+      "type": "torch",
+      "roomId": "room_mine_hall",
+      "cell": {
+        "x": 5,
+        "y": 1
+      },
+      "wall": "north"
+    },
+    {
+      "id": "object_torch_hall_e",
+      "type": "torch",
+      "roomId": "room_mine_hall",
+      "cell": {
+        "x": 8,
+        "y": 1
+      },
+      "wall": "east"
+    },
+    {
+      "id": "object_hall_crate",
+      "type": "prop",
+      "name": "Crate",
+      "roomId": "room_mine_hall",
+      "cell": {
+        "x": 2,
+        "y": 1
+      },
+      "visualAssetId": "crate"
+    },
+    {
+      "id": "object_torch_storeroom",
+      "type": "torch",
+      "roomId": "room_storeroom",
+      "cell": {
+        "x": 12,
+        "y": 1
+      },
+      "wall": "north"
+    },
+    {
+      "id": "object_store_barrel_a",
+      "type": "prop",
+      "name": "Barrel",
+      "roomId": "room_storeroom",
+      "cell": {
+        "x": 13,
+        "y": 1
+      },
+      "visualAssetId": "barrel"
+    },
+    {
+      "id": "object_store_barrel_b",
+      "type": "prop",
+      "name": "Barrel",
+      "roomId": "room_storeroom",
+      "cell": {
+        "x": 13,
+        "y": 2
+      },
+      "visualAssetId": "barrel"
+    },
+    {
+      "id": "object_store_crate",
+      "type": "prop",
+      "name": "Crate",
+      "roomId": "room_storeroom",
+      "cell": {
+        "x": 10,
+        "y": 4
+      },
+      "visualAssetId": "crate"
+    },
+    {
+      "id": "object_torch_shaft",
+      "type": "torch",
+      "roomId": "room_old_shaft",
+      "cell": {
+        "x": 1,
+        "y": 8
+      },
+      "wall": "west",
+      "radius": 3
+    },
+    {
+      "id": "object_shaft_rubble",
+      "type": "prop",
+      "name": "Rubble",
+      "roomId": "room_old_shaft",
+      "cell": {
+        "x": 1,
+        "y": 10
+      },
+      "visualAssetId": "rubble"
+    },
+    {
+      "id": "object_shaft_key",
+      "type": "pickup",
+      "name": "Iron key",
+      "roomId": "room_storeroom",
+      "cell": {
+        "x": 12,
+        "y": 3
+      },
+      "itemId": "item_shaft_key"
+    },
+    {
+      "id": "object_torch_cache",
+      "type": "torch",
+      "roomId": "room_hidden_cache",
+      "cell": {
+        "x": 8,
+        "y": 8
+      },
+      "wall": "north",
+      "radius": 3
+    },
+    {
+      "id": "object_cache_chest",
+      "type": "chest",
+      "name": "Miner's chest",
+      "roomId": "room_hidden_cache",
+      "cell": {
+        "x": 8,
+        "y": 10
+      },
+      "contents": [
+        "item_healing_draught",
+        "item_gold_pouch"
+      ]
+    }
   ],
   "items": [
     {
@@ -147,8 +530,41 @@
       "name": "Short sword",
       "description": "Notched, but it holds an edge.",
       "category": "weapon",
-      "weapon": { "damage": { "min": 4, "max": 7 }, "windupTicks": 6, "recoveryTicks": 20 },
+      "weapon": {
+        "damage": {
+          "min": 4,
+          "max": 7
+        },
+        "windupTicks": 6,
+        "recoveryTicks": 20
+      },
       "visualAssetId": "short_sword"
+    },
+    {
+      "id": "item_shaft_key",
+      "name": "Iron key",
+      "description": "Heavy, cold, stamped with a pick.",
+      "category": "key",
+      "visualAssetId": "key"
+    },
+    {
+      "id": "item_healing_draught",
+      "name": "Healing draught",
+      "description": "Bitter, but it closes wounds.",
+      "category": "consumable",
+      "effect": {
+        "type": "heal",
+        "amount": 20
+      },
+      "visualAssetId": "flask"
+    },
+    {
+      "id": "item_gold_pouch",
+      "name": "Pouch of gold",
+      "description": "A miner's savings, never collected.",
+      "category": "treasure",
+      "value": 120,
+      "visualAssetId": "coins"
     }
   ],
   "characters": [
@@ -157,11 +573,41 @@
       "name": "Brannoc",
       "classId": "fighter",
       "maxHealth": 40,
-      "equipment": { "mainHand": "item_short_sword" },
+      "equipment": {
+        "mainHand": "item_short_sword"
+      },
       "portraitAssetId": "fighter"
     }
   ],
+  "quests": [
+    {
+      "id": "quest_clear_mines",
+      "title": "Clear the Forgotten Mines",
+      "description": "A goblin chief has taken the old shaft. Find a way in and put an end to him.",
+      "objectives": [
+        {
+          "id": "find_key",
+          "description": "Find the key to the shaft door",
+          "type": "collect_item",
+          "targetId": "item_shaft_key"
+        },
+        {
+          "id": "slay_chief",
+          "description": "Slay the goblin chief",
+          "type": "defeat_encounter",
+          "targetId": "encounter_pit_boss"
+        },
+        {
+          "id": "find_cache",
+          "description": "Find the miner's hidden cache",
+          "type": "open_chest",
+          "targetId": "object_cache_chest",
+          "optional": true
+        }
+      ],
+      "completionText": "The chief is dead and the mines are quiet again."
+    }
+  ],
   "npcs": [],
-  "quests": [],
   "factions": []
 }

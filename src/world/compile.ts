@@ -40,6 +40,21 @@ export interface CompiledProp {
   blocking: boolean;
 }
 
+export interface CompiledChest {
+  id: string;
+  name: string;
+  x: number;
+  y: number;
+  contents: string[];
+}
+
+export interface CompiledPickup {
+  id: string;
+  x: number;
+  y: number;
+  itemId: string;
+}
+
 export interface EnemySpawn {
   /** Stable instance ID: encounter ID plus placement index. */
   instanceId: string;
@@ -61,7 +76,10 @@ export interface CompiledWorld {
   doorAt: Map<number, CompiledDoor>;
   torches: CompiledTorch[];
   props: CompiledProp[];
-  /** Cells that a blocking prop occupies. */
+  chests: CompiledChest[];
+  chestAt: Map<number, CompiledChest>;
+  pickups: CompiledPickup[];
+  /** Cells that a blocking prop or a chest occupies. */
   blocked: Uint8Array;
   spawns: EnemySpawn[];
   /** Baked torchlight per cell, 0..1. */
@@ -129,10 +147,20 @@ export function compileWorld(def: WorldDefinition): CompiledWorld {
 
   const torches: CompiledTorch[] = [];
   const props: CompiledProp[] = [];
+  const chests: CompiledChest[] = [];
+  const chestAt = new Map<number, CompiledChest>();
+  const pickups: CompiledPickup[] = [];
   const blocked = new Uint8Array(width * height);
   for (const obj of def.objects) {
     if (obj.type === 'torch') {
       torches.push({ id: obj.id, x: obj.cell.x, y: obj.cell.y, wall: FACING_INDEX[obj.wall], radius: obj.radius });
+    } else if (obj.type === 'chest') {
+      const chest = { id: obj.id, name: obj.name, x: obj.cell.x, y: obj.cell.y, contents: [...obj.contents] };
+      chests.push(chest);
+      chestAt.set(obj.cell.y * width + obj.cell.x, chest);
+      blocked[obj.cell.y * width + obj.cell.x] = 1;
+    } else if (obj.type === 'pickup') {
+      pickups.push({ id: obj.id, x: obj.cell.x, y: obj.cell.y, itemId: obj.itemId });
     } else {
       props.push({
         id: obj.id,
@@ -180,6 +208,8 @@ export function compileWorld(def: WorldDefinition): CompiledWorld {
         const ni = ny * width + nx;
         if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
         if (tiles[ni] === TILE_WALL || dist[ni] >= 0) continue;
+        // Light must not give a secret door away by shining through it.
+        if (doorAt.get(ni)?.def.kind === 'secret') continue;
         dist[ni] = d + 1;
         queue.push(ni);
       }
@@ -196,6 +226,9 @@ export function compileWorld(def: WorldDefinition): CompiledWorld {
     doorAt,
     torches,
     props,
+    chests,
+    chestAt,
+    pickups,
     blocked,
     spawns,
     light,

@@ -1,11 +1,16 @@
 /**
  * World schema — the contract shared by the engine, the future editor and the
  * future AI creator. World definitions are plain serializable data. They never
- * contain code and never contain runtime state (see engine/state.ts for that).
+ * contain code and never contain runtime state (see engine/types.ts for that).
+ *
+ * Version history
+ *   0.1.0  rooms, doors, enemies, encounters, torches, props, weapons
+ *   0.2.0  locks, secret doors, pickups, chests, keys, consumables, treasure,
+ *          boss encounters with an introduction, quests
  */
 import { z } from 'zod';
 
-export const SCHEMA_VERSION = '0.1.0';
+export const SCHEMA_VERSION = '0.2.0';
 
 const id = z.string().regex(/^[a-z][a-z0-9_]*$/, 'ids are lower_snake_case');
 const cell = z.object({ x: z.number().int().min(1), y: z.number().int().min(1) });
@@ -47,6 +52,8 @@ export const SettingsSchema = z.object({
   startCell: cell,
   startFacing: FacingSchema,
   startingPartyIds: z.array(id).min(1).max(4),
+  /** Quests the party holds from the first moment. */
+  startingQuestIds: z.array(id).default([]),
 });
 
 export const RegionSchema = z.object({
@@ -79,17 +86,23 @@ export const RoomSchema = z.object({
 export const DoorSchema = z.object({
   id,
   name: z.string().default('Door'),
-  /** An archway is always passable. A door starts closed and opens on interact. */
-  kind: z.enum(['archway', 'door']),
+  /**
+   * archway  always passable
+   * door     starts closed, opens and closes on interact
+   * secret   looks like wall until someone tries it, then stays open
+   */
+  kind: z.enum(['archway', 'door', 'secret']),
   /** The single wall cell this opening occupies, between the two rooms. */
   cell,
+  /** A locked door needs the party to hold this key item. Doors only. */
+  lock: z.object({ keyItemId: id }).optional(),
 });
 
 export const EnemySchema = z.object({
   id,
   name: z.string().min(1),
   description: z.string().default(''),
-  archetype: z.enum(['goblin']),
+  archetype: z.enum(['goblin', 'goblin_chief']),
   health: z.number().int().min(1),
   damage: damageRange,
   defence: z.number().int().min(0).default(0),
@@ -105,7 +118,7 @@ export const EnemySchema = z.object({
   staggerTicks: ticks,
   /** Names an engine-supported behaviour. Never code. */
   behaviour: z.enum(['melee_aggressive']),
-  visualAssetId: z.enum(['goblin']),
+  visualAssetId: z.enum(['goblin', 'goblin_chief']),
 });
 
 export const EncounterSchema = z.object({
@@ -115,6 +128,10 @@ export const EncounterSchema = z.object({
   placements: z
     .array(z.object({ enemyId: id, cell, facing: FacingSchema }))
     .min(1),
+  /** Boss encounters are announced and shown with a named health bar. */
+  boss: z.boolean().default(false),
+  /** A line the enemy speaks when it first notices the party. */
+  intro: z.string().optional(),
 });
 
 export const ObjectSchema = z.discriminatedUnion('type', [
@@ -137,22 +154,56 @@ export const ObjectSchema = z.discriminatedUnion('type', [
     visualAssetId: z.enum(['barrel', 'crate', 'rubble']),
     blocking: z.boolean().default(true),
   }),
+  /** An item lying on the floor. Walking onto its cell picks it up. */
+  z.object({
+    id,
+    type: z.literal('pickup'),
+    name: z.string().default('Item'),
+    roomId: id,
+    cell,
+    itemId: id,
+  }),
+  /** A container that blocks its cell and gives its contents when opened. */
+  z.object({
+    id,
+    type: z.literal('chest'),
+    name: z.string().default('Chest'),
+    roomId: id,
+    cell,
+    contents: z.array(id).min(1),
+  }),
 ]);
 
-export const ItemSchema = z.object({
-  id,
-  name: z.string().min(1),
-  description: z.string().default(''),
-  category: z.enum(['weapon']),
-  weapon: z.object({
-    damage: damageRange,
-    /** Ticks between pressing attack and the blow landing. */
-    windupTicks: ticks,
-    /** Ticks after the blow before another action. */
-    recoveryTicks: ticks,
+const itemBase = { id, name: z.string().min(1), description: z.string().default('') };
+
+export const ItemSchema = z.discriminatedUnion('category', [
+  z.object({
+    ...itemBase,
+    category: z.literal('weapon'),
+    weapon: z.object({
+      damage: damageRange,
+      /** Ticks between pressing attack and the blow landing. */
+      windupTicks: ticks,
+      /** Ticks after the blow before another action. */
+      recoveryTicks: ticks,
+    }),
+    visualAssetId: z.enum(['short_sword']),
   }),
-  visualAssetId: z.enum(['short_sword']),
-});
+  z.object({ ...itemBase, category: z.literal('key'), visualAssetId: z.enum(['key']) }),
+  z.object({
+    ...itemBase,
+    category: z.literal('consumable'),
+    /** Names an engine-supported effect. Never code. */
+    effect: z.object({ type: z.literal('heal'), amount: z.number().int().min(1) }),
+    visualAssetId: z.enum(['flask']),
+  }),
+  z.object({
+    ...itemBase,
+    category: z.literal('treasure'),
+    value: z.number().int().min(0),
+    visualAssetId: z.enum(['coins']),
+  }),
+]);
 
 export const CharacterSchema = z.object({
   id,
@@ -161,6 +212,26 @@ export const CharacterSchema = z.object({
   maxHealth: z.number().int().min(1),
   equipment: z.object({ mainHand: id }),
   portraitAssetId: z.enum(['fighter']),
+});
+
+export const QuestObjectiveSchema = z.object({
+  id,
+  description: z.string().min(1),
+  /** Names an engine-supported objective type. Never code. */
+  type: z.enum(['collect_item', 'defeat_encounter', 'open_chest', 'reach_room']),
+  /** The item, encounter, chest object or room this objective is about. */
+  targetId: id,
+  /** Optional objectives are tracked but not needed to finish the quest. */
+  optional: z.boolean().default(false),
+});
+
+export const QuestSchema = z.object({
+  id,
+  title: z.string().min(1),
+  description: z.string().default(''),
+  objectives: z.array(QuestObjectiveSchema).min(1),
+  /** Shown when the last required objective is done. */
+  completionText: z.string().default(''),
 });
 
 export const WorldSchema = z.object({
@@ -175,9 +246,9 @@ export const WorldSchema = z.object({
   objects: z.array(ObjectSchema).default([]),
   items: z.array(ItemSchema).default([]),
   characters: z.array(CharacterSchema).min(1),
+  quests: z.array(QuestSchema).default([]),
   // Reserved for later phases. Present so worlds stay forward-shaped.
   npcs: z.array(z.object({ id }).passthrough()).default([]),
-  quests: z.array(z.object({ id }).passthrough()).default([]),
   factions: z.array(z.object({ id }).passthrough()).default([]),
 });
 
@@ -189,5 +260,8 @@ export type EnemyDef = z.infer<typeof EnemySchema>;
 export type EncounterDef = z.infer<typeof EncounterSchema>;
 export type ObjectDef = z.infer<typeof ObjectSchema>;
 export type ItemDef = z.infer<typeof ItemSchema>;
+export type WeaponDef = Extract<ItemDef, { category: 'weapon' }>;
 export type CharacterDef = z.infer<typeof CharacterSchema>;
+export type QuestDef = z.infer<typeof QuestSchema>;
+export type QuestObjectiveDef = z.infer<typeof QuestObjectiveSchema>;
 export type Cell = z.infer<typeof cell>;

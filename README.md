@@ -21,14 +21,18 @@ npm run art            # write the generated art to .art/ for review
 | --- | --- |
 | W A S D | Step forward, left, back, right |
 | Q E (or left/right arrows) | Turn |
-| Space or left click | Attack |
+| J or left click | Light attack |
+| K or Shift + left click | Heavy attack: slow, hits hard, can break a goblin's wind-up |
+| Hold L or right click | Block. Raise it just as a blow lands to parry |
+| Space | Dodge back, or the way you are steering |
 | F or Enter | Open and close doors, unlock, search walls, open chests |
 | H | Drink a healing draught |
-| J | Quest journal |
+| B | Quest journal |
 | M | Sound on or off |
 | R | Try again after a defeat |
 
-Watch the goblin: when it rears back, step away and its blow misses.
+Watch the enemy: when it rears back, step away, dodge, block or parry. A red glow means
+the blow cannot be blocked.
 
 ## Layout
 

@@ -1,4 +1,4 @@
-# World schema reference — version 0.2.0
+# World schema reference — version 0.3.0
 
 What the engine actually reads today. The source of truth is `src/schema/world.ts`
 (shapes) and `src/schema/validate.ts` (meaning). A world is one JSON object; see
@@ -8,17 +8,17 @@ What the engine actually reads today. The source of truth is `src/schema/world.t
 
 | Field | Contents |
 | --- | --- |
-| `schemaVersion` | `"0.2.0"`. `0.1.0` worlds are migrated on load. Anything else is rejected. |
+| `schemaVersion` | `"0.3.0"`. `0.1.0` and `0.2.0` worlds are migrated on load. Anything else is rejected. |
 | `world` | id, name, description, theme, difficulty, optional author and timestamps |
 | `settings` | movement mode, start room, start cell, start facing, starting party, starting quests |
 | `regions` | id, name, environment (tileset), room IDs |
 | `rooms` | id, region, name, type, description, `layout` rectangle, connections, encounter IDs, object IDs |
 | `doors` | id, name, `kind` (`archway`, `door`, `secret`), cell, optional `lock.keyItemId` |
-| `enemies` | stats, timings, sight range, `behaviour` and `visualAssetId` chosen from engine-supported lists |
+| `enemies` | health, defence, `poise`, movement, sight range, a list of `attacks`, `behaviour` and `visualAssetId` from engine-supported lists |
 | `encounters` | room, enemy placements, `boss` flag, optional `intro` line |
 | `objects` | `torch`, `prop`, `pickup` (an item on the floor) or `chest` (blocking, with contents) |
 | `items` | `weapon`, `key`, `consumable` (with an engine-supported effect) or `treasure` |
-| `characters` | name, class, health, equipment, portrait |
+| `characters` | name, class, health, stamina, equipment, portrait |
 | `quests` | title, description, objectives, completion text |
 | `npcs`, `factions` | reserved for later phases |
 
@@ -28,6 +28,24 @@ Rooms are rectangles of floor on one shared grid, with x growing east and y grow
 south. Rooms must be separated by at least one wall cell. A door occupies exactly one
 wall cell that touches both of the rooms it joins, and both rooms must list the
 connection.
+
+## Combat data
+
+A weapon has two attacks, `light` and `heavy`. Each has `damage` (min and max),
+`windupTicks`, `recoveryTicks`, `staminaCost` and `impact`. Time is in ticks, 60 to a
+second.
+
+An enemy attack has `damage`, `telegraphTicks` (the visible wind-up), `recoverTicks`,
+a `pattern` and a `blockable` flag. The enemy picks between its attacks by `weight`.
+
+| Pattern | Reach |
+| --- | --- |
+| `front` | the one cell the enemy aimed at |
+| `sweep` | that cell and the cells to either side, so a sidestep does not escape |
+
+A player's blow breaks an enemy's wind-up only if its `impact` is at least the enemy's
+`poise`. With the usual light impact of 1 and heavy impact of 3: poise 2 means only
+heavy blows interrupt, and poise 4 means nothing does.
 
 ## Quest objectives
 
@@ -56,6 +74,6 @@ A quest is complete when every objective not marked `optional` is done.
 
 ## Runtime state is separate
 
-Door states, opened chests, taken pickups, inventory, quest progress, enemy health and
-the party's position live in the session (`src/engine/types.ts`), never in the world
+Door states, opened chests, taken pickups, inventory, quest progress, health, stamina,
+the guard, enemy state and the party's position live in the session (`src/engine/types.ts`), never in the world
 definition.

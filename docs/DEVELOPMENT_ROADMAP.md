@@ -1,10 +1,11 @@
 DEVELOPMENT ROADMAP — WORLD FORGE
 Status (2026-11-15)
-Phase 0 and Phase 1 are complete, and The Forgotten Mines is complete as the golden reference adventure. See DEVELOPMENT_LOG.md for the milestone reports.
+Phases 0, 1 and 2 are built and tested, and The Forgotten Mines is complete as the golden reference adventure. See DEVELOPMENT_LOG.md for the milestone reports.
+Phase 2 still needs one thing no test can give: a person playing it and judging whether the combat feels good. Its numbers are first guesses.
 The code lives at https://github.com/john-l-hansen/world-forge.
-Next: Phase 2 (combat).
+Next: tune combat from play, then Phase 3 (RPG systems).
 Two phases were added on 2026-11-15: Phase 3b (co-op play) and Phase 6b (dynamic world simulation).
-The world schema and world validation were brought forward from Phase 4, so that The Forgotten Mines loads from world data and is not hard-coded. The schema is at version 0.2.0 (rooms, doors, locks, secret doors, enemies, encounters, bosses, objects, chests, pickups, items, characters, quests).
+The world schema and world validation were brought forward from Phase 4, so that The Forgotten Mines loads from world data and is not hard-coded. The schema is at version 0.3.0 (rooms, doors, locks, secret doors, enemies with attack lists and poise, encounters, bosses, objects, chests, pickups, items, weapons with light and heavy attacks, characters with stamina, quests).
 1. Development philosophy
 Build incrementally.
 Every milestone must produce functioning software.
@@ -68,7 +69,7 @@ One secret room.
 One boss encounter.
 One simple quest.
 The full adventure is played from start to finish by an automated test (tests/adventure.test.ts), which is the standing regression test for the engine.
-4. Phase 2: Combat (next)
+4. Phase 2: Combat (built and tested; feel not yet judged by a player)
 Objectives
 Establish satisfying real-time combat.
 Tasks
@@ -91,10 +92,21 @@ Defensive actions work.
 Stamina rules work.
 Combat feedback is clear.
 Combat is tested.
-Already in place from Phases 1 and 2 groundwork
-Light attack with wind-up and recovery.
-Enemy telegraphs that can be side-stepped.
-Hit-stop, hit flash, stagger and damage numbers.
+Status of each task
+Light attacks: done.
+Heavy attacks: done. Slower, costlier, about twice the damage, breaks a wind-up if its impact meets the enemy's poise.
+Attack timing: done. Wind-up and recovery per attack, in world data.
+Stamina: done. Spent by attacks, blocks and dodges; returns with rest.
+Blocking: done. Front only; 30% damage for 10 stamina; a tired guard breaks.
+Parrying: done. A guard raised within 0.15 s of the blow; no damage, enemy reels for a second.
+Dodging: done. A quick step with a short window in which the party cannot be hit.
+Enemy telegraphs: done. Every attack has a visible wind-up; unblockable ones glow red.
+Hit reactions and stagger: done.
+Damage feedback: done. Hit-stop, flash, floating numbers, camera response, parry spark.
+Sound integration: done, but not yet listened to.
+Not done: directional attacks (horizontal, vertical, thrust), which GAMEPLAY_DESIGN lists as "eventually".
+Controls
+J or left click: light attack. K or Shift + left click: heavy attack. Hold L or right click: block and parry. Space: dodge. B: journal.
 5. Phase 3: RPG systems
 Objectives
 Establish the basic RPG framework.
@@ -282,7 +294,7 @@ Large-scale asset generation.
 These belong to future development.
 Multiplayer was on this list until 2026-11-15. Co-op play is now Phase 3b. Other forms of multiplayer (competitive play, large shared worlds) remain out of scope.
 15. Immediate priority
-The immediate goal is Phase 2: combat.
+The immediate goal is to play The Forgotten Mines and tune the combat numbers, then begin Phase 3: RPG systems.
 Do not spend the initial development effort building the entire creator platform.
 Build a playable retro dungeon first.
 Then make it extensible.

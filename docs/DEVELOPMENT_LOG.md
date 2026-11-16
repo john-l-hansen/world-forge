@@ -1,5 +1,96 @@
 # Development log — World Forge
 
+## Milestone 3 — Phase 2: Combat (2026-11-15)
+
+Combat now has a light and a heavy attack, stamina, blocking, parrying, dodging, and
+enemies with more than one attack.
+
+### What was implemented
+
+- **World schema 0.3.0.** A weapon has a `light` and a `heavy` attack, each with damage,
+  wind-up, recovery, stamina cost and impact. Characters have `maxStamina`. Enemies have
+  `poise` and a weighted list of `attacks`, each with its own damage, timings, a `front`
+  or `sweep` pattern and a `blockable` flag. `0.2.0` worlds are migrated on load.
+- **Stamina.** Attacks, blocked blows and dodges spend it. It returns at 12 a second
+  after a half-second rest, but not while swinging or holding the guard up. A character
+  too tired to act gets a clear refusal instead of a weak swing.
+- **Heavy attack.** Slower and costlier, roughly twice the damage, longer hit-stop, and
+  it staggers for twice as long. If its impact meets the enemy's poise it breaks a
+  wind-up: it interrupts a goblin but not the chief.
+- **Block.** Holding the guard up while facing the attacker cuts a blow to 30% and
+  costs 10 stamina. With too little stamina the guard is broken and the blow does 70%.
+- **Parry.** A guard raised within 9 ticks (0.15 s) before the blow lands turns it aside
+  for no damage and no stamina, and leaves the enemy reeling for a full second, long
+  enough for a heavy attack.
+- **Dodge.** A quick step (7 ticks against 14 for a walk), backward or in the direction
+  being steered, for 10 stamina. The party cannot be hit for 12 ticks from its start,
+  so a well-timed dodge passes through a blow even if it stays in reach.
+- **Enemy attacks.** The goblin has one, a chop. The chief has two: a blockable cleave
+  and an unblockable great sweep that also hits the cells to either side, so a sidestep
+  fails and the answer is to back off or dodge. The enemy glows red and its name
+  flashes while it winds up an attack that cannot be blocked.
+- **Presentation.** A stamina bar, a guard indicator, six action buttons, heavy-swing
+  and guard poses for the sword, a parry spark, a low lunge on a dodge, new floating
+  numbers and new sounds for every outcome. A one-time tip explains the three answers
+  to a wind-up the first time one happens.
+
+### Controls
+
+| Action | Keys |
+| --- | --- |
+| Light attack | J, or left click |
+| Heavy attack | K, or Shift + left click |
+| Block and parry | hold L, or hold right click |
+| Dodge | Space (back, or the way you are steering) |
+| Journal | B (was J) |
+
+This follows GAMEPLAY_DESIGN: left mouse attacks, right mouse blocks, Space dodges.
+Attack moved off Space, as flagged in milestone 1.
+
+### Decisions made
+
+- **A parry is a well-timed block, not a separate button.** One guard input, with
+  timing deciding the result.
+- **Dodge is a fast grid step with a short window of safety.** It keeps grid movement
+  intact while still rewarding timing.
+- **Poise against impact** decides interruption, with plain numbers in world data, so
+  creators can make an enemy that shrugs off heavy blows without new code.
+- **The guard only works to the front.** With one character this is simple; party
+  positioning will build on it.
+
+### Tests executed
+
+- `npm run typecheck` — passes.
+- `npm test` — 97 unit tests pass. New: 25 in `tests/combat.test.ts` covering stamina,
+  heavy attacks, interruption and poise, block, parry, guard break, facing, dodge and
+  its safety window, sweep reach, unblockable attacks, attack choice and determinism.
+  The full-adventure regression test still passes.
+- `npm run build` — production build succeeds.
+- `npm run test:browser` — 59 checks pass in headless Chrome, and passed on four runs
+  in a row. New checks: heavy and light stamina costs, stamina recovery, dodge back and
+  sideways, raising and lowering the guard, blocking a goblin's blow, and a timed parry.
+  (The commit message for this work says 64 checks; 59 is the correct count.)
+
+### Known limitations
+
+- **Feel is untested by a person.** Every number here (parry window, dodge safety,
+  stamina costs, wind-up lengths) is a first guess that passes tests. Whether combat is
+  satisfying, which is the point of Phase 2, needs someone to play it.
+- The scripted test player still wins by stepping away from every wind-up, so the
+  adventure test does not exercise block, parry or dodge. Those are covered by the
+  staged duels in `tests/combat.test.ts` and by the browser playthrough.
+- Both of the chief's attacks use the same wind-up pose; only the red glow, the
+  flashing name and the log tell them apart.
+- Directional attacks (horizontal, vertical, thrust) are not in. GAMEPLAY_DESIGN lists
+  them as "eventually".
+- Sound still has not been listened to. Tested in headless Chrome only.
+- Controls cannot yet be rebound in the interface.
+
+### Recommended next milestone
+
+Play it and tune the numbers. Then Phase 3: character attributes and classes,
+equipment, experience and levels, spells, and a second party member with basic AI.
+
 ## Milestone 2 — The Forgotten Mines, complete (2026-11-15)
 
 The golden reference adventure is now whole: five connected rooms, one entrance, one

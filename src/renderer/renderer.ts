@@ -4,11 +4,11 @@
  * unfiltered, so every pixel on screen is a real pixel of the frame.
  */
 import * as THREE from 'three';
-import { GOBLIN_H, GOBLIN_POSES, GOBLIN_W, PROP_SIZE, SWORD_H, SWORD_W, TORCH_H, TORCH_W, drawGoblin, drawProp, drawSword, drawTorch, type GoblinPose } from '../art/sprites';
+import { CHEST_H, CHEST_W, GOBLIN_H, GOBLIN_POSES, GOBLIN_W, KEY_H, KEY_W, PROP_SIZE, SWORD_H, SWORD_W, TORCH_H, TORCH_W, drawChest, drawGoblin, drawKey, drawProp, drawSword, drawTorch, type GoblinPose, type GoblinVariant } from '../art/sprites';
 import { Pix } from '../art/pixel';
 import { BUMP_TICKS, ENEMY_ATTACK_POSE_TICKS, MOVE_TICKS, TURN_TICKS, type EnemyState, type GameEvent, type SessionState } from '../engine/types';
 import { DIR_X, DIR_Y, type CompiledWorld } from '../world/compile';
-import { DOOR_HEIGHT, buildAtlas, buildDoorGeometry, buildDungeonGeometry } from './dungeon';
+import { DOOR_HEIGHT, buildAtlas, buildDoorGeometry, buildDungeonGeometry, buildSecretGeometry } from './dungeon';
 import { makeDungeonMaterial, makeOverlayMaterial, makePresentMaterial, makeSharedUniforms, makeSpriteMaterial, pixTexture, type SharedUniforms } from './materials';
 
 export interface RendererOptions {
@@ -21,7 +21,8 @@ export interface RendererOptions {
 const EYE_HEIGHT = 0.52;
 /** The eye sits a little behind the cell centre, so near things fit in view. */
 const EYE_SETBACK = 0.28;
-const GOBLIN_WORLD_HEIGHT = 0.8;
+/** How tall each kind of enemy stands, in cells. The ceiling is at 1. */
+const ENEMY_HEIGHT: Record<GoblinVariant, number> = { goblin: 0.8, goblin_chief: 0.97 };
 const PROP_TEXEL = 1 / 64;
 
 const smooth = (t: number) => t * t * (3 - 2 * t);
@@ -49,6 +50,14 @@ interface DoorView {
   id: string;
   mesh: THREE.Mesh;
   open: number;
+  /** How far the leaf travels to be fully out of sight. */
+  travel: number;
+}
+
+interface LootView {
+  id: string;
+  mesh: THREE.Mesh;
+  material: THREE.ShaderMaterial;
 }
 
 export class DungeonRenderer {
@@ -68,6 +77,9 @@ export class DungeonRenderer {
 
   private enemies = new Map<string, EnemyView>();
   private doors: DoorView[] = [];
+  private chests: LootView[] = [];
+  private pickups: LootView[] = [];
+  private healFlash = 0;
   private torchMaterials: THREE.ShaderMaterial[] = [];
   private facers: THREE.Object3D[] = [];
   private sword: THREE.Mesh;
@@ -112,13 +124,19 @@ export class DungeonRenderer {
     this.scene.add(new THREE.Mesh(dungeonGeometry, dungeonMaterial));
     this.disposables.push(atlas, dungeonMaterial, dungeonGeometry);
 
+    const lightAt = (x: number, y: number) => world.light[y * world.width + x] ?? 0;
     for (const door of world.doors) {
-      if (door.def.kind !== 'door') continue;
-      const geo = buildDoorGeometry(door.axis, world.light[door.y * world.width + door.x]);
+      if (door.def.kind === 'archway') continue;
+      const secret = door.def.kind === 'secret';
+      const geo = secret
+        ? door.axis === 'ew'
+          ? buildSecretGeometry('ew', lightAt(door.x - 1, door.y), lightAt(door.x + 1, door.y))
+          : buildSecretGeometry('ns', lightAt(door.x, door.y - 1), lightAt(door.x, door.y + 1))
+        : buildDoorGeometry(door.axis, lightAt(door.x, door.y), Boolean(door.def.lock));
       const mesh = new THREE.Mesh(geo, dungeonMaterial);
       mesh.position.set(door.x, 0, door.y);
       this.scene.add(mesh);
-      this.doors.push({ id: door.def.id, mesh, open: 0 });
+      this.doors.push({ id: door.def.id, mesh, open: 0, travel: secret ? 1 : DOOR_HEIGHT * 0.99 });
       this.disposables.push(geo);
     }
 
@@ -154,12 +172,50 @@ export class DungeonRenderer {
       this.disposables.push(material, mesh.geometry);
     }
 
+    // --- Chests and things lying on the floor ---------------------------------
+    if (world.chests.length) {
+      const chestSheet = pixTexture(sheetOf([drawChest(false), drawChest(true)]));
+      this.disposables.push(chestSheet);
+      for (const chest of world.chests) {
+        const material = makeSpriteMaterial(chestSheet, this.shared, 2);
+        material.uniforms.uLight.value = lightAt(chest.x, chest.y);
+        const mesh = billboard(CHEST_W * PROP_TEXEL, CHEST_H * PROP_TEXEL, material);
+        mesh.position.set(chest.x, 0, chest.y);
+        this.scene.add(mesh);
+        this.facers.push(mesh);
+        this.chests.push({ id: chest.id, mesh, material });
+        this.disposables.push(material, mesh.geometry);
+      }
+    }
+    if (world.pickups.length) {
+      const keySheet = pixTexture(sheetOf([drawKey(0), drawKey(1)]));
+      this.disposables.push(keySheet);
+      for (const pickup of world.pickups) {
+        const material = makeSpriteMaterial(keySheet, this.shared, 2);
+        // Small things on the floor are lifted a little so they can be found.
+        material.uniforms.uLight.value = Math.max(0.75, lightAt(pickup.x, pickup.y));
+        const mesh = billboard(KEY_W * PROP_TEXEL, KEY_H * PROP_TEXEL, material);
+        mesh.position.set(pickup.x, 0.04, pickup.y);
+        this.scene.add(mesh);
+        this.facers.push(mesh);
+        this.pickups.push({ id: pickup.id, mesh, material });
+        this.disposables.push(material, mesh.geometry);
+      }
+    }
+
     // --- Enemies -------------------------------------------------------------
-    const goblinSheet = pixTexture(sheetOf(GOBLIN_POSES.map(drawGoblin)));
-    this.disposables.push(goblinSheet);
+    const enemySheets = new Map<GoblinVariant, THREE.Texture>();
     for (const spawn of world.spawns) {
-      const material = makeSpriteMaterial(goblinSheet, this.shared, GOBLIN_POSES.length);
-      const mesh = billboard((GOBLIN_WORLD_HEIGHT * GOBLIN_W) / GOBLIN_H, GOBLIN_WORLD_HEIGHT, material);
+      const variant = world.def.enemies.find((e) => e.id === spawn.enemyId)!.visualAssetId;
+      let sheet = enemySheets.get(variant);
+      if (!sheet) {
+        sheet = pixTexture(sheetOf(GOBLIN_POSES.map((pose) => drawGoblin(pose, variant))));
+        enemySheets.set(variant, sheet);
+        this.disposables.push(sheet);
+      }
+      const height = ENEMY_HEIGHT[variant];
+      const material = makeSpriteMaterial(sheet, this.shared, GOBLIN_POSES.length);
+      const mesh = billboard((height * GOBLIN_W) / GOBLIN_H, height, material);
       this.scene.add(mesh);
       this.facers.push(mesh);
       this.enemies.set(spawn.instanceId, { mesh, material });
@@ -200,6 +256,9 @@ export class DungeonRenderer {
       case 'party.died':
         this.damageFlash = 1;
         break;
+      case 'item.used':
+        this.healFlash = 1;
+        break;
     }
   }
 
@@ -215,6 +274,7 @@ export class DungeonRenderer {
     this.hitKick = Math.max(0, this.hitKick - dt * 7);
     this.hurtKick = Math.max(0, this.hurtKick - dt * 4);
     this.damageFlash = Math.max(0, this.damageFlash - dt * 3.2);
+    this.healFlash = Math.max(0, this.healFlash - dt * 2.2);
     this.deathFade = state.status === 'dead' ? Math.min(1, this.deathFade + dt * 0.7) : 0;
 
     // Torch flicker: a slow wobble with the odd sharp gutter.
@@ -231,14 +291,20 @@ export class DungeonRenderer {
       const goal = state.doorsOpen[door.id] ? 1 : 0;
       const stepSize = dt * 3.2;
       door.open = goal > door.open ? Math.min(goal, door.open + stepSize) : Math.max(goal, door.open - stepSize);
-      door.mesh.position.y = smooth(door.open) * DOOR_HEIGHT * 0.99;
+      door.mesh.position.y = smooth(door.open) * door.travel;
       door.mesh.visible = door.open < 0.995;
+    }
+    for (const chest of this.chests) chest.material.uniforms.uFrame.value = state.chestsOpened[chest.id] ? 1 : 0;
+    for (const pickup of this.pickups) {
+      pickup.mesh.visible = !state.pickupsTaken[pickup.id];
+      pickup.material.uniforms.uFrame.value = Math.floor(timeSeconds * 2.5) % 4 === 0 ? 1 : 0;
     }
 
     for (const enemy of state.enemies) this.placeEnemy(enemy, now);
     this.placeSword(state, now, timeSeconds);
 
     this.present.uniforms.uDamage.value = this.damageFlash;
+    this.present.uniforms.uHeal.value = this.healFlash;
     this.present.uniforms.uFade.value = this.deathFade;
 
     this.gl.setRenderTarget(this.target);

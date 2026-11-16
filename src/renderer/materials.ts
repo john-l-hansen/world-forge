@@ -187,6 +187,7 @@ export function makePresentMaterial(frame: THREE.Texture): THREE.ShaderMaterial 
       uFrame: { value: frame },
       uLevels: { value: 28 },
       uDamage: { value: 0 },
+      uHeal: { value: 0 },
       uFade: { value: 0 },
     },
     depthTest: false,
@@ -202,6 +203,7 @@ export function makePresentMaterial(frame: THREE.Texture): THREE.ShaderMaterial 
       uniform sampler2D uFrame;
       uniform float uLevels;
       uniform float uDamage;
+      uniform float uHeal;
       uniform float uFade;
       varying vec2 vUv;
       float bayer4(vec2 p) {
@@ -213,6 +215,7 @@ export function makePresentMaterial(frame: THREE.Texture): THREE.ShaderMaterial 
       void main() {
         vec3 c = texture2D(uFrame, vUv).rgb;
         c = mix(c, vec3(0.62, 0.05, 0.03), uDamage * 0.55);
+        c += vec3(0.16, 0.30, 0.10) * uHeal * 0.6;
         c = mix(c, vec3(0.16, 0.0, 0.0) * dot(c, vec3(0.5)), uFade);
         c = floor(c * uLevels + bayer4(gl_FragCoord.xy)) / uLevels;
         gl_FragColor = vec4(c, 1.0);

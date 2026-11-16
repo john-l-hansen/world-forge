@@ -4,16 +4,16 @@
  */
 import * as THREE from 'three';
 import { Pix, hash2 } from '../art/pixel';
-import { TEX, dirtFloor, plankDoor, rockCeiling, stoneWall, timberFrame, timberWall } from '../art/textures';
+import { TEX, dirtFloor, lockedDoor, plankDoor, rockCeiling, secretWall, stoneWall, timberFrame, timberWall } from '../art/textures';
 import { DIR_X, DIR_Y, TILE_DOORWAY, TILE_WALL, type CompiledWorld } from '../world/compile';
 
-export const TILE = { stoneA: 0, stoneB: 1, timber: 2, floor: 3, ceiling: 4, door: 5, frame: 6, floorB: 7 } as const;
-const TILE_COUNT = 8;
+export const TILE = { stoneA: 0, stoneB: 1, timber: 2, floor: 3, ceiling: 4, door: 5, frame: 6, floorB: 7, secret: 8, doorLocked: 9 } as const;
+const TILE_COUNT = 10;
 export const DOOR_HEIGHT = 0.86;
 
 export function buildAtlas(): Pix {
   const atlas = new Pix(TEX * TILE_COUNT, TEX);
-  const tiles = [stoneWall(1), stoneWall(2), timberWall(3), dirtFloor(4), rockCeiling(5), plankDoor(6), timberFrame(7), dirtFloor(8)];
+  const tiles = [stoneWall(1), stoneWall(2), timberWall(3), dirtFloor(4), rockCeiling(5), plankDoor(6), timberFrame(7), dirtFloor(8), secretWall(1), lockedDoor(6)];
   tiles.forEach((t, i) => atlas.blit(t, i * TEX, 0));
   return atlas;
 }
@@ -142,12 +142,31 @@ export function buildDungeonGeometry(world: CompiledWorld): THREE.BufferGeometry
 }
 
 /** A door leaf: a single quad across the middle of its cell. */
-export function buildDoorGeometry(axis: 'ns' | 'ew', light: number): THREE.BufferGeometry {
+export function buildDoorGeometry(axis: 'ns' | 'ew', light: number, locked: boolean): THREE.BufferGeometry {
   const b = new QuadBuilder();
   const corners: [V3, V3, V3, V3] =
     axis === 'ns'
       ? [[-0.5, 0, 0], [0.5, 0, 0], [0.5, DOOR_HEIGHT, 0], [-0.5, DOOR_HEIGHT, 0]]
       : [[0, 0, 0.5], [0, 0, -0.5], [0, DOOR_HEIGHT, -0.5], [0, DOOR_HEIGHT, 0.5]];
-  b.quad(corners, TILE.door, [light, light, light, light], axis === 'ns' ? 1 : 0.85);
+  b.quad(corners, locked ? TILE.doorLocked : TILE.door, [light, light, light, light], axis === 'ns' ? 1 : 0.85);
+  return b.build();
+}
+
+/**
+ * A secret door: two full-height slabs of stonework, one flush with the wall
+ * of each room it joins, so from either side it reads as more wall.
+ * `lightA` is the room on the north or west side, `lightB` the south or east.
+ */
+export function buildSecretGeometry(axis: 'ns' | 'ew', lightA: number, lightB: number): THREE.BufferGeometry {
+  const b = new QuadBuilder();
+  // Sit a hair proud of the cell edge so the slab covers the door's lintel.
+  const edge = 0.505;
+  if (axis === 'ew') {
+    b.quad([[-edge, 0, -0.5], [-edge, 0, 0.5], [-edge, 1, 0.5], [-edge, 1, -0.5]], TILE.secret, [lightA, lightA, lightA, lightA], WALL_SHADE[1]);
+    b.quad([[edge, 0, 0.5], [edge, 0, -0.5], [edge, 1, -0.5], [edge, 1, 0.5]], TILE.secret, [lightB, lightB, lightB, lightB], WALL_SHADE[3]);
+  } else {
+    b.quad([[0.5, 0, -edge], [-0.5, 0, -edge], [-0.5, 1, -edge], [0.5, 1, -edge]], TILE.secret, [lightA, lightA, lightA, lightA], WALL_SHADE[2]);
+    b.quad([[-0.5, 0, edge], [0.5, 0, edge], [0.5, 1, edge], [-0.5, 1, edge]], TILE.secret, [lightB, lightB, lightB, lightB], WALL_SHADE[0]);
+  }
   return b.build();
 }

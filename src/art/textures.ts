@@ -2,7 +2,7 @@
  * Original 64×64 environment textures for the mine tileset, generated from
  * the palette with repeatable noise. All of them tile.
  */
-import { DIRT, INK, IRON, RUST, STONE, WOOD } from './palette';
+import { DIRT, GOLD, INK, IRON, RUST, STONE, WOOD } from './palette';
 import { Pix, clampIndex, hash2, tileNoise, type Ramp } from './pixel';
 
 export const TEX = 64;
@@ -212,5 +212,39 @@ export function timberFrame(seed: number): Pix {
   for (let i = 0; i < 4; i++) plank(p, i * 16, 0, 16, TEX, seed + i, true);
   plank(p, 0, 0, TEX, 8, seed + 9, false);
   for (let x = 0; x < TEX; x++) p.set(x, 8, WOOD[0]);
+  return p;
+}
+
+/**
+ * Stonework that hides a secret door. Close to the ordinary wall, but the
+ * mortar is cracked through in a door-shaped seam for those who look.
+ */
+export function secretWall(seed: number): Pix {
+  const p = stoneWall(seed);
+  for (let y = 5; y < TEX; y++) {
+    for (const x of [7, 56]) if (hash2(x, y, seed) > 0.5) p.set(x + (hash2(y, x, seed) > 0.8 ? 1 : 0), y, STONE[0]);
+  }
+  for (let x = 7; x <= 56; x++) if (hash2(x, 5, seed) > 0.55) p.set(x, 5 + (hash2(x, 9, seed) > 0.8 ? 1 : 0), STONE[0]);
+  return p;
+}
+
+/** The plank door with a heavy lock plate in place of the ring handle. */
+export function lockedDoor(seed: number): Pix {
+  const p = plankDoor(seed);
+  // Cover the ring handle with planking, then add a third band and the lock.
+  plank(p, TEX - 23, 26, 11, 16, seed + 14, true);
+  for (let x = 7; x < TEX - 7; x++) {
+    p.set(x, 30, IRON[3]);
+    p.set(x, 31, IRON[2]);
+    p.set(x, 32, IRON[2]);
+    p.set(x, 33, IRON[0]);
+  }
+  p.rect(TEX - 24, 25, 13, 15, IRON[1]);
+  p.rect(TEX - 23, 26, 11, 13, IRON[3]);
+  p.rect(TEX - 23, 26, 11, 1, IRON[5]);
+  p.rect(TEX - 23, 26, 1, 13, IRON[4]);
+  p.rect(TEX - 19, 30, 3, 3, INK);
+  p.rect(TEX - 18, 33, 1, 3, INK);
+  for (const [rx, ry] of [[TEX - 22, 27], [TEX - 14, 27], [TEX - 22, 37], [TEX - 14, 37]]) p.set(rx, ry, GOLD[2]);
   return p;
 }

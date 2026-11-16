@@ -4,7 +4,7 @@ import { DEFAULT_KEYMAP } from '../game/input';
 import { useHud } from '../game/store';
 import type { CompiledWorld } from '../world/compile';
 import { uiArt } from './art';
-import { ActionButtons, AutoMap, Compass, DeathOverlay, Floaters, MessageLog, MovePad, PartyCard, TargetBar, TitleOverlay } from './Hud';
+import { ActionButtons, AutoMap, Belt, Compass, DeathOverlay, Floaters, JournalOverlay, MessageLog, MovePad, ObjectivePlate, PartyCard, TargetBar, TitleOverlay, VictoryOverlay } from './Hud';
 
 const LOGICAL_W = 480;
 const LOGICAL_H = 270;
@@ -57,6 +57,23 @@ export function GameScreen({ world }: { world: CompiledWorld }) {
         if (e.code === 'KeyR') game.restart();
         return;
       }
+      if (current === 'victory') {
+        if (e.code === 'KeyR') game.restart();
+        else if (e.code === 'Enter' || e.code === 'Space' || e.code === 'Escape') {
+          e.preventDefault();
+          game.keepExploring();
+        }
+        return;
+      }
+      if (e.code === 'KeyJ' || (current === 'journal' && e.code === 'Escape')) {
+        game.toggleJournal();
+        return;
+      }
+      if (current === 'journal') return;
+      if (e.code === 'KeyH') {
+        game.drink();
+        return;
+      }
       const action = DEFAULT_KEYMAP[e.code];
       if (!action) return;
       e.preventDefault();
@@ -93,12 +110,16 @@ export function GameScreen({ world }: { world: CompiledWorld }) {
           {screen === 'playing' && <Floaters />}
           {screen === 'title' && <TitleOverlay title={world.def.world.name} />}
           {screen === 'dead' && <DeathOverlay name={heroName} />}
+          {screen === 'journal' && <JournalOverlay />}
+          {screen === 'victory' && <VictoryOverlay world={world.def.world.name} />}
         </div>
 
         <div className="side">
           <PartyCard />
           <div className="plate raised">{roomName}</div>
+          <ObjectivePlate />
           {game && <AutoMap game={game} />}
+          {game && <Belt game={game} />}
           <div className="actions">
             <Compass />
             {game && <ActionButtons game={game} />}

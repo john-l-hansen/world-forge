@@ -114,6 +114,45 @@ export class AudioEngine {
       case 'party.died':
         [220, 185, 147, 110].forEach((f, i) => this.tone({ wave: 'triangle', from: f, to: f * 0.97, dur: 0.4, gain: 0.22, delay: i * 0.3 }));
         break;
+      case 'door.locked':
+        this.noiseHit({ dur: 0.04, freq: 2600, q: 3, gain: 0.3, type: 'bandpass' });
+        this.noiseHit({ dur: 0.05, freq: 1900, q: 3, gain: 0.3, type: 'bandpass', delay: 0.09 });
+        this.tone({ wave: 'sine', from: 95, to: 70, dur: 0.1, gain: 0.3, delay: 0.09 });
+        break;
+      case 'door.unlocked':
+        this.noiseHit({ dur: 0.03, freq: 3200, q: 4, gain: 0.3, type: 'bandpass' });
+        this.tone({ wave: 'triangle', from: 880, to: 860, dur: 0.07, gain: 0.12, delay: 0.05 });
+        this.tone({ wave: 'sine', from: 130, to: 60, dur: 0.16, gain: 0.5, delay: 0.14 });
+        break;
+      case 'secret.found':
+        this.noiseHit({ dur: 0.9, freq: 110, to: 220, q: 1.4, gain: 0.8, type: 'lowpass', attack: 0.15 });
+        [392, 466, 587].forEach((f, i) => this.tone({ wave: 'triangle', from: f, to: f, dur: 0.35, gain: 0.1, delay: 0.5 + i * 0.16 }));
+        break;
+      case 'chest.opened':
+        this.tone({ wave: 'sawtooth', from: 70, to: 120, dur: 0.3, gain: 0.14, vibrato: 12, filter: 500, attack: 0.05 });
+        this.noiseHit({ dur: 0.08, freq: 500, q: 0.8, gain: 0.35, type: 'lowpass', delay: 0.28 });
+        break;
+      case 'item.gained':
+        [1047, 1319, 1568].forEach((f, i) => this.tone({ wave: 'square', from: f, to: f, dur: 0.09, gain: 0.07, delay: 0.3 + i * 0.07, filter: 3000 }));
+        break;
+      case 'item.used':
+        [300, 260, 300, 260].forEach((f, i) => this.tone({ wave: 'sine', from: f, to: f * 0.8, dur: 0.07, gain: 0.2, delay: i * 0.09 }));
+        [523, 659, 784, 1047].forEach((f, i) => this.tone({ wave: 'triangle', from: f, to: f, dur: 0.22, gain: 0.08, delay: 0.4 + i * 0.08 }));
+        break;
+      case 'item.refused':
+        this.tone({ wave: 'square', from: 160, to: 150, dur: 0.07, gain: 0.08, filter: 800 });
+        break;
+      case 'encounter.started':
+        this.tone({ wave: 'sine', from: 70, to: 40, dur: 0.5, gain: 0.6 });
+        this.noiseHit({ dur: 0.25, freq: 180, q: 0.8, gain: 0.5, type: 'lowpass' });
+        break;
+      case 'quest.objective':
+        [659, 880].forEach((f, i) => this.tone({ wave: 'triangle', from: f, to: f, dur: 0.2, gain: 0.1, delay: 0.55 + i * 0.12 }));
+        break;
+      case 'quest.completed':
+        [392, 523, 659, 784, 1047].forEach((f, i) => this.tone({ wave: 'square', from: f, to: f, dur: i === 4 ? 0.7 : 0.18, gain: 0.1, delay: 1.4 + i * 0.16, filter: 2400 }));
+        [196, 262].forEach((f, i) => this.tone({ wave: 'triangle', from: f, to: f, dur: 0.9, gain: 0.14, delay: 1.4 + i * 0.64 }));
+        break;
       case 'interact.nothing':
         this.tone({ wave: 'square', from: 180, to: 170, dur: 0.05, gain: 0.08, filter: 900 });
         break;

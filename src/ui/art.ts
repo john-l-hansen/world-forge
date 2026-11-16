@@ -82,11 +82,51 @@ function swordIcon(): Pix {
   return p;
 }
 
+function keyIcon(): Pix {
+  const p = new Pix(12, 12);
+  for (let a = 0; a < 16; a++) {
+    const ang = (a / 16) * Math.PI * 2;
+    p.set(3.5 + Math.cos(ang) * 2.5, 3.5 + Math.sin(ang) * 2.5, a > 6 && a < 13 ? GOLD[3] : GOLD[2]);
+  }
+  p.line(5, 5, 10, 10, GOLD[2], 1);
+  p.set(9, 7, GOLD[2]);
+  p.set(10, 8, GOLD[1]);
+  p.set(8, 10, GOLD[1]);
+  p.outline(INK);
+  return p;
+}
+
+function flaskIcon(): Pix {
+  const p = new Pix(12, 12);
+  p.rect(5, 1, 2, 1, 0x8a6a3a); // cork
+  p.rect(5, 2, 2, 3, 0x9fb7c4); // neck
+  p.ellipse(5.5, 8, 3.6, 3.2, 0x9fb7c4);
+  p.ellipse(5.5, 8.6, 2.8, 2.4, 0xb02a22); // the draught
+  p.set(4, 7, 0xe0604a);
+  p.set(3, 6, 0xe8f2f6);
+  p.outline(INK);
+  return p;
+}
+
+function coinsIcon(): Pix {
+  const p = new Pix(12, 12);
+  for (const [cx, cy] of [[4, 8], [8, 8], [6, 5]] as const) {
+    p.ellipse(cx, cy, 2.6, 2.2, GOLD[2]);
+    p.set(cx - 1, cy - 1, GOLD[3]);
+    p.set(cx + 1, cy + 1, GOLD[0]);
+  }
+  p.outline(INK);
+  return p;
+}
+
+export type ItemIcon = 'key' | 'flask' | 'coins' | 'short_sword';
+
 export interface UiArt {
   panel: string;
   portrait: string;
   sword: string;
   icons: Record<IconKind, string>;
+  items: Record<ItemIcon, string>;
 }
 
 let cache: UiArt | null = null;
@@ -98,6 +138,12 @@ export function uiArt(): UiArt {
     panel: pixToDataUrl(panelStone()),
     portrait: pixToDataUrl(drawFighterPortrait()),
     sword: pixToDataUrl(swordIcon()),
+    items: {
+      key: pixToDataUrl(keyIcon()),
+      flask: pixToDataUrl(flaskIcon()),
+      coins: pixToDataUrl(coinsIcon()),
+      short_sword: pixToDataUrl(swordIcon()),
+    },
     icons: Object.fromEntries(kinds.map((k) => [k, pixToDataUrl(arrowIcon(k))])) as Record<IconKind, string>,
   };
   return cache;

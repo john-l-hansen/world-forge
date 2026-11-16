@@ -587,19 +587,19 @@
       "objectives": [
         {
           "id": "find_key",
-          "description": "Find the key to the shaft door",
+          "description": "Find the shaft key",
           "type": "collect_item",
           "targetId": "item_shaft_key"
         },
         {
           "id": "slay_chief",
-          "description": "Slay the goblin chief",
+          "description": "Slay the chief",
           "type": "defeat_encounter",
           "targetId": "encounter_pit_boss"
         },
         {
           "id": "find_cache",
-          "description": "Find the miner's hidden cache",
+          "description": "Find the hidden cache",
           "type": "open_chest",
           "targetId": "object_cache_chest",
           "optional": true

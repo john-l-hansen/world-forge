@@ -5,8 +5,8 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { deflateSync } from 'node:zlib';
 import { Pix } from '../src/art/pixel';
-import { dirtFloor, plankDoor, rockCeiling, stoneWall, timberFrame, timberWall } from '../src/art/textures';
-import { GOBLIN_POSES, drawGoblin, drawProp, drawSword, drawTorch } from '../src/art/sprites';
+import { dirtFloor, lockedDoor, plankDoor, rockCeiling, secretWall, stoneWall, timberFrame, timberWall } from '../src/art/textures';
+import { GOBLIN_POSES, drawChest, drawGoblin, drawKey, drawProp, drawSword, drawTorch } from '../src/art/sprites';
 import { drawFighterPortrait } from '../src/art/portraits';
 
 function crc32(buf: Buffer): number {
@@ -60,8 +60,10 @@ function sheet(items: Pix[], scale: number, bg: number): Pix {
 }
 
 mkdirSync('.art', { recursive: true });
-writeFileSync('.art/textures.png', encodePng(sheet([stoneWall(1), stoneWall(2), timberWall(3), dirtFloor(4), rockCeiling(5), plankDoor(6), timberFrame(7)], 3, 0x202020)));
-writeFileSync('.art/goblin.png', encodePng(sheet(GOBLIN_POSES.map(drawGoblin), 4, 0x3a312a)));
+writeFileSync('.art/textures.png', encodePng(sheet([stoneWall(1), stoneWall(2), timberWall(3), dirtFloor(4), rockCeiling(5), plankDoor(6), timberFrame(7), secretWall(1), lockedDoor(6)], 3, 0x202020)));
+writeFileSync('.art/goblin.png', encodePng(sheet(GOBLIN_POSES.map((pose) => drawGoblin(pose)), 4, 0x3a312a)));
+writeFileSync('.art/chief.png', encodePng(sheet(GOBLIN_POSES.map((pose) => drawGoblin(pose, 'goblin_chief')), 4, 0x3a312a)));
+writeFileSync('.art/loot.png', encodePng(sheet([drawChest(false), drawChest(true), drawKey(0), drawKey(1)], 6, 0x3a312a)));
 writeFileSync('.art/props.png', encodePng(sheet([drawTorch(0), drawTorch(1), drawTorch(2), drawProp('barrel'), drawProp('crate'), drawProp('rubble'), drawFighterPortrait()], 6, 0x3a312a)));
 writeFileSync('.art/sword.png', encodePng(sheet([drawSword()], 4, 0x3a312a)));
 console.log('wrote .art/*.png');

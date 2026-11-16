@@ -5,12 +5,12 @@
  */
 import { AudioEngine } from '../audio/audio';
 import { createSession, enemyAt, hasLineOfSight, partyIsBusy, step } from '../engine/sim';
-import { TICKS_PER_SECOND, type GameEvent, type SessionState } from '../engine/types';
+import { TICKS_PER_SECOND, type Command, type GameEvent, type SessionState } from '../engine/types';
 import { DungeonRenderer } from '../renderer/renderer';
 import { DIR_X, DIR_Y, roomAtCell, type CompiledWorld } from '../world/compile';
 import { InputState, commandFor, type Action } from './input';
 import { describeEvent } from './messages';
-import { pushFloater, pushLog, useHud } from './store';
+import { pushFloater, pushLog, useHud, type BeltItem, type QuestView } from './store';
 
 const TICK_MS = 1000 / TICKS_PER_SECOND;
 
@@ -23,6 +23,12 @@ export class Game {
   private lastMs = 0;
   private acc = 0;
   private disposed = false;
+  /** Commands that carry more than an action, such as which item to use. */
+  private pending: Command[] = [];
+  /** Counts sessions, so a delayed effect never lands on a restarted game. */
+  private sessionNumber = 0;
+  private lastBumpText = '';
+  private lastBumpTick = -1000;
 
   constructor(canvas: HTMLCanvasElement, readonly world: CompiledWorld, private seed = 1) {
     this.renderer = new DungeonRenderer(canvas, world);
@@ -37,18 +43,50 @@ export class Game {
     this.audio.start();
     this.input.clear();
     useHud.setState({ screen: 'playing' });
-    const room = roomAtCell(this.world, this.state.party.x, this.state.party.y);
-    if (room) pushLog(`${room.name}. ${room.description}`, 'lore');
+    this.announceStart();
   }
 
   restart() {
     this.seed += 1;
+    this.sessionNumber += 1;
     this.state = createSession(this.world, this.seed);
     this.input.clear();
+    this.pending = [];
+    this.lastBumpTick = -1000;
     this.acc = 0;
     this.resetHud('playing');
+    this.announceStart();
+  }
+
+  private announceStart() {
+    for (const questId of Object.keys(this.state.quests)) {
+      const quest = this.world.def.quests.find((q) => q.id === questId);
+      if (quest) pushLog(`Quest: ${quest.title}. ${quest.description}`.trim(), 'quest');
+    }
     const room = roomAtCell(this.world, this.state.party.x, this.state.party.y);
     if (room) pushLog(`${room.name}. ${room.description}`, 'lore');
+  }
+
+  /** Drink the first healing item the party carries. */
+  drink() {
+    const item = this.world.def.items.find((i) => i.category === 'consumable' && this.state.inventory[i.id]);
+    const fallback = this.world.def.items.find((i) => i.category === 'consumable');
+    const itemId = item?.id ?? fallback?.id;
+    if (itemId) this.pending.push({ type: 'use', actor: this.state.party.members[0].id, itemId });
+  }
+
+  /** Open or close the quest journal. The game waits while it is open. */
+  toggleJournal() {
+    const screen = useHud.getState().screen;
+    if (screen === 'playing') {
+      this.input.clear();
+      useHud.setState({ screen: 'journal' });
+    } else if (screen === 'journal') useHud.setState({ screen: 'playing' });
+  }
+
+  /** Carry on exploring after the victory screen. */
+  keepExploring() {
+    if (useHud.getState().screen === 'victory') useHud.setState({ screen: 'playing' });
   }
 
   act(action: Action) {
@@ -79,11 +117,14 @@ export class Game {
       log: [],
       floaters: [],
       target: null,
+      belt: [],
+      quest: null,
       cleared: false,
       hurtPulse: 0,
       mapVersion: 0,
     });
     this.syncHud();
+    this.syncPack();
   }
 
   private frame = (ms: number) => {
@@ -92,7 +133,7 @@ export class Game {
     const dt = Math.min(250, this.lastMs ? ms - this.lastMs : 0);
     this.lastMs = ms;
 
-    if (useHud.getState().screen !== 'title') {
+    if (useHud.getState().screen === 'playing') {
       this.acc += dt;
       while (this.acc >= TICK_MS) {
         this.acc -= TICK_MS;
@@ -106,8 +147,12 @@ export class Game {
   tick() {
     const actor = this.state.party.members[0].id;
     const free = !partyIsBusy(this.state) && !this.state.buffered && this.state.hitStop === 0;
-    const action = this.state.status === 'playing' ? this.input.next(free) : null;
-    const events = step(this.state, this.world, action ? [commandFor(action, actor)] : []);
+    let command: Command | null = this.pending.shift() ?? null;
+    if (!command && this.state.status === 'playing') {
+      const action = this.input.next(free);
+      if (action) command = commandFor(action, actor);
+    }
+    const events = step(this.state, this.world, command ? [command] : []);
     for (const event of events) this.handle(event);
     this.syncHud();
   }
@@ -116,7 +161,13 @@ export class Game {
     this.renderer.onEvent(event);
     this.audio.onEvent(event);
     const line = describeEvent(event, this.state, this.world);
-    if (line) pushLog(line.text, line.tone);
+    // Walking into something repeatedly should not flood the log.
+    const repeatedBump = event.type === 'party.bumped' && line?.text === this.lastBumpText && this.state.tick - this.lastBumpTick < 240;
+    if (line && !repeatedBump) pushLog(line.text, line.tone);
+    if (event.type === 'party.bumped' && line && !repeatedBump) {
+      this.lastBumpText = line.text;
+      this.lastBumpTick = this.state.tick;
+    }
 
     switch (event.type) {
       case 'attack.hit':
@@ -126,9 +177,32 @@ export class Game {
         pushFloater(`-${event.damage}`, 'taken');
         useHud.setState((s) => ({ hurtPulse: s.hurtPulse + 1 }));
         break;
+      case 'item.used':
+        pushFloater(`+${event.healed}`, 'healed');
+        this.syncPack();
+        break;
+      case 'item.gained':
+      case 'quest.objective':
+        this.syncPack();
+        break;
+      case 'quest.completed': {
+        this.syncPack();
+        // Let the last blow, the death and the fanfare play out first.
+        const session = this.sessionNumber;
+        setTimeout(() => {
+          if (!this.disposed && session === this.sessionNumber && useHud.getState().screen === 'playing') {
+            this.input.clear();
+            useHud.setState({ screen: 'victory' });
+          }
+        }, 1800);
+        break;
+      }
       case 'party.moved':
         useHud.setState((s) => ({ mapVersion: s.mapVersion + 1 }));
         break;
+      case 'secret.found':
+      case 'door.unlocked':
+      case 'chest.opened':
       case 'door.opened':
       case 'door.closed':
       case 'enemy.moved':
@@ -162,7 +236,9 @@ export class Game {
       );
     if (seen) {
       const def = this.world.def.enemies.find((d) => d.id === seen.defId)!;
-      target = { name: def.name, hp: seen.hp, maxHp: seen.maxHp, winding: seen.ai === 'telegraph' };
+      const encounter = this.world.def.encounters.find((e) => e.id === seen.id.split('#')[0]);
+      const boss = encounter?.boss === true;
+      target = { name: boss ? encounter.name : def.name, hp: seen.hp, maxHp: seen.maxHp, winding: seen.ai === 'telegraph', boss };
     }
     const sameTarget =
       (target === null && hud.target === null) ||
@@ -171,5 +247,29 @@ export class Game {
     if (hud.hp !== member.hp || hud.maxHp !== member.maxHp || hud.facing !== s.party.facing || hud.roomName !== roomName || !sameTarget) {
       useHud.setState({ hp: member.hp, maxHp: member.maxHp, facing: s.party.facing, roomName, target });
     }
+  }
+
+  /** Copy the inventory and quest progress to the interface. */
+  private syncPack() {
+    const def = this.world.def;
+    const belt: BeltItem[] = [];
+    for (const item of def.items) {
+      const count = this.state.inventory[item.id];
+      if (!count) continue;
+      belt.push({ itemId: item.id, name: item.name, description: item.description, icon: item.visualAssetId, count, usable: item.category === 'consumable' });
+    }
+    let quest: QuestView | null = null;
+    const questId = Object.keys(this.state.quests)[0];
+    const questDef = def.quests.find((q) => q.id === questId);
+    if (questDef) {
+      const progress = this.state.quests[questId];
+      quest = {
+        title: questDef.title,
+        description: questDef.description,
+        completed: progress.completed,
+        objectives: questDef.objectives.map((o) => ({ id: o.id, text: o.description, done: progress.done[o.id] === true, optional: o.optional })),
+      };
+    }
+    useHud.setState({ belt, quest });
   }
 }

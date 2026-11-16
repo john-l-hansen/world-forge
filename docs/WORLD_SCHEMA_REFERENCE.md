@@ -1,0 +1,61 @@
+# World schema reference — version 0.2.0
+
+What the engine actually reads today. The source of truth is `src/schema/world.ts`
+(shapes) and `src/schema/validate.ts` (meaning). A world is one JSON object; see
+`src/worlds/forgotten-mines.json` for a complete example.
+
+## Top level
+
+| Field | Contents |
+| --- | --- |
+| `schemaVersion` | `"0.2.0"`. `0.1.0` worlds are migrated on load. Anything else is rejected. |
+| `world` | id, name, description, theme, difficulty, optional author and timestamps |
+| `settings` | movement mode, start room, start cell, start facing, starting party, starting quests |
+| `regions` | id, name, environment (tileset), room IDs |
+| `rooms` | id, region, name, type, description, `layout` rectangle, connections, encounter IDs, object IDs |
+| `doors` | id, name, `kind` (`archway`, `door`, `secret`), cell, optional `lock.keyItemId` |
+| `enemies` | stats, timings, sight range, `behaviour` and `visualAssetId` chosen from engine-supported lists |
+| `encounters` | room, enemy placements, `boss` flag, optional `intro` line |
+| `objects` | `torch`, `prop`, `pickup` (an item on the floor) or `chest` (blocking, with contents) |
+| `items` | `weapon`, `key`, `consumable` (with an engine-supported effect) or `treasure` |
+| `characters` | name, class, health, equipment, portrait |
+| `quests` | title, description, objectives, completion text |
+| `npcs`, `factions` | reserved for later phases |
+
+## Geometry
+
+Rooms are rectangles of floor on one shared grid, with x growing east and y growing
+south. Rooms must be separated by at least one wall cell. A door occupies exactly one
+wall cell that touches both of the rooms it joins, and both rooms must list the
+connection.
+
+## Quest objectives
+
+| Type | `targetId` is | Done when |
+| --- | --- | --- |
+| `collect_item` | an item | the party gains that item |
+| `defeat_encounter` | an encounter | every enemy in it is dead |
+| `open_chest` | a chest object | the chest is opened |
+| `reach_room` | a room | the party enters it |
+
+A quest is complete when every objective not marked `optional` is done.
+
+## What validation checks
+
+- Every ID is unique and every reference resolves.
+- Rooms do not overlap; doors sit between their two rooms; connections are two-way.
+- Enemies, props, chests and pickups sit inside their rooms and do not share cells.
+- Torches have a wall to hang on.
+- Locks are only on doors and name an item that is a key.
+- Every room can be reached from the start, counting a locked door as open only once
+  its key has been found in a room already reached.
+- Quest objectives point at things that exist, quest items can actually be obtained,
+  and every quest has at least one required objective.
+- Behaviours, effects, objective types and asset IDs are from the engine's lists. World
+  data never contains code.
+
+## Runtime state is separate
+
+Door states, opened chests, taken pickups, inventory, quest progress, enemy health and
+the party's position live in the session (`src/engine/types.ts`), never in the world
+definition.

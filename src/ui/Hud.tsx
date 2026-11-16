@@ -3,7 +3,7 @@
  * compass, controls and message log around it. It reads the interface store
  * and sends actions to the game; it holds no game rules.
  */
-import { useEffect, useRef } from 'react';
+import { Fragment, useEffect, useRef } from 'react';
 import type { Game } from '../game/game';
 import type { Action } from '../game/input';
 import { useHud } from '../game/store';
@@ -16,7 +16,7 @@ export function TargetBar() {
   const target = useHud((s) => s.target);
   if (!target) return null;
   return (
-    <div className={`target${target.winding ? ' winding' : ''}`}>
+    <div className={`target${target.winding ? ' winding' : ''}${target.boss ? ' boss' : ''}`}>
       <span className="target-name">{target.name}</span>
       <div className="bar">
         <i style={{ width: `${(target.hp / target.maxHp) * 100}%` }} />
@@ -96,7 +96,8 @@ export function AutoMap({ game }: { game: Game }) {
     canvas.height = H;
     const ctx = canvas.getContext('2d')!;
     const { world, state } = game;
-    const cell = Math.max(4, Math.min(8, Math.floor(Math.min(W / world.width, H / world.height))));
+    // A fixed, readable cell size. Larger maps scroll to follow the party.
+    const cell = 7;
     ctx.fillStyle = '#0b0a0c';
     ctx.fillRect(0, 0, W, H);
     // Centre the map, or follow the party when the map is larger than the panel.
@@ -112,7 +113,10 @@ export function AutoMap({ game }: { game: Game }) {
         const tile = world.tiles[i];
         const px = ox + x * cell;
         const py = oy + y * cell;
-        if (tile === TILE_WALL) {
+        const doorHere = tile === TILE_DOORWAY ? world.doorAt.get(i)! : null;
+        // A secret door is drawn as wall until it has been found.
+        const hidden = doorHere?.def.kind === 'secret' && !state.doorsOpen[doorHere.def.id];
+        if (tile === TILE_WALL || hidden) {
           ctx.fillStyle = '#3a312a';
           ctx.fillRect(px, py, cell, cell);
         } else {
@@ -124,13 +128,15 @@ export function AutoMap({ game }: { game: Game }) {
           if (tile === TILE_DOORWAY) {
             const door = world.doorAt.get(i)!;
             if (door.def.kind === 'door') {
-              ctx.fillStyle = state.doorsOpen[door.def.id] ? '#5e4010' : '#cfa436';
+              const locked = door.def.lock && !state.doorsUnlocked[door.def.id];
+              ctx.fillStyle = state.doorsOpen[door.def.id] ? '#5e4010' : locked ? '#d8553a' : '#cfa436';
               if (door.axis === 'ns') ctx.fillRect(px, py + 2, cell, 2);
               else ctx.fillRect(px + 2, py, 2, cell);
             }
           }
           if (world.blocked[i]) {
-            ctx.fillStyle = '#473016';
+            const chest = world.chestAt.get(i);
+            ctx.fillStyle = chest ? (state.chestsOpened[chest.id] ? '#9a701c' : '#f0d878') : '#473016';
             ctx.fillRect(px + 1, py + 1, cell - 3, cell - 3);
           }
         }
@@ -157,6 +163,102 @@ export function AutoMap({ game }: { game: Game }) {
   return (
     <div className="map sunk">
       <canvas ref={ref} />
+    </div>
+  );
+}
+
+export function ObjectivePlate() {
+  const quest = useHud((s) => s.quest);
+  if (!quest) return <div className="plate objective raised" />;
+  const next = quest.objectives.find((o) => !o.done && !o.optional);
+  return (
+    <div className={`plate objective raised${quest.completed ? ' done' : ''}`} title={quest.title}>
+      {quest.completed ? 'Quest complete' : next ? next.text : quest.title}
+    </div>
+  );
+}
+
+/** What the party carries. A draught can be drunk by clicking it. */
+export function Belt({ game }: { game: Game }) {
+  const art = uiArt();
+  const belt = useHud((s) => s.belt);
+  const slots = [...belt, ...new Array<null>(Math.max(0, 6 - belt.length)).fill(null)].slice(0, 6);
+  return (
+    <div className="belt">
+      {slots.map((item, i) =>
+        item ? (
+          <button
+            key={item.itemId}
+            className={`slot sunk${item.usable ? ' usable' : ''}`}
+            title={`${item.name}. ${item.description}${item.usable ? ' (H to drink)' : ''}`}
+            aria-label={item.name}
+            onPointerDown={() => item.usable && game.drink()}
+          >
+            <img src={art.items[item.icon]} alt="" />
+            {item.count > 1 && <span className="count">{item.count}</span>}
+            {item.usable && <kbd>H</kbd>}
+          </button>
+        ) : (
+          <div key={i} className="slot sunk" />
+        ),
+      )}
+    </div>
+  );
+}
+
+export function JournalOverlay() {
+  const quest = useHud((s) => s.quest);
+  return (
+    <div className="overlay journal">
+      <h2>Journal</h2>
+      {quest ? (
+        <>
+          <h3>{quest.title}</h3>
+          <p>{quest.description}</p>
+          <ul>
+            {quest.objectives.map((o) => (
+              <li key={o.id} className={o.done ? 'done' : ''}>
+                <span className="tick">{o.done ? 'X' : '-'}</span>
+                {o.text}
+                {o.optional && <em> (optional)</em>}
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : (
+        <p>No quests yet.</p>
+      )}
+      <div className="blink">Press J to close</div>
+    </div>
+  );
+}
+
+export function VictoryOverlay({ world }: { world: string }) {
+  const quest = useHud((s) => s.quest);
+  const hp = useHud((s) => s.hp);
+  const maxHp = useHud((s) => s.maxHp);
+  const belt = useHud((s) => s.belt);
+  const bonus = quest?.objectives.filter((o) => o.optional) ?? [];
+  const gold = belt.filter((b) => b.icon === 'coins').length > 0;
+  return (
+    <div className="overlay victory">
+      <h2>Quest complete</h2>
+      <h1>{quest?.title ?? world}</h1>
+      <dl className="keys">
+        <dt>Health left</dt>
+        <dd>
+          {hp} of {maxHp}
+        </dd>
+        {bonus.map((o) => (
+          <Fragment key={o.id}>
+            <dt>{o.text}</dt>
+            <dd>{o.done ? 'Found' : 'Not found'}</dd>
+          </Fragment>
+        ))}
+        <dt>Gold</dt>
+        <dd>{gold ? 'Carried out' : 'Left behind'}</dd>
+      </dl>
+      <div className="blink">Enter to keep exploring - R to play again</div>
     </div>
   );
 }
@@ -240,7 +342,11 @@ export function TitleOverlay({ title }: { title: string }) {
         <dt>Space / Click</dt>
         <dd>Attack</dd>
         <dt>F / Enter</dt>
-        <dd>Open doors</dd>
+        <dd>Open, unlock, search</dd>
+        <dt>H</dt>
+        <dd>Drink a draught</dd>
+        <dt>J</dt>
+        <dd>Journal</dd>
         <dt>M</dt>
         <dd>Sound on / off</dd>
       </dl>

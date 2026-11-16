@@ -1,5 +1,81 @@
 # Development log — World Forge
 
+## Milestone 2 — The Forgotten Mines, complete (2026-11-15)
+
+The golden reference adventure is now whole: five connected rooms, one entrance, one
+goblin patrol, one locked door, one key, one secret room, one treasure chest, one boss
+encounter and one quest. It can be played from the title screen to a victory screen.
+
+### What was implemented
+
+- **World schema 0.2.0.** Door locks, secret doors, floor pickups, chests, item
+  categories (weapon, key, consumable, treasure), boss encounters with a spoken
+  introduction, and quests with four objective types. `0.1.0` worlds are migrated on
+  load; unknown versions are still rejected. See `docs/WORLD_SCHEMA_REFERENCE.md`.
+- **Validation.** Locks must name a key item; chests and pickups must hold real items;
+  quest objectives must point at things that exist and can be obtained; and every room
+  must be reachable counting a locked door as open only once its key has been found.
+  A key shut behind its own door is caught before the world can be played.
+- **Simulation.** A shared party inventory, picking items up by walking over them,
+  chests, locked doors that need their key, secret doors that feel like wall until
+  searched, a healing draught, encounter introductions, and quest tracking driven by
+  the simulation's own events. Session state version is now 2.
+- **Content.** The shaft door is locked. The key lies in the storeroom, past the goblin
+  patrol. A secret door in the tunnel hides a cache with a chest (a healing draught and
+  a pouch of gold). Behind the shaft door waits the boss, a goblin chief with more
+  health, a heavier blow and a slower, more readable wind-up.
+- **Art.** The goblin chief (horned helm, plate, war paint, taller), a banded chest with
+  open and closed frames, a glinting key, a locked-door texture and a cracked-stone
+  texture whose seam is the only hint of the secret door. All drawn in code.
+- **Interface.** An objective tracker, a six-slot belt for carried items (click the
+  draught or press H to drink), a quest journal (J), a named boss health bar, heal and
+  damage numbers, and a victory screen. The automap shows locked doors in red, hides
+  the secret door until found, and marks the chest.
+- **Audio.** Lock rattle, unlock, secret door rumble, chest, item pickup, drinking,
+  boss sting, objective chime and a quest fanfare.
+
+### Decisions made
+
+- **The secret room is a sixth room.** "Five connected rooms" are the five reachable
+  by ordinary doors; the hidden cache is the one secret room on top of them.
+- **Items are picked up by walking over them.** A modern convenience in place of
+  clicking small objects on the floor.
+- **The inventory is shared by the party**, not per character. Per-character equipment
+  arrives with the RPG systems in Phase 3.
+- **The journal and victory screens pause the simulation.** This will need rethinking
+  for co-op, where one player cannot pause another.
+- **The boss uses the same behaviour as the goblin with different numbers.** A
+  distinct boss pattern belongs with Phase 2 combat.
+
+### Tests executed
+
+- `npm run typecheck` — passes.
+- `npm test` — 72 unit tests pass. New: 22 tests in `tests/adventure.test.ts`, including
+  a scripted player that completes the whole adventure, the same run replayed from the
+  same seed, a save and reload mid-adventure, and ten validation cases for locks, keys,
+  chests, quests and migration.
+- `npm run build` — production build succeeds.
+- `npm run test:browser` — 48 checks pass in headless Chrome against the production
+  build, playing the full quest through the real keyboard handlers: locked door, secret
+  door, chest, belt, journal, goblin patrol, key, draught, unlock, boss introduction,
+  boss fight, victory screen, then a defeat and a restart.
+
+### Known limitations
+
+- The scripted test player dodges every wind-up and finishes unhurt, so the tests show
+  the adventure can be won, not that its difficulty is right for a person. Balance
+  needs human play.
+- Sound still has not been listened to.
+- Tested in headless Chrome only.
+- The secret door's seam may be too easy or too hard to spot; this needs a human eye.
+- Still one attack and no block, parry, dodge or stamina (Phase 2).
+- No save/load interface yet, though saving and resuming a session is tested.
+
+### Recommended next milestone
+
+Phase 2 combat: heavy attack, stamina, block, parry, dodge, hit reactions, and a boss
+pattern that uses them.
+
 ## Milestone 1 — Phase 0 and Phase 1: The Forgotten Mines (2026-11-15)
 
 ### What was implemented

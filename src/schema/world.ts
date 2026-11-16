@@ -12,10 +12,11 @@
  *   0.4.0  character attributes and level (health and stamina are now
  *          derived from them), and experience awarded by enemies
  *   0.5.0  armour items and seven equipment slots per character
+ *   0.6.0  spells, and scrolls that cast them
  */
 import { z } from 'zod';
 
-export const SCHEMA_VERSION = '0.5.0';
+export const SCHEMA_VERSION = '0.6.0';
 
 const id = z.string().regex(/^[a-z][a-z0-9_]*$/, 'ids are lower_snake_case');
 const cell = z.object({ x: z.number().int().min(1), y: z.number().int().min(1) });
@@ -235,8 +236,12 @@ export const ItemSchema = z.discriminatedUnion('category', [
     ...itemBase,
     category: z.literal('consumable'),
     /** Names an engine-supported effect. Never code. */
-    effect: z.object({ type: z.literal('heal'), amount: z.number().int().min(1) }),
-    visualAssetId: z.enum(['flask']),
+    effect: z.discriminatedUnion('type', [
+      z.object({ type: z.literal('heal'), amount: z.number().int().min(1) }),
+      /** A scroll: casts a spell once, with no mana, and is used up. */
+      z.object({ type: z.literal('cast'), spellId: id }),
+    ]),
+    visualAssetId: z.enum(['flask', 'scroll']),
   }),
   z.object({
     ...itemBase,
@@ -281,6 +286,26 @@ export const CharacterSchema = z.object({
   portraitAssetId: z.enum(['fighter']),
 });
 
+export const SpellSchema = z.object({
+  id,
+  name: z.string().min(1),
+  description: z.string().default(''),
+  /** Chooses the look and sound of the effect. */
+  element: z.enum(['fire', 'ice', 'lightning']),
+  /** Names an engine-supported shape. A bolt strikes the first enemy straight ahead. */
+  shape: z.enum(['bolt']),
+  /** How many cells ahead it reaches. */
+  range: z.number().int().min(1).max(12),
+  damage: damageRange,
+  /** Compared with an enemy's poise, like a weapon's impact. */
+  impact: z.number().int().min(0).max(9).default(3),
+  /** Ticks between starting the cast and the effect. */
+  castTicks: ticks,
+  recoveryTicks: ticks,
+  /** What it costs a caster. A scroll ignores this. */
+  manaCost: z.number().int().min(0).default(0),
+});
+
 export const QuestObjectiveSchema = z.object({
   id,
   description: z.string().min(1),
@@ -314,6 +339,7 @@ export const WorldSchema = z.object({
   items: z.array(ItemSchema).default([]),
   characters: z.array(CharacterSchema).min(1),
   quests: z.array(QuestSchema).default([]),
+  spells: z.array(SpellSchema).default([]),
   // Reserved for later phases. Present so worlds stay forward-shaped.
   npcs: z.array(z.object({ id }).passthrough()).default([]),
   factions: z.array(z.object({ id }).passthrough()).default([]),
@@ -335,5 +361,6 @@ export const EQUIP_SLOTS = ['mainHand', 'offHand', 'head', 'body', 'hands', 'fee
 export type EquipSlot = (typeof EQUIP_SLOTS)[number];
 export type CharacterDef = z.infer<typeof CharacterSchema>;
 export type QuestDef = z.infer<typeof QuestSchema>;
+export type SpellDef = z.infer<typeof SpellSchema>;
 export type QuestObjectiveDef = z.infer<typeof QuestObjectiveSchema>;
 export type Cell = z.infer<typeof cell>;

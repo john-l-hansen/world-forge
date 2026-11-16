@@ -12,10 +12,10 @@ import {
   roomAtCell,
   type CompiledWorld,
 } from '../world/compile';
-import type { EnemyAttackDef, EnemyDef, EquipSlot, ItemDef, WeaponAttackDef } from '../schema/world';
+import type { EnemyAttackDef, EnemyDef, EquipSlot, ItemDef, SpellDef, WeaponAttackDef } from '../schema/world';
 import { CLASSES } from './classes';
 import { randomInt } from './rng';
-import { CRITICAL_MULTIPLIER, criticalChance, damageBonus, levelForExperience, maxHealth, maxStamina, experienceForLevel } from './stats';
+import { CRITICAL_MULTIPLIER, criticalChance, damageBonus, levelForExperience, maxHealth, maxStamina, experienceForLevel, modifier } from './stats';
 import {
   BLOCK_DAMAGE_SHARE,
   BLOCK_STAMINA_COST,
@@ -108,7 +108,7 @@ export function createSession(world: CompiledWorld, seed = 1): SessionState {
 
   const startRoom = roomAtCell(world, world.start.x, world.start.y);
   const state: SessionState = {
-    stateVersion: 5,
+    stateVersion: 6,
     worldId: def.world.id,
     tick: 0,
     rng: seed | 0,
@@ -153,7 +153,7 @@ export function serializeSession(state: SessionState): string {
 
 export function deserializeSession(json: string): SessionState {
   const state = JSON.parse(json) as SessionState;
-  if (state.stateVersion !== 5) throw new Error(`Unsupported session version ${String(state.stateVersion)}`);
+  if (state.stateVersion !== 6) throw new Error(`Unsupported session version ${String(state.stateVersion)}`);
   return state;
 }
 
@@ -225,7 +225,7 @@ export function partyIsBusy(state: SessionState): boolean {
   if (state.tick < p.turnStart + TURN_TICKS) return true;
   // A bump counts as a very short action so a held key does not spam it.
   if (state.tick < p.bumpStart + BUMP_TICKS) return true;
-  return p.members.some((m) => m.action.kind === 'attack' && state.tick < m.action.end);
+  return p.members.some((m) => m.action.kind !== 'idle' && state.tick < m.action.end);
 }
 
 /** True while the guard is actually up: held, and not in the middle of a swing. */
@@ -440,11 +440,32 @@ function runCommand(state: SessionState, world: CompiledWorld, command: Command,
         events.push({ type: 'item.refused', itemId: item.id, reason: 'none_left' });
         return;
       }
+      const effect = item.effect;
+      if (effect.type === 'cast') {
+        // A scroll casts its spell once, for no mana. It is kept if there is nothing to strike.
+        const spell = world.def.spells.find((sp) => sp.id === effect.spellId)!;
+        if (!spellTarget(state, world, spell)) {
+          events.push({ type: 'item.refused', itemId: item.id, reason: 'no_target' });
+          return;
+        }
+        state.inventory[item.id] -= 1;
+        if (state.inventory[item.id] === 0) delete state.inventory[item.id];
+        member.action = {
+          kind: 'cast',
+          spellId: spell.id,
+          start: state.tick,
+          hitTick: state.tick + spell.castTicks,
+          end: state.tick + spell.castTicks + spell.recoveryTicks,
+          resolved: false,
+        };
+        events.push({ type: 'spell.cast', actor: member.id, spellId: spell.id, itemId: item.id });
+        return;
+      }
       if (member.hp >= member.maxHp) {
         events.push({ type: 'item.refused', itemId: item.id, reason: 'full_health' });
         return;
       }
-      const healed = Math.min(item.effect.amount, member.maxHp - member.hp);
+      const healed = Math.min(effect.amount, member.maxHp - member.hp);
       member.hp += healed;
       state.inventory[item.id] -= 1;
       if (state.inventory[item.id] === 0) delete state.inventory[item.id];
@@ -573,6 +594,17 @@ function resolvePartyAttacks(state: SessionState, world: CompiledWorld, events: 
   const p = state.party;
   for (const member of p.members) {
     const action = member.action;
+    if (action.kind === 'cast') {
+      if (!action.resolved && state.tick >= action.hitTick) {
+        action.resolved = true;
+        resolveSpell(state, world, member, world.def.spells.find((sp) => sp.id === action.spellId)!, events);
+      }
+      if (state.tick >= action.end) {
+        member.action = { kind: 'idle' };
+        if (member.blocking) member.blockStart = state.tick;
+      }
+      continue;
+    }
     if (action.kind !== 'attack') continue;
     if (!action.resolved && state.tick >= action.hitTick) {
       action.resolved = true;
@@ -622,6 +654,47 @@ function resolvePartyAttacks(state: SessionState, world: CompiledWorld, events: 
       if (member.blocking) member.blockStart = state.tick;
     }
   }
+}
+
+/** The first living enemy straight ahead within a spell's reach, if the way is clear. */
+export function spellTarget(state: SessionState, world: CompiledWorld, spell: SpellDef): EnemyState | null {
+  const p = state.party;
+  let x = p.x;
+  let y = p.y;
+  for (let i = 0; i < spell.range; i++) {
+    x += DIR_X[p.facing];
+    y += DIR_Y[p.facing];
+    if (!inBounds(world, x, y) || world.tiles[y * world.width + x] === TILE_WALL || !isDoorOpenAt(state, world, x, y)) return null;
+    const enemy = enemyAt(state, x, y);
+    if (enemy) return enemy;
+  }
+  return null;
+}
+
+function resolveSpell(state: SessionState, world: CompiledWorld, member: PartyMember, spell: SpellDef, events: GameEvent[]) {
+  const enemy = spellTarget(state, world, spell);
+  if (!enemy) {
+    // The target moved out of the line while the words were being spoken.
+    events.push({ type: 'spell.fizzled', actor: member.id, spellId: spell.id });
+    return;
+  }
+  const def = enemyDef(world, enemy);
+  // Magic ignores armour, and a keen mind sharpens it.
+  const damage = Math.max(1, randomInt(state, spell.damage.min, spell.damage.max) + Math.max(0, modifier(member.attributes.intelligence)));
+  enemy.hp = Math.max(0, enemy.hp - damage);
+  enemy.lastHitTick = state.tick;
+  if (!enemy.alerted) alertEnemy(state, world, enemy, events);
+  const killed = enemy.hp === 0;
+  events.push({ type: 'spell.hit', actor: member.id, spellId: spell.id, enemyId: enemy.id, damage, killed });
+  state.hitStop = HIT_STOP_TICKS + 2;
+  if (killed) killEnemy(state, world, enemy, events);
+  else if (enemy.ai === 'telegraph') {
+    if (spell.impact >= def.poise) {
+      setAi(state, enemy, 'stagger', def.staggerTicks * 2);
+      events.push({ type: 'enemy.interrupted', enemyId: enemy.id });
+    }
+  } else if (enemy.ai === 'idle' || enemy.ai === 'move') setAi(state, enemy, 'stagger', def.staggerTicks * 2);
+  else if (enemy.ai === 'recover' || enemy.ai === 'stagger') enemy.aiEnd = Math.max(enemy.aiEnd, state.tick + def.staggerTicks * 2);
 }
 
 function reveal(state: SessionState, world: CompiledWorld) {

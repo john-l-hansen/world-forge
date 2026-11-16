@@ -27,10 +27,11 @@ npm run art            # write the generated art to .art/ for review
 | Space | Dodge back, or the way you are steering |
 | F or Enter | Open and close doors, unlock, search walls, open chests |
 | H | Drink a healing draught |
+| R | Read a spell scroll at the enemy straight ahead |
 | B | Quest journal |
 | C | Character sheet (click a worn item to take it off; click an item on the belt to equip it) |
 | M | Sound on or off |
-| R | Try again after a defeat |
+| R | Try again after a defeat or a victory |
 
 Watch the enemy: when it rears back, step away, dodge, block or parry. A red glow means
 the blow cannot be blocked.

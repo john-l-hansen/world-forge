@@ -59,7 +59,8 @@ export type Controller = 'local' | 'ai' | 'remote';
 
 export type MemberAction =
   | { kind: 'idle' }
-  | { kind: 'attack'; attack: AttackKind; start: number; hitTick: number; end: number; resolved: boolean };
+  | { kind: 'attack'; attack: AttackKind; start: number; hitTick: number; end: number; resolved: boolean }
+  | { kind: 'cast'; spellId: string; start: number; hitTick: number; end: number; resolved: boolean };
 
 export interface PartyMember {
   /** Character ID from the world definition. */
@@ -138,7 +139,7 @@ export interface QuestProgress {
 }
 
 export interface SessionState {
-  stateVersion: 5;
+  stateVersion: 6;
   worldId: string;
   tick: number;
   rng: number;
@@ -182,7 +183,10 @@ export type GameEvent =
   | { type: 'item.equipped'; actor: string; itemId: string; slot: EquipSlot; auto: boolean }
   | { type: 'item.unequipped'; actor: string; itemId: string; slot: EquipSlot }
   | { type: 'item.used'; itemId: string; actor: string; healed: number }
-  | { type: 'item.refused'; itemId: string; reason: 'full_health' | 'none_left' | 'not_usable' }
+  | { type: 'item.refused'; itemId: string; reason: 'full_health' | 'none_left' | 'not_usable' | 'no_target' }
+  | { type: 'spell.cast'; actor: string; spellId: string; itemId?: string }
+  | { type: 'spell.hit'; actor: string; spellId: string; enemyId: string; damage: number; killed: boolean }
+  | { type: 'spell.fizzled'; actor: string; spellId: string }
   | { type: 'encounter.started'; encounterId: string }
   | { type: 'quest.objective'; questId: string; objectiveId: string }
   | { type: 'quest.completed'; questId: string }

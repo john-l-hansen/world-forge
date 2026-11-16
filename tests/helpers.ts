@@ -113,7 +113,10 @@ export function fight(state: SessionState, world: CompiledWorld, enemy: EnemySta
     if (!partyIsBusy(state) && !state.buffered) {
       const dist = Math.abs(enemy.x - p.x) + Math.abs(enemy.y - p.y);
       const aimedAtUs = enemy.ai === 'telegraph' && enemy.targetX === p.x && enemy.targetY === p.y;
-      const draught = Object.keys(state.inventory).find((id) => world.def.items.find((it) => it.id === id)?.category === 'consumable');
+      const draught = Object.keys(state.inventory).find((id) => {
+        const item = world.def.items.find((it) => it.id === id);
+        return item?.category === 'consumable' && item.effect.type === 'heal';
+      });
       if (aimedAtUs) {
         const away = dirTo(enemy.x, enemy.y, p.x, p.y);
         for (const d of [away, (away + 1) % 4, (away + 3) % 4]) {

@@ -474,9 +474,28 @@ function drawSack(): Pix {
   return p;
 }
 
+/** A rolled scroll with a wax seal. */
+function drawScroll(frame: number): Pix {
+  const p = new Pix(24, 14);
+  p.rect(3, 3, 18, 8, 0xd8cfb4);
+  p.rect(3, 3, 18, 2, 0xf2ecd8);
+  p.rect(3, 9, 18, 2, 0xa89c7c);
+  p.ellipse(3, 7, 2.2, 4.2, 0xb8ab88);
+  p.ellipse(20, 7, 2.2, 4.2, 0xb8ab88);
+  p.ellipse(3, 7, 1, 2.4, 0x7d6d58);
+  p.ellipse(12, 7, 2.4, 2.4, BLOOD[2]);
+  p.set(11, 6, 0xe0604a);
+  p.outline(INK);
+  if (frame % 2 === 1) {
+    for (const [x, y] of [[7, 1], [16, 12], [19, 2]] as const) p.set(x, y, 0xcdb8ff);
+  }
+  return p;
+}
+
 /** Two frames (plain, and with a glint) of an item as it lies on the floor. */
 export function drawPickup(visual: string): [Pix, Pix] {
   if (visual === 'key') return [drawKey(0), drawKey(1)];
   if (visual === 'shield') return [drawShield(0), drawShield(1)];
+  if (visual === 'scroll') return [drawScroll(0), drawScroll(1)];
   return [drawSack(), drawSack()];
 }

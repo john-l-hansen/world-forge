@@ -322,6 +322,18 @@ await page.waitForTimeout(300);
 s = await state();
 check(s.equipment.body === 'item_studded_jerkin' && !s.inventory.item_studded_jerkin, 'clicking armour on the belt puts it on');
 
+// --- Scroll --------------------------------------------------------------------
+await walkTo(3, 5);
+await turnTo(W);
+await shot('08c-scroll-on-floor');
+await walkTo(2, 5);
+s = await state();
+h = await hud();
+check(s.inventory.item_storm_scroll === 1 && h.belt.includes('Scroll of storms'), 'the scroll in the hall is picked up and shown on the belt');
+await key('KeyR', 300);
+s = await state();
+check(s.inventory.item_storm_scroll === 1 && /nothing ahead to strike/i.test((await hud()).text), 'a scroll is kept when there is nothing to strike');
+
 // --- Key -----------------------------------------------------------------------
 await walkTo(8, 3);
 await use(E, 700);
@@ -362,6 +374,14 @@ h = await hud();
 check(/creeping into Gnarl/i.test(h.text), 'the chief speaks his introduction');
 check(/Gnarl, chief of the pit/i.test(h.target ?? ''), `the boss is named on his health bar ("${(h.target ?? '').trim()}")`);
 await shot('10-boss-reveal');
+// Open with the scroll: the chief stands straight ahead through the door.
+const chiefBefore = (await state()).enemies[1].hp;
+await key('KeyR', 120);
+await page.waitForFunction(() => document.querySelector('.floater.spell') !== null, null, { timeout: 5000 }).catch(() => {});
+await shot('10b-storm-bolt');
+await page.waitForTimeout(500);
+s = await state();
+check(!s.inventory.item_storm_scroll && chiefBefore - s.enemies[1].hp >= 14, `R reads the scroll and the bolt strikes the chief (${chiefBefore} to ${s.enemies[1].hp})`);
 await fight(1, () => shot('11-boss-telegraph'));
 s = await state();
 check(s.enemies[1].ai === 'dead' && s.status === 'playing', `the chief can be beaten (party hp ${s.hp})`);

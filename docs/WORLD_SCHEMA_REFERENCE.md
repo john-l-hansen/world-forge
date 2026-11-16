@@ -1,4 +1,4 @@
-# World schema reference — version 0.5.0
+# World schema reference — version 0.6.0
 
 What the engine actually reads today. The source of truth is `src/schema/world.ts`
 (shapes) and `src/schema/validate.ts` (meaning). A world is one JSON object; see
@@ -8,7 +8,7 @@ What the engine actually reads today. The source of truth is `src/schema/world.t
 
 | Field | Contents |
 | --- | --- |
-| `schemaVersion` | `"0.5.0"`. Worlds from `0.1.0` onward are migrated on load, one version at a time. Anything else is rejected. |
+| `schemaVersion` | `"0.6.0"`. Worlds from `0.1.0` onward are migrated on load, one version at a time. Anything else is rejected. |
 | `world` | id, name, description, theme, difficulty, optional author and timestamps |
 | `settings` | movement mode, start room, start cell, start facing, starting party, starting quests |
 | `regions` | id, name, environment (tileset), room IDs |
@@ -17,9 +17,10 @@ What the engine actually reads today. The source of truth is `src/schema/world.t
 | `enemies` | health, defence, `poise`, movement, sight range, a list of `attacks`, `behaviour` and `visualAssetId` from engine-supported lists |
 | `encounters` | room, enemy placements, `boss` flag, optional `intro` line |
 | `objects` | `torch`, `prop`, `pickup` (an item on the floor) or `chest` (blocking, with contents) |
-| `items` | `weapon`, `armour` (with a slot and a defence value), `key`, `consumable` (with an engine-supported effect) or `treasure` |
+| `items` | `weapon`, `armour` (with a slot and a defence value), `key`, `consumable` (heals, or casts a spell as a scroll) or `treasure` |
 | `characters` | name, class, level, optional attributes, equipment (seven optional slots), portrait |
 | `quests` | title, description, objectives, completion text |
+| `spells` | name, element, shape, range, damage, impact, cast time, recovery, mana cost |
 | `npcs`, `factions` | reserved for later phases |
 
 ## Geometry

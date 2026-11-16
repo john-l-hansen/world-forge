@@ -24,6 +24,8 @@ const EYE_SETBACK = 0.28;
 /** How tall each kind of enemy stands, in cells. The ceiling is at 1. */
 const ENEMY_HEIGHT: Record<GoblinVariant, number> = { goblin: 0.8, goblin_chief: 0.97 };
 const PROP_TEXEL = 1 / 64;
+const BOLT_SEGMENTS = 40;
+const BOLT_COLOUR = { lightning: 0xe8dcff, fire: 0xffc24a, ice: 0xbfe8ff } as const;
 
 const smooth = (t: number) => t * t * (3 - 2 * t);
 const clamp01 = (t: number) => Math.max(0, Math.min(1, t));
@@ -82,6 +84,10 @@ export class DungeonRenderer {
   private healFlash = 0;
   private spark = 0;
   private guard = 0;
+  /** A spell bolt in flight: which enemy it strikes and how long it has left. */
+  private bolt: { enemyId: string; life: number } | null = null;
+  private boltLines: THREE.LineSegments;
+  private boltMaterial: THREE.LineBasicMaterial;
   private torchMaterials: THREE.ShaderMaterial[] = [];
   private facers: THREE.Object3D[] = [];
   private sword: THREE.Mesh;
@@ -241,6 +247,17 @@ export class DungeonRenderer {
     this.overlayScene.add(this.sword);
     this.disposables.push(swordTexture, swordMaterial, swordGeometry);
 
+    // --- Spell bolt: jagged lines redrawn every frame while it lasts -----------
+    const boltGeometry = new THREE.BufferGeometry();
+    boltGeometry.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(BOLT_SEGMENTS * 2 * 3), 3));
+    this.boltMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, depthTest: false, depthWrite: false });
+    this.boltLines = new THREE.LineSegments(boltGeometry, this.boltMaterial);
+    this.boltLines.frustumCulled = false;
+    this.boltLines.renderOrder = 10;
+    this.boltLines.visible = false;
+    this.scene.add(this.boltLines);
+    this.disposables.push(boltGeometry, this.boltMaterial);
+
     // --- Presentation pass ---------------------------------------------------
     this.present = makePresentMaterial(this.target.texture);
     const presentGeometry = new THREE.PlaneGeometry(2, 2);
@@ -279,6 +296,14 @@ export class DungeonRenderer {
       case 'item.used':
         this.healFlash = 1;
         break;
+      case 'spell.hit': {
+        const element = this.world.def.spells.find((sp) => sp.id === event.spellId)?.element ?? 'lightning';
+        this.boltMaterial.color.setHex(BOLT_COLOUR[element]);
+        this.bolt = { enemyId: event.enemyId, life: 0.3 };
+        this.spark = 0.9;
+        this.hitKick = 0.7;
+        break;
+      }
     }
   }
 
@@ -324,6 +349,7 @@ export class DungeonRenderer {
     }
 
     for (const enemy of state.enemies) this.placeEnemy(enemy, now);
+    this.placeBolt(dt);
     this.placeSword(state, now, timeSeconds);
 
     this.present.uniforms.uDamage.value = this.damageFlash;
@@ -430,6 +456,57 @@ export class DungeonRenderer {
     view.material.uniforms.uFlash.value = enemy.ai !== 'dead' || sinceHit < 6 ? Math.max(0, 1 - sinceHit / 5) * 0.85 : 0;
     const unblockable = enemy.ai === 'telegraph' && def.attacks.find((a) => a.id === enemy.attackId)?.blockable === false;
     view.material.uniforms.uDanger.value = unblockable ? 0.3 + 0.25 * Math.sin(now * 0.45) : 0;
+  }
+
+  /** Redraw the spell bolt from the caster's hand to its target, freshly jagged each frame. */
+  private placeBolt(dt: number) {
+    const target = this.bolt && this.enemies.get(this.bolt.enemyId);
+    if (!this.bolt || !target) {
+      this.boltLines.visible = false;
+      return;
+    }
+    this.bolt.life -= dt;
+    if (this.bolt.life <= 0) {
+      this.bolt = null;
+      this.boltLines.visible = false;
+      return;
+    }
+    const fx = -Math.sin(this.yaw);
+    const fz = -Math.cos(this.yaw);
+    const from = new THREE.Vector3(this.camera.position.x + fx * 0.3 - fz * 0.12, this.camera.position.y - 0.14, this.camera.position.z + fz * 0.3 + fx * 0.12);
+    const to = new THREE.Vector3(target.mesh.position.x, 0.42, target.mesh.position.z);
+    const positions = this.boltLines.geometry.getAttribute('position') as THREE.BufferAttribute;
+    let i = 0;
+    const strand = (a: THREE.Vector3, b: THREE.Vector3, segments: number, spread: number) => {
+      let prev = a.clone();
+      for (let k = 1; k <= segments && i < BOLT_SEGMENTS; k++) {
+        const t = k / segments;
+        const next = a.clone().lerp(b, t);
+        if (k < segments) {
+          const wobble = spread * Math.sin(t * Math.PI);
+          next.x += (Math.random() - 0.5) * wobble;
+          next.y += (Math.random() - 0.5) * wobble;
+          next.z += (Math.random() - 0.5) * wobble;
+        }
+        positions.setXYZ(i * 2, prev.x, prev.y, prev.z);
+        positions.setXYZ(i * 2 + 1, next.x, next.y, next.z);
+        i++;
+        prev = next;
+      }
+    };
+    // Three main strands and a few short forks off the path.
+    for (let n = 0; n < 3; n++) strand(from, to, 8, 0.22);
+    for (let n = 0; n < 4; n++) {
+      const start = from.clone().lerp(to, 0.25 + Math.random() * 0.6);
+      const end = start.clone().add(new THREE.Vector3((Math.random() - 0.5) * 0.5, (Math.random() - 0.3) * 0.4, (Math.random() - 0.5) * 0.5));
+      strand(start, end, 3, 0.12);
+    }
+    for (; i < BOLT_SEGMENTS; i++) {
+      positions.setXYZ(i * 2, 0, -10, 0);
+      positions.setXYZ(i * 2 + 1, 0, -10, 0);
+    }
+    positions.needsUpdate = true;
+    this.boltLines.visible = true;
   }
 
   private placeSword(state: SessionState, now: number, timeSeconds: number) {

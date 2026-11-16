@@ -78,6 +78,21 @@ export class AudioEngine {
           this.noiseHit({ dur: 0.16, freq: 700, to: 2600, q: 2.5, gain: 0.3, type: 'bandpass', attack: 0.04 });
         }
         break;
+      case 'spell.cast':
+        // A rising hum while the words are spoken.
+        this.tone({ wave: 'sine', from: 180, to: 720, dur: 0.32, gain: 0.16, vibrato: 14, attack: 0.2 });
+        this.noiseHit({ dur: 0.3, freq: 2500, to: 6000, q: 4, gain: 0.1, type: 'bandpass', attack: 0.25 });
+        break;
+      case 'spell.hit':
+        // The crack of the bolt, then its rumble.
+        this.noiseHit({ dur: 0.05, freq: 6000, q: 0.7, gain: 0.8, type: 'highpass' });
+        this.noiseHit({ dur: 0.35, freq: 1800, to: 200, q: 0.8, gain: 0.7, type: 'lowpass' });
+        this.tone({ wave: 'sawtooth', from: 900, to: 60, dur: 0.3, gain: 0.25, filter: 2400 });
+        this.tone({ wave: 'sine', from: 70, to: 35, dur: 0.7, gain: 0.4, delay: 0.1 });
+        break;
+      case 'spell.fizzled':
+        this.noiseHit({ dur: 0.25, freq: 3000, to: 600, q: 3, gain: 0.15, type: 'bandpass' });
+        break;
       case 'level.up':
         [523, 659, 784, 1047, 1319].forEach((f, i) => this.tone({ wave: 'triangle', from: f, to: f, dur: 0.3, gain: 0.12, delay: 0.7 + i * 0.09 }));
         this.tone({ wave: 'sine', from: 131, to: 131, dur: 0.9, gain: 0.2, delay: 0.7 });

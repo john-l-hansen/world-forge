@@ -14,17 +14,17 @@ export interface LogEntry {
 export interface Floater {
   id: number;
   text: string;
-  kind: 'dealt' | 'heavy' | 'taken' | 'healed' | 'parry' | 'block' | 'level';
+  kind: 'dealt' | 'heavy' | 'spell' | 'taken' | 'healed' | 'parry' | 'block' | 'level';
 }
 
 export interface BeltItem {
   itemId: string;
   name: string;
   description: string;
-  icon: 'key' | 'flask' | 'coins' | 'short_sword' | 'shield' | 'jerkin' | 'helm';
+  icon: 'key' | 'flask' | 'coins' | 'short_sword' | 'shield' | 'jerkin' | 'helm' | 'scroll';
   count: number;
   /** What clicking it does, if anything. */
-  action: 'drink' | 'equip' | null;
+  action: 'drink' | 'read' | 'equip' | null;
 }
 
 export interface QuestView {

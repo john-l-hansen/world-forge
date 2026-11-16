@@ -79,6 +79,10 @@ export function GameScreen({ world }: { world: CompiledWorld }) {
         game.drink();
         return;
       }
+      if (e.code === 'KeyR') {
+        game.readScroll();
+        return;
+      }
       if (e.code === 'KeyL') {
         e.preventDefault();
         if (!e.repeat) game.setGuard(true);

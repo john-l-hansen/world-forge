@@ -204,13 +204,16 @@ export function Belt({ game }: { game: Game }) {
           <button
             key={item.itemId}
             className={`slot sunk${item.action ? ' usable' : ''}`}
-            title={`${item.name}. ${item.description}${item.action === 'drink' ? ' (click or H to drink)' : item.action === 'equip' ? ' (click to equip)' : ''}`}
+            title={`${item.name}. ${item.description}${
+              item.action === 'drink' ? ' (click or H to drink)' : item.action === 'read' ? ' (click or R to read)' : item.action === 'equip' ? ' (click to equip)' : ''
+            }`}
             aria-label={item.name}
             onPointerDown={() => item.action && game.useItem(item.itemId)}
           >
             <img src={art.items[item.icon]} alt="" />
             {item.count > 1 && <span className="count">{item.count}</span>}
             {item.action === 'drink' && <kbd>H</kbd>}
+            {item.action === 'read' && <kbd>R</kbd>}
           </button>
         ) : (
           <div key={i} className="slot sunk" />
@@ -442,8 +445,8 @@ export function TitleOverlay({ title }: { title: string }) {
         <dd>Dodge</dd>
         <dt>F / Enter</dt>
         <dd>Open, search</dd>
-        <dt>H</dt>
-        <dd>Drink</dd>
+        <dt>H / R</dt>
+        <dd>Drink, read scroll</dd>
         <dt>B / C</dt>
         <dd>Journal, character</dd>
         <dt>M</dt>

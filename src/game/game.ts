@@ -73,10 +73,19 @@ export class Game {
 
   /** Drink the first healing item the party carries. */
   drink() {
-    const item = this.world.def.items.find((i) => i.category === 'consumable' && this.state.inventory[i.id]);
-    const fallback = this.world.def.items.find((i) => i.category === 'consumable');
-    const itemId = item?.id ?? fallback?.id;
-    if (itemId) this.pending.push({ type: 'use', actor: this.state.party.members[0].id, itemId });
+    this.useFirst('heal');
+  }
+
+  /** Read the first spell scroll the party carries. */
+  readScroll() {
+    this.useFirst('cast');
+  }
+
+  private useFirst(effect: 'heal' | 'cast') {
+    const matches = this.world.def.items.filter((i) => i.category === 'consumable' && i.effect.type === effect);
+    // With none in the pack, still send the request so the game can say so.
+    const item = matches.find((i) => this.state.inventory[i.id]) ?? matches[0];
+    if (item) this.pending.push({ type: 'use', actor: this.state.party.members[0].id, itemId: item.id });
   }
 
   /** Click on something in the pack: drink it, or put it on. */
@@ -224,6 +233,12 @@ export class Game {
       case 'attack.hit':
         pushFloater(`${event.damage}${event.critical ? '!' : ''}`, event.kind === 'heavy' || event.critical ? 'heavy' : 'dealt');
         break;
+      case 'spell.hit':
+        pushFloater(String(event.damage), 'spell');
+        break;
+      case 'spell.cast':
+        this.syncPack();
+        break;
       case 'level.up':
         pushFloater('Level up!', 'level', 1600);
         this.syncPack();
@@ -345,7 +360,8 @@ export class Game {
     for (const item of def.items) {
       const count = this.state.inventory[item.id];
       if (!count) continue;
-      const action = item.category === 'consumable' ? 'drink' : item.category === 'weapon' || item.category === 'armour' ? 'equip' : null;
+      const action =
+        item.category === 'consumable' ? (item.effect.type === 'cast' ? 'read' : 'drink') : item.category === 'weapon' || item.category === 'armour' ? 'equip' : null;
       belt.push({ itemId: item.id, name: item.name, description: item.description, icon: item.visualAssetId, count, action });
     }
     let quest: QuestView | null = null;

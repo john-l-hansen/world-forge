@@ -63,8 +63,25 @@ export function describeEvent(event: GameEvent, state: SessionState, world: Comp
     }
     case 'item.refused':
       if (event.reason === 'full_health') return { text: 'You are not hurt.', tone: 'plain' };
-      if (event.reason === 'none_left') return { text: 'You have nothing to drink.', tone: 'plain' };
+      if (event.reason === 'none_left') {
+        const item = def.items.find((i) => i.id === event.itemId);
+        const scroll = item?.category === 'consumable' && item.effect.type === 'cast';
+        return { text: scroll ? 'You have no scroll to read.' : 'You have nothing to drink.', tone: 'plain' };
+      }
+      if (event.reason === 'no_target') return { text: 'There is nothing ahead to strike. You keep the scroll.', tone: 'plain' };
       return null;
+    case 'spell.cast': {
+      const spell = def.spells.find((sp) => sp.id === event.spellId);
+      return { text: `${heroName(event.actor)} reads the scroll. ${spell?.name ?? 'Power'} gathers!`, tone: 'speech' };
+    }
+    case 'spell.hit': {
+      const spell = def.spells.find((sp) => sp.id === event.spellId);
+      return event.killed
+        ? { text: `The ${(spell?.name ?? 'spell').toLowerCase()} destroys the ${enemyName(event.enemyId)}!`, tone: 'good' }
+        : { text: `The ${(spell?.name ?? 'spell').toLowerCase()} strikes the ${enemyName(event.enemyId)} for ${event.damage}.`, tone: 'good' };
+    }
+    case 'spell.fizzled':
+      return { text: 'The spell finds nothing and fades.', tone: 'plain' };
     case 'encounter.started': {
       const encounter = def.encounters.find((e) => e.id === event.encounterId);
       return encounter?.intro ? { text: `"${encounter.intro}"`, tone: 'speech' } : null;

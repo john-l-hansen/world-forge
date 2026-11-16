@@ -97,6 +97,10 @@ export function migrateWorld(input: unknown): unknown {
     // 0.5.0 added armour and more equipment slots. Nothing existing changes.
     data = { ...data, schemaVersion: '0.5.0' };
   }
+  if (data.schemaVersion === '0.5.0') {
+    // 0.6.0 added spells and scrolls. Nothing existing changes.
+    data = { ...data, schemaVersion: '0.6.0', spells: data.spells ?? [] };
+  }
   return data;
 }
 
@@ -152,6 +156,12 @@ export function validateWorld(input: unknown): ValidationResult {
   world.items.forEach((i) => claim(i.id, 'item'));
   world.characters.forEach((c) => claim(c.id, 'character'));
   world.quests.forEach((q) => claim(q.id, 'quest'));
+  world.spells.forEach((sp) => claim(sp.id, 'spell'));
+  for (const item of world.items) {
+    if (item.category !== 'consumable' || item.effect.type !== 'cast') continue;
+    const spellId = item.effect.spellId;
+    if (!world.spells.some((sp) => sp.id === spellId)) add('missing_reference', `Item "${item.id}" casts missing spell "${spellId}".`);
+  }
 
   const regions = new Map(world.regions.map((r) => [r.id, r]));
   const rooms = new Map(world.rooms.map((r) => [r.id, r]));

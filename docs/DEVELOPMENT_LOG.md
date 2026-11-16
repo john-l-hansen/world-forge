@@ -1,5 +1,74 @@
 # Development log — World Forge
 
+## Milestone 6 — Phase 3, part 3: spells and scrolls (2026-11-15)
+
+### What was implemented
+
+- **World schema 0.6.0.** A world can define `spells`: name, element (fire, ice or
+  lightning), shape (a bolt, for now), range, damage, impact, cast time, recovery and
+  mana cost. A consumable item can have the effect `cast` with a `spellId`, which makes
+  it a scroll. `0.5.0` worlds are migrated.
+- **Simulation.** Reading a scroll starts a cast that takes its time and then strikes
+  the first enemy straight ahead within range, if no wall or closed door is in the way.
+  Magic ignores armour, is sharpened by intelligence, staggers like a heavy blow and
+  can break a wind-up if its impact meets the enemy's poise. A scroll is kept if there
+  is nothing to strike, and the spell fades if the target leaves the line mid-cast.
+- **Content.** A Scroll of storms lies in the mine hall. It casts Storm bolt: 14 to 20
+  damage at up to five cells.
+- **Presentation.** A jagged bolt drawn fresh each frame from the caster's hand to the
+  target, a flash, a floating damage number, a rising hum for the cast and a crack and
+  rumble for the strike. Read a scroll with R or by clicking it on the belt.
+
+### Decisions made
+
+- **Spells are world data and scrolls reuse them.** The same spell definition will
+  serve a mage spending mana once casters arrive; a scroll simply casts it for free.
+  This also matches the reference board's point that one effect should serve both a
+  combat action and a scripted scene.
+- **One shape so far (bolt).** Area effects, healing spells and status effects wait
+  for the party, since they need casters and allies to be worth designing.
+
+### Tests executed
+
+- `npm run typecheck` and `npm run build` — pass.
+- `npm test` — 136 unit tests pass. New: 13 in `tests/spells.test.ts` (pickup, cast
+  timing, damage, range, walls and doors, refusal with no target, fizzling,
+  interruption against poise, experience and quest credit for a spell kill, being busy
+  while casting, determinism, and three validation cases).
+- `npm run test:browser` — 71 checks pass in headless Chrome, including picking up
+  the scroll, keeping it when nothing is ahead, and striking the chief with it.
+
+### Known limitations
+
+- The bolt is drawn as thin lines and reads as lightning only just. It is the same
+  for every element apart from colour.
+- Mana exists as a formula but no character spends it yet.
+- R reads a scroll during play and restarts after a defeat or victory. The two never
+  overlap, but the key is doing two jobs.
+
+### Open decision before the rest of Phase 3: how the party works
+
+Party switching and party AI are the remaining Phase 3 tasks, and they depend on a
+choice that is hard to undo and that also shapes co-op:
+
+1. **One body, classic style.** The party moves as a single unit, as in Eye of the
+   Beholder and Lands of Lore. The player acts through one active character and can
+   switch; the others attack, cast and heal on their own. Simple, faithful to the
+   references, and it keeps grid movement and encounters as they are. In co-op,
+   though, several players would share one body, so someone has to steer.
+2. **Separate bodies.** Each character stands in their own cell and moves on their
+   own. This fits "each player controls one party member" in co-op, and makes
+   positioning matter (the rogue behind the enemy). It is a much larger change:
+   companion pathfinding, formation, doors and corridors with four bodies, and a view
+   that only ever shows one character's eyes.
+3. **One body now, with rows.** As option 1, plus a front and back row inside the
+   party's cell, so the fighter shields the mage. Co-op players each drive one
+   character's actions while one of them steers, as in a tabletop party.
+
+Recommendation: option 3. It matches the reference games, keeps everything built so
+far, gives classes distinct roles, and gives co-op a workable shape without a rewrite.
+The cost is that co-op players do not move independently.
+
 ## Milestone 5 — Phase 3, part 2: equipment and armour (2026-11-15)
 
 ### What was implemented

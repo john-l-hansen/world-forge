@@ -85,6 +85,7 @@ html, body, #root {
 .floater.dealt { top: 74px; color: var(--gold-hi); }
 .floater.taken { top: 150px; color: var(--bad); }
 .floater.healed { top: 150px; color: var(--good); }
+.floater.spell { top: 66px; color: #cdb8ff; font-size: 24px; line-height: 24px; }
 .floater.heavy { top: 70px; color: #fff2a8; font-size: 24px; line-height: 24px; }
 .floater.parry { top: 96px; color: var(--gold-hi); }
 .floater.block { top: 150px; color: var(--bone); }

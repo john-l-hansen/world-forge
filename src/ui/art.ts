@@ -155,7 +155,19 @@ function helmIcon(): Pix {
   return p;
 }
 
-export type ItemIcon = 'key' | 'flask' | 'coins' | 'short_sword' | 'shield' | 'jerkin' | 'helm';
+function scrollIcon(): Pix {
+  const p = new Pix(12, 12);
+  p.rect(2, 2, 8, 8, 0xd8cfb4);
+  p.rect(1, 1, 10, 2, 0xb8ab88);
+  p.rect(1, 9, 10, 2, 0xb8ab88);
+  p.rect(1, 1, 10, 1, 0xf2ecd8);
+  for (const y of [4, 6]) p.rect(3, y, 6, 1, 0x6f8fd0);
+  p.rect(3, 8, 3, 1, 0x6f8fd0);
+  p.outline(INK);
+  return p;
+}
+
+export type ItemIcon = 'key' | 'flask' | 'coins' | 'short_sword' | 'shield' | 'jerkin' | 'helm' | 'scroll';
 
 export interface UiArt {
   panel: string;
@@ -182,6 +194,7 @@ export function uiArt(): UiArt {
       shield: pixToDataUrl(shieldIcon()),
       jerkin: pixToDataUrl(jerkinIcon()),
       helm: pixToDataUrl(helmIcon()),
+      scroll: pixToDataUrl(scrollIcon()),
     },
     icons: Object.fromEntries(kinds.map((k) => [k, pixToDataUrl(arrowIcon(k))])) as Record<IconKind, string>,
   };

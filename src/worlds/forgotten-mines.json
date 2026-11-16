@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "0.5.0",
+  "schemaVersion": "0.6.0",
   "world": {
     "id": "world_forgotten_mines",
     "name": "The Forgotten Mines",
@@ -129,7 +129,8 @@
         "object_torch_hall_w",
         "object_torch_hall_n",
         "object_torch_hall_e",
-        "object_hall_crate"
+        "object_hall_crate",
+        "object_hall_scroll"
       ]
     },
     {
@@ -566,6 +567,17 @@
         "y": 1
       },
       "itemId": "item_wooden_shield"
+    },
+    {
+      "id": "object_hall_scroll",
+      "type": "pickup",
+      "name": "Scroll of storms",
+      "roomId": "room_mine_hall",
+      "cell": {
+        "x": 2,
+        "y": 5
+      },
+      "itemId": "item_storm_scroll"
     }
   ],
   "items": [
@@ -641,6 +653,35 @@
       "slot": "offHand",
       "defence": 1,
       "visualAssetId": "shield"
+    },
+    {
+      "id": "item_storm_scroll",
+      "name": "Scroll of storms",
+      "description": "Read it aloud and lightning answers. Once.",
+      "category": "consumable",
+      "effect": {
+        "type": "cast",
+        "spellId": "spell_storm_bolt"
+      },
+      "visualAssetId": "scroll"
+    }
+  ],
+  "spells": [
+    {
+      "id": "spell_storm_bolt",
+      "name": "Storm bolt",
+      "description": "A fork of lightning that leaps to the nearest foe ahead.",
+      "element": "lightning",
+      "shape": "bolt",
+      "range": 5,
+      "damage": {
+        "min": 14,
+        "max": 20
+      },
+      "impact": 3,
+      "castTicks": 18,
+      "recoveryTicks": 24,
+      "manaCost": 8
     }
   ],
   "characters": [

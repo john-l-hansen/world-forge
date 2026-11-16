@@ -203,14 +203,14 @@ export function Belt({ game }: { game: Game }) {
         item ? (
           <button
             key={item.itemId}
-            className={`slot sunk${item.usable ? ' usable' : ''}`}
-            title={`${item.name}. ${item.description}${item.usable ? ' (H to drink)' : ''}`}
+            className={`slot sunk${item.action ? ' usable' : ''}`}
+            title={`${item.name}. ${item.description}${item.action === 'drink' ? ' (click or H to drink)' : item.action === 'equip' ? ' (click to equip)' : ''}`}
             aria-label={item.name}
-            onPointerDown={() => item.usable && game.drink()}
+            onPointerDown={() => item.action && game.useItem(item.itemId)}
           >
             <img src={art.items[item.icon]} alt="" />
             {item.count > 1 && <span className="count">{item.count}</span>}
-            {item.usable && <kbd>H</kbd>}
+            {item.action === 'drink' && <kbd>H</kbd>}
           </button>
         ) : (
           <div key={i} className="slot sunk" />
@@ -247,7 +247,7 @@ export function JournalOverlay() {
   );
 }
 
-export function SheetOverlay() {
+export function SheetOverlay({ game }: { game: Game }) {
   const sheet = useHud((s) => s.sheet);
   if (!sheet) return null;
   const sign = (n: number) => (n >= 0 ? `+${n}` : String(n));
@@ -279,12 +279,30 @@ export function SheetOverlay() {
           <dd>{sheet.heavy}</dd>
           <dt>Critical</dt>
           <dd>{sheet.critical}</dd>
+          <dt>Defence</dt>
+          <dd>{sheet.defence}</dd>
         </dl>
+      </div>
+      <div className="worn">
+        {sheet.equipment.length === 0 && <span>Nothing worn or held.</span>}
+        {sheet.equipment.map((e) => (
+          <button
+            key={e.slot}
+            className="btn"
+            title={`${e.label}: ${e.name}. ${e.detail}. Click to take off.`}
+            onPointerDown={(ev) => {
+              ev.stopPropagation();
+              game.unequip(e.slot as Parameters<Game['unequip']>[0]);
+            }}
+          >
+            {e.name}
+          </button>
+        ))}
       </div>
       <h2>
         Experience {sheet.xp}. Level {sheet.level + 1} at {sheet.nextLevel}.
       </h2>
-      <div className="blink">Press C to close</div>
+      <div className="blink">Click an item to take it off - C to close</div>
     </div>
   );
 }

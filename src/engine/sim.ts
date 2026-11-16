@@ -12,7 +12,7 @@ import {
   roomAtCell,
   type CompiledWorld,
 } from '../world/compile';
-import type { EnemyAttackDef, EnemyDef, WeaponDef } from '../schema/world';
+import type { EnemyAttackDef, EnemyDef, EquipSlot, ItemDef, WeaponAttackDef } from '../schema/world';
 import { CLASSES } from './classes';
 import { randomInt } from './rng';
 import { CRITICAL_MULTIPLIER, criticalChance, damageBonus, levelForExperience, maxHealth, maxStamina, experienceForLevel } from './stats';
@@ -64,6 +64,7 @@ export function createSession(world: CompiledWorld, seed = 1): SessionState {
       // A character who starts above level 1 starts with that level's experience.
       xp: experienceForLevel(c.level),
       attributes,
+      equipment: { ...c.equipment },
       hp: health,
       maxHp: health,
       stamina,
@@ -107,7 +108,7 @@ export function createSession(world: CompiledWorld, seed = 1): SessionState {
 
   const startRoom = roomAtCell(world, world.start.x, world.start.y);
   const state: SessionState = {
-    stateVersion: 4,
+    stateVersion: 5,
     worldId: def.world.id,
     tick: 0,
     rng: seed | 0,
@@ -152,7 +153,7 @@ export function serializeSession(state: SessionState): string {
 
 export function deserializeSession(json: string): SessionState {
   const state = JSON.parse(json) as SessionState;
-  if (state.stateVersion !== 4) throw new Error(`Unsupported session version ${String(state.stateVersion)}`);
+  if (state.stateVersion !== 5) throw new Error(`Unsupported session version ${String(state.stateVersion)}`);
   return state;
 }
 
@@ -268,6 +269,9 @@ export function step(state: SessionState, world: CompiledWorld, commands: readon
       // Raising or lowering the guard is never queued behind other actions.
       if (command.held && !member.blocking) member.blockStart = state.tick + 1;
       member.blocking = command.held;
+    } else if (command.type === 'equip' || command.type === 'unequip') {
+      // Changing equipment is a pack action: it does not wait for a swing to finish.
+      runCommand(state, world, command, events);
     } else {
       state.buffered = { command, tick: state.tick };
     }
@@ -335,7 +339,7 @@ function runCommand(state: SessionState, world: CompiledWorld, command: Command,
       const member = p.members.find((m) => m.id === command.actor);
       if (!member || member.hp <= 0) return;
       const kind = command.kind ?? 'light';
-      const attack = weaponOf(world, member).weapon[kind];
+      const attack = weaponOf(world, member)[kind];
       if (member.stamina < attack.staminaCost) {
         events.push({ type: 'stamina.low', actor: member.id });
         return;
@@ -365,7 +369,7 @@ function runCommand(state: SessionState, world: CompiledWorld, command: Command,
         }
         state.chestsOpened[chest.id] = true;
         events.push({ type: 'chest.opened', objectId: chest.id });
-        for (const itemId of chest.contents) gainItem(state, itemId, 'chest', events);
+        for (const itemId of chest.contents) gainItem(state, world, itemId, 'chest', events);
         return;
       }
 
@@ -404,6 +408,24 @@ function runCommand(state: SessionState, world: CompiledWorld, command: Command,
       }
       state.doorsOpen[door.def.id] = true;
       events.push({ type: 'door.opened', doorId: door.def.id });
+      return;
+    }
+    case 'equip': {
+      const member = p.members.find((m) => m.id === command.actor);
+      const item = world.def.items.find((it) => it.id === command.itemId);
+      if (!member || member.hp <= 0) return;
+      if (!item || !equipItem(state, member, item, false, events)) {
+        events.push({ type: 'item.refused', itemId: command.itemId, reason: 'not_usable' });
+      }
+      return;
+    }
+    case 'unequip': {
+      const member = p.members.find((m) => m.id === command.actor);
+      const itemId = member?.equipment[command.slot];
+      if (!member || member.hp <= 0 || !itemId) return;
+      delete member.equipment[command.slot];
+      state.inventory[itemId] = (state.inventory[itemId] ?? 0) + 1;
+      events.push({ type: 'item.unequipped', actor: member.id, itemId, slot: command.slot });
       return;
     }
     case 'use': {
@@ -457,7 +479,7 @@ function moveParty(state: SessionState, world: CompiledWorld, dir: number, ticks
   for (const pickup of world.pickups) {
     if (pickup.x !== nx || pickup.y !== ny || state.pickupsTaken[pickup.id]) continue;
     state.pickupsTaken[pickup.id] = true;
-    gainItem(state, pickup.itemId, 'pickup', events);
+    gainItem(state, world, pickup.itemId, 'pickup', events);
   }
   const room = roomAtCell(world, nx, ny);
   if (room && room.id !== state.currentRoomId) {
@@ -484,9 +506,48 @@ function restoreStamina(state: SessionState) {
   }
 }
 
-function gainItem(state: SessionState, itemId: string, from: 'pickup' | 'chest', events: GameEvent[]) {
+function gainItem(state: SessionState, world: CompiledWorld, itemId: string, from: 'pickup' | 'chest', events: GameEvent[]) {
   state.inventory[itemId] = (state.inventory[itemId] ?? 0) + 1;
   events.push({ type: 'item.gained', itemId, from });
+  // Armour for an empty slot is put straight on.
+  const item = world.def.items.find((it) => it.id === itemId);
+  const wearer = state.party.members.find((m) => m.hp > 0);
+  if (item?.category === 'armour' && wearer && !wearer.equipment[item.slot]) equipItem(state, wearer, item, true, events);
+}
+
+/** The slot an item goes in, or null if it cannot be worn or wielded. */
+function slotFor(item: ItemDef): EquipSlot | null {
+  if (item.category === 'weapon') return 'mainHand';
+  if (item.category === 'armour') return item.slot;
+  return null;
+}
+
+function equipItem(state: SessionState, member: PartyMember, item: ItemDef, auto: boolean, events: GameEvent[]) {
+  const slot = slotFor(item);
+  if (!slot || !state.inventory[item.id]) return false;
+  const previous = member.equipment[slot];
+  if (previous) state.inventory[previous] = (state.inventory[previous] ?? 0) + 1;
+  state.inventory[item.id] -= 1;
+  if (state.inventory[item.id] === 0) delete state.inventory[item.id];
+  member.equipment[slot] = item.id;
+  events.push({ type: 'item.equipped', actor: member.id, itemId: item.id, slot, auto });
+  return true;
+}
+
+/** Bare hands, for a character with nothing in the main hand. */
+const UNARMED: { light: WeaponAttackDef; heavy: WeaponAttackDef } = {
+  light: { damage: { min: 1, max: 2 }, windupTicks: 5, recoveryTicks: 16, staminaCost: 3, impact: 1 },
+  heavy: { damage: { min: 2, max: 4 }, windupTicks: 12, recoveryTicks: 24, staminaCost: 10, impact: 2 },
+};
+
+/** The total defence of everything a character wears. */
+export function defenceOf(world: CompiledWorld, member: PartyMember): number {
+  let total = 0;
+  for (const itemId of Object.values(member.equipment)) {
+    const item = world.def.items.find((it) => it.id === itemId);
+    if (item?.category === 'armour') total += item.defence;
+  }
+  return total;
 }
 
 function blockReason(state: SessionState, world: CompiledWorld, x: number, y: number): BumpReason | null {
@@ -502,10 +563,10 @@ function blockReason(state: SessionState, world: CompiledWorld, x: number, y: nu
   return null;
 }
 
-function weaponOf(world: CompiledWorld, member: PartyMember): WeaponDef {
-  const c = world.def.characters.find((ch) => ch.id === member.id)!;
-  // Validation guarantees the main hand holds a weapon.
-  return world.def.items.find((it) => it.id === c.equipment.mainHand) as WeaponDef;
+/** The light and heavy attacks of whatever the character holds, or bare hands. */
+function weaponOf(world: CompiledWorld, member: PartyMember): { light: WeaponAttackDef; heavy: WeaponAttackDef } {
+  const item = world.def.items.find((it) => it.id === member.equipment.mainHand);
+  return item?.category === 'weapon' ? item.weapon : UNARMED;
 }
 
 function resolvePartyAttacks(state: SessionState, world: CompiledWorld, events: GameEvent[]) {
@@ -519,7 +580,7 @@ function resolvePartyAttacks(state: SessionState, world: CompiledWorld, events: 
       const fy = p.y + DIR_Y[p.facing];
       const enemy = enemyAt(state, fx, fy);
       if (enemy) {
-        const attack = weaponOf(world, member).weapon[action.attack];
+        const attack = weaponOf(world, member)[action.attack];
         const def = enemyDef(world, enemy);
         const rolled = randomInt(state, attack.damage.min, attack.damage.max) + damageBonus(member.attributes);
         const critical = randomInt(state, 1, 100) <= criticalChance(member.attributes);
@@ -656,7 +717,7 @@ function updateEnemy(state: SessionState, world: CompiledWorld, enemy: EnemyStat
     case 'telegraph': {
       if (state.tick < enemy.aiEnd) return;
       const attack = currentAttack(def, enemy);
-      resolveEnemyAttack(state, enemy, attack, events);
+      resolveEnemyAttack(state, world, enemy, attack, events);
       // A parry leaves the enemy reeling instead of following through.
       if (enemy.ai === 'telegraph') setAi(state, enemy, 'attack', ENEMY_ATTACK_POSE_TICKS);
       return;
@@ -726,7 +787,7 @@ function chooseAttack(state: SessionState, def: EnemyDef): EnemyAttackDef {
  * party can avoid it by not being there, by a dodge, by a parry, or soften
  * it with a block.
  */
-function resolveEnemyAttack(state: SessionState, enemy: EnemyState, attack: EnemyAttackDef, events: GameEvent[]) {
+function resolveEnemyAttack(state: SessionState, world: CompiledWorld, enemy: EnemyState, attack: EnemyAttackDef, events: GameEvent[]) {
   const p = state.party;
   const inReach = attackCells(enemy, attack).some((c) => c.x === p.x && c.y === p.y);
   if (!inReach) {
@@ -740,7 +801,8 @@ function resolveEnemyAttack(state: SessionState, enemy: EnemyState, attack: Enem
   const target = p.members.find((m) => m.hp > 0);
   if (!target) return;
 
-  const rolled = randomInt(state, attack.damage.min, attack.damage.max);
+  // Armour takes its defence off the blow before anything else, down to 1.
+  const rolled = Math.max(1, randomInt(state, attack.damage.min, attack.damage.max) - defenceOf(world, target));
   const facingEnemy = p.x + DIR_X[p.facing] === enemy.x && p.y + DIR_Y[p.facing] === enemy.y;
   let damage = rolled;
 

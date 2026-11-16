@@ -1,4 +1,4 @@
-# World schema reference — version 0.3.0
+# World schema reference — version 0.5.0
 
 What the engine actually reads today. The source of truth is `src/schema/world.ts`
 (shapes) and `src/schema/validate.ts` (meaning). A world is one JSON object; see
@@ -8,7 +8,7 @@ What the engine actually reads today. The source of truth is `src/schema/world.t
 
 | Field | Contents |
 | --- | --- |
-| `schemaVersion` | `"0.3.0"`. `0.1.0` and `0.2.0` worlds are migrated on load. Anything else is rejected. |
+| `schemaVersion` | `"0.5.0"`. Worlds from `0.1.0` onward are migrated on load, one version at a time. Anything else is rejected. |
 | `world` | id, name, description, theme, difficulty, optional author and timestamps |
 | `settings` | movement mode, start room, start cell, start facing, starting party, starting quests |
 | `regions` | id, name, environment (tileset), room IDs |
@@ -17,8 +17,8 @@ What the engine actually reads today. The source of truth is `src/schema/world.t
 | `enemies` | health, defence, `poise`, movement, sight range, a list of `attacks`, `behaviour` and `visualAssetId` from engine-supported lists |
 | `encounters` | room, enemy placements, `boss` flag, optional `intro` line |
 | `objects` | `torch`, `prop`, `pickup` (an item on the floor) or `chest` (blocking, with contents) |
-| `items` | `weapon`, `key`, `consumable` (with an engine-supported effect) or `treasure` |
-| `characters` | name, class, health, stamina, equipment, portrait |
+| `items` | `weapon`, `armour` (with a slot and a defence value), `key`, `consumable` (with an engine-supported effect) or `treasure` |
+| `characters` | name, class, level, optional attributes, equipment (seven optional slots), portrait |
 | `quests` | title, description, objectives, completion text |
 | `npcs`, `factions` | reserved for later phases |
 
@@ -46,6 +46,18 @@ a `pattern` and a `blockable` flag. The enemy picks between its attacks by `weig
 A player's blow breaks an enemy's wind-up only if its `impact` is at least the enemy's
 `poise`. With the usual light impact of 1 and heavy impact of 3: poise 2 means only
 heavy blows interrupt, and poise 4 means nothing does.
+
+## Characters
+
+A character has a `classId` (fighter, rogue, mage or cleric), a `level` and, optionally,
+five `attributes` from 3 to 20: strength, dexterity, constitution, intelligence and
+wisdom. Left out, the class's usual starting attributes are used. Health, stamina, mana,
+damage bonus and critical chance are worked out from these in `src/engine/stats.ts`;
+they are not stored in the world.
+
+`equipment` has seven optional slots: `mainHand` (a weapon), and `offHand`, `head`,
+`body`, `hands`, `feet` and `accessory` (armour made for that slot). Enemies have an `xp`
+value that every living party member earns when the enemy dies.
 
 ## Quest objectives
 

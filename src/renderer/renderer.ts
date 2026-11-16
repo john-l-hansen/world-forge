@@ -4,7 +4,7 @@
  * unfiltered, so every pixel on screen is a real pixel of the frame.
  */
 import * as THREE from 'three';
-import { CHEST_H, CHEST_W, GOBLIN_H, GOBLIN_POSES, GOBLIN_W, KEY_H, KEY_W, PROP_SIZE, SWORD_H, SWORD_W, TORCH_H, TORCH_W, drawChest, drawGoblin, drawKey, drawProp, drawSword, drawTorch, type GoblinPose, type GoblinVariant } from '../art/sprites';
+import { CHEST_H, CHEST_W, GOBLIN_H, GOBLIN_POSES, GOBLIN_W, PROP_SIZE, SWORD_H, SWORD_W, TORCH_H, TORCH_W, drawChest, drawGoblin, drawPickup, drawProp, drawSword, drawTorch, type GoblinPose, type GoblinVariant } from '../art/sprites';
 import { Pix } from '../art/pixel';
 import { BUMP_TICKS, ENEMY_ATTACK_POSE_TICKS, MOVE_TICKS, TURN_TICKS, type EnemyState, type GameEvent, type SessionState } from '../engine/types';
 import { DIR_X, DIR_Y, type CompiledWorld } from '../world/compile';
@@ -189,20 +189,26 @@ export class DungeonRenderer {
         this.disposables.push(material, mesh.geometry);
       }
     }
-    if (world.pickups.length) {
-      const keySheet = pixTexture(sheetOf([drawKey(0), drawKey(1)]));
-      this.disposables.push(keySheet);
-      for (const pickup of world.pickups) {
-        const material = makeSpriteMaterial(keySheet, this.shared, 2);
-        // Small things on the floor are lifted a little so they can be found.
-        material.uniforms.uLight.value = Math.max(0.75, lightAt(pickup.x, pickup.y));
-        const mesh = billboard(KEY_W * PROP_TEXEL, KEY_H * PROP_TEXEL, material);
-        mesh.position.set(pickup.x, 0.04, pickup.y);
-        this.scene.add(mesh);
-        this.facers.push(mesh);
-        this.pickups.push({ id: pickup.id, mesh, material });
-        this.disposables.push(material, mesh.geometry);
+    const pickupSheets = new Map<string, { texture: THREE.Texture; w: number; h: number }>();
+    for (const pickup of world.pickups) {
+      const item = world.def.items.find((i) => i.id === pickup.itemId);
+      const visual = item?.visualAssetId ?? 'sack';
+      let sheet = pickupSheets.get(visual);
+      if (!sheet) {
+        const frames = drawPickup(visual);
+        sheet = { texture: pixTexture(sheetOf(frames)), w: frames[0].w, h: frames[0].h };
+        pickupSheets.set(visual, sheet);
+        this.disposables.push(sheet.texture);
       }
+      const material = makeSpriteMaterial(sheet.texture, this.shared, 2);
+      // Small things on the floor are lifted a little so they can be found.
+      material.uniforms.uLight.value = Math.max(0.75, lightAt(pickup.x, pickup.y));
+      const mesh = billboard(sheet.w * PROP_TEXEL, sheet.h * PROP_TEXEL, material);
+      mesh.position.set(pickup.x, 0.04, pickup.y);
+      this.scene.add(mesh);
+      this.facers.push(mesh);
+      this.pickups.push({ id: pickup.id, mesh, material });
+      this.disposables.push(material, mesh.geometry);
     }
 
     // --- Enemies -------------------------------------------------------------
@@ -329,6 +335,8 @@ export class DungeonRenderer {
     this.gl.clear();
     this.gl.render(this.scene, this.camera);
     this.gl.clearDepth();
+    // The sword is only drawn while one is held.
+    this.sword.visible = Boolean(state.party.members[0]?.equipment.mainHand);
     if (state.status === 'playing') this.gl.render(this.overlayScene, this.overlayCamera);
     this.gl.setRenderTarget(null);
     this.gl.render(this.presentScene, this.presentCamera);

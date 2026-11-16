@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { createSession, deserializeSession, serializeSession } from '../src/engine/sim';
 import type { GameEvent } from '../src/engine/types';
 import { validateWorld } from '../src/schema/validate';
+import { SCHEMA_VERSION } from '../src/schema/world';
 import { HERO, act, face, fight, interact, loadMines, minesData, move, walkTo } from './helpers';
 
 const N = 0;
@@ -93,8 +94,10 @@ describe('secret room and chest', () => {
     face(state, world, S);
     expect(act(state, world, move('forward'))).toContainEqual({ type: 'party.bumped', reason: 'object' });
     const opened = act(state, world, interact());
-    expect(types(opened)).toEqual(['chest.opened', 'item.gained', 'item.gained', 'quest.objective']);
+    expect(types(opened)).toEqual(['chest.opened', 'item.gained', 'item.gained', 'item.gained', 'item.equipped', 'quest.objective']);
+    // The jerkin is put straight on, so it is worn, not carried.
     expect(state.inventory).toEqual({ item_healing_draught: 1, item_gold_pouch: 1 });
+    expect(state.party.members[0].equipment.body).toBe('item_studded_jerkin');
     expect(types(act(state, world, interact()))).toEqual(['interact.nothing']);
   });
 });
@@ -343,7 +346,7 @@ describe('progression checks in validation', () => {
     const migrated = validateWorld(old);
     expect(migrated.ok ? [] : migrated.issues).toEqual([]);
     if (!migrated.ok) throw new Error('migration failed');
-    expect(migrated.world.schemaVersion).toBe('0.4.0');
+    expect(migrated.world.schemaVersion).toBe(SCHEMA_VERSION);
     expect(migrated.world.settings.startingQuestIds).toEqual([]);
     const sword = migrated.world.items[0];
     if (sword.category !== 'weapon') throw new Error('not a weapon');

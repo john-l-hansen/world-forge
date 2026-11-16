@@ -21,9 +21,10 @@ export interface BeltItem {
   itemId: string;
   name: string;
   description: string;
-  icon: 'key' | 'flask' | 'coins' | 'short_sword';
+  icon: 'key' | 'flask' | 'coins' | 'short_sword' | 'shield' | 'jerkin' | 'helm';
   count: number;
-  usable: boolean;
+  /** What clicking it does, if anything. */
+  action: 'drink' | 'equip' | null;
 }
 
 export interface QuestView {
@@ -50,6 +51,9 @@ export interface SheetView {
   heavy: string;
   critical: string;
   weapon: string;
+  defence: number;
+  /** One row per equipment slot that holds something. */
+  equipment: { slot: string; label: string; itemId: string; name: string; detail: string }[];
 }
 
 export interface HudState {

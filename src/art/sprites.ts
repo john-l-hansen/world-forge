@@ -436,3 +436,47 @@ export function drawKey(frame: number): Pix {
   }
   return p;
 }
+
+/** A round wooden shield, propped where it was dropped. */
+function drawShield(frame: number): Pix {
+  const p = new Pix(26, 26);
+  for (let y = 0; y < 26; y++) {
+    for (let x = 0; x < 26; x++) {
+      const dx = (x - 12.5) / 12;
+      const dy = (y - 12.5) / 12;
+      const d = dx * dx + dy * dy;
+      if (d > 1) continue;
+      if (d > 0.8) p.set(x, y, dx + dy < 0 ? IRON[5] : IRON[2]);
+      else {
+        const board = Math.floor(x / 4);
+        const shade = 3 - dx * 1.2 - dy * 1.4 + (hash2(board, y >> 2, 4) - 0.5) - (x % 4 === 3 ? 1.2 : 0);
+        p.set(x, y, WOOD[Math.max(0, Math.min(5, Math.round(shade)))]);
+      }
+    }
+  }
+  p.shaded(12.5, 12.5, 3.6, 3.6, [IRON[1], IRON[3], IRON[4], IRON[5]]);
+  p.outline(INK);
+  if (frame % 2 === 1) {
+    p.set(11, 11, 0xffffff);
+    p.set(10, 11, IRON[5]);
+    p.set(11, 10, IRON[5]);
+  }
+  return p;
+}
+
+/** A tied sack: the stand-in for any pickup without art of its own. */
+function drawSack(): Pix {
+  const p = new Pix(20, 20);
+  p.shaded(10, 12, 8, 7, [HIDE[0], HIDE[1], HIDE[2], HIDE[3]]);
+  p.poly([[7, 6], [13, 6], [12, 2], [8, 2]], HIDE[2]);
+  p.rect(7, 5, 6, 1, GOLD[1]);
+  p.outline(INK);
+  return p;
+}
+
+/** Two frames (plain, and with a glint) of an item as it lies on the floor. */
+export function drawPickup(visual: string): [Pix, Pix] {
+  if (visual === 'key') return [drawKey(0), drawKey(1)];
+  if (visual === 'shield') return [drawShield(0), drawShield(1)];
+  return [drawSack(), drawSack()];
+}

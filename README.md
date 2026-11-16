@@ -28,6 +28,7 @@ npm run art            # write the generated art to .art/ for review
 | F or Enter | Open and close doors, unlock, search walls, open chests |
 | H | Drink a healing draught |
 | B | Quest journal |
+| C | Character sheet (click a worn item to take it off; click an item on the belt to equip it) |
 | M | Sound on or off |
 | R | Try again after a defeat |
 

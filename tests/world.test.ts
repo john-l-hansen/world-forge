@@ -71,10 +71,10 @@ describe('world compiler', () => {
     expect(at(6, 9)).toBe(0);
   });
 
-  it('places the enemies, chest, key and blocking props', () => {
+  it('places the enemies, chest, pickups and blocking props', () => {
     expect(world.spawns).toHaveLength(2);
     expect(world.chests).toHaveLength(1);
-    expect(world.pickups).toHaveLength(1);
+    expect(world.pickups.map((p) => p.itemId).sort()).toEqual(['item_shaft_key', 'item_wooden_shield']);
     expect(world.blocked[10 * world.width + 8]).toBe(1);
     expect(world.spawns[0]).toMatchObject({ instanceId: 'encounter_goblin_patrol#0', x: 5, y: 2 });
     expect(world.blocked[1 * world.width + 13]).toBe(1);

@@ -11,10 +11,11 @@
  *          stamina, enemy poise, and a list of attacks per enemy
  *   0.4.0  character attributes and level (health and stamina are now
  *          derived from them), and experience awarded by enemies
+ *   0.5.0  armour items and seven equipment slots per character
  */
 import { z } from 'zod';
 
-export const SCHEMA_VERSION = '0.4.0';
+export const SCHEMA_VERSION = '0.5.0';
 
 const id = z.string().regex(/^[a-z][a-z0-9_]*$/, 'ids are lower_snake_case');
 const cell = z.object({ x: z.number().int().min(1), y: z.number().int().min(1) });
@@ -220,6 +221,15 @@ export const ItemSchema = z.discriminatedUnion('category', [
     weapon: z.object({ light: WeaponAttackSchema, heavy: WeaponAttackSchema }),
     visualAssetId: z.enum(['short_sword']),
   }),
+  z.object({
+    ...itemBase,
+    category: z.literal('armour'),
+    /** Where it is worn. A shield goes in the off hand. */
+    slot: z.enum(['offHand', 'head', 'body', 'hands', 'feet', 'accessory']),
+    /** Taken off every blow that lands on the wearer. */
+    defence: z.number().int().min(0).max(20),
+    visualAssetId: z.enum(['shield', 'jerkin', 'helm']),
+  }),
   z.object({ ...itemBase, category: z.literal('key'), visualAssetId: z.enum(['key']) }),
   z.object({
     ...itemBase,
@@ -256,7 +266,18 @@ export const CharacterSchema = z.object({
    * Left out, the class's usual starting attributes are used.
    */
   attributes: AttributesSchema.optional(),
-  equipment: z.object({ mainHand: id }),
+  /** What the character starts out wearing and holding. Every slot is optional. */
+  equipment: z
+    .object({
+      mainHand: id.optional(),
+      offHand: id.optional(),
+      head: id.optional(),
+      body: id.optional(),
+      hands: id.optional(),
+      feet: id.optional(),
+      accessory: id.optional(),
+    })
+    .default({}),
   portraitAssetId: z.enum(['fighter']),
 });
 
@@ -309,6 +330,9 @@ export type EncounterDef = z.infer<typeof EncounterSchema>;
 export type ObjectDef = z.infer<typeof ObjectSchema>;
 export type ItemDef = z.infer<typeof ItemSchema>;
 export type WeaponDef = Extract<ItemDef, { category: 'weapon' }>;
+export type ArmourDef = Extract<ItemDef, { category: 'armour' }>;
+export const EQUIP_SLOTS = ['mainHand', 'offHand', 'head', 'body', 'hands', 'feet', 'accessory'] as const;
+export type EquipSlot = (typeof EQUIP_SLOTS)[number];
 export type CharacterDef = z.infer<typeof CharacterSchema>;
 export type QuestDef = z.infer<typeof QuestSchema>;
 export type QuestObjectiveDef = z.infer<typeof QuestObjectiveSchema>;

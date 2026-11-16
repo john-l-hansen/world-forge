@@ -119,7 +119,43 @@ function coinsIcon(): Pix {
   return p;
 }
 
-export type ItemIcon = 'key' | 'flask' | 'coins' | 'short_sword';
+function shieldIcon(): Pix {
+  const p = new Pix(12, 12);
+  p.ellipse(5.5, 5.5, 5, 5, 0x60421e);
+  p.ellipse(5.5, 5.5, 4, 4, 0x7b5629);
+  for (let a = 0; a < 20; a++) {
+    const ang = (a / 20) * Math.PI * 2;
+    p.set(5.5 + Math.cos(ang) * 5, 5.5 + Math.sin(ang) * 5, a > 8 && a < 16 ? IRON[5] : IRON[3]);
+  }
+  p.rect(5, 2, 1, 8, 0x473016);
+  p.ellipse(5.5, 5.5, 1.6, 1.6, IRON[4]);
+  p.set(5, 5, IRON[5]);
+  p.outline(INK);
+  return p;
+}
+
+function jerkinIcon(): Pix {
+  const p = new Pix(12, 12);
+  p.poly([[2, 2], [4, 1], [7, 1], [9, 2], [11, 4], [9, 6], [9, 11], [2, 11], [2, 6], [0, 4]], 0x5d3d20);
+  p.rect(3, 2, 3, 9, 0x7a542d);
+  p.rect(5, 1, 2, 2, INK);
+  for (const [x, y] of [[4, 4], [7, 4], [4, 7], [7, 7], [4, 10], [7, 10]] as const) p.set(x, y, IRON[5]);
+  p.outline(INK);
+  return p;
+}
+
+function helmIcon(): Pix {
+  const p = new Pix(12, 12);
+  p.ellipse(5.5, 6, 4.5, 4.5, IRON[3]);
+  p.rect(1, 7, 10, 4, IRON[3]);
+  p.rect(2, 3, 2, 3, IRON[5]);
+  p.rect(1, 7, 10, 1, IRON[1]);
+  p.rect(5, 7, 2, 4, INK);
+  p.outline(INK);
+  return p;
+}
+
+export type ItemIcon = 'key' | 'flask' | 'coins' | 'short_sword' | 'shield' | 'jerkin' | 'helm';
 
 export interface UiArt {
   panel: string;
@@ -143,6 +179,9 @@ export function uiArt(): UiArt {
       flask: pixToDataUrl(flaskIcon()),
       coins: pixToDataUrl(coinsIcon()),
       short_sword: pixToDataUrl(swordIcon()),
+      shield: pixToDataUrl(shieldIcon()),
+      jerkin: pixToDataUrl(jerkinIcon()),
+      helm: pixToDataUrl(helmIcon()),
     },
     icons: Object.fromEntries(kinds.map((k) => [k, pixToDataUrl(arrowIcon(k))])) as Record<IconKind, string>,
   };

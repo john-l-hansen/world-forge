@@ -4,7 +4,8 @@
  * in fixed 60 Hz ticks no matter how fast the screen refreshes.
  */
 import { AudioEngine } from '../audio/audio';
-import { createSession, enemyAt, hasLineOfSight, isGuarding, partyIsBusy, step } from '../engine/sim';
+import { createSession, defenceOf, enemyAt, hasLineOfSight, isGuarding, partyIsBusy, step } from '../engine/sim';
+import { EQUIP_SLOTS, type EquipSlot } from '../schema/world';
 import { TICKS_PER_SECOND, type Command, type GameEvent, type SessionState } from '../engine/types';
 import { DungeonRenderer } from '../renderer/renderer';
 import { DIR_X, DIR_Y, roomAtCell, type CompiledWorld } from '../world/compile';
@@ -78,6 +79,28 @@ export class Game {
     if (itemId) this.pending.push({ type: 'use', actor: this.state.party.members[0].id, itemId });
   }
 
+  /** Click on something in the pack: drink it, or put it on. */
+  useItem(itemId: string) {
+    const item = this.world.def.items.find((i) => i.id === itemId);
+    const actor = this.state.party.members[0].id;
+    if (item?.category === 'consumable') this.pending.push({ type: 'use', actor, itemId });
+    else if (item?.category === 'weapon' || item?.category === 'armour') this.pending.push({ type: 'equip', actor, itemId });
+    // The sheet pauses the game, so apply the change now for it to show.
+    if (useHud.getState().screen === 'sheet') this.applyWhilePaused();
+  }
+
+  /** Take something off and put it back in the pack. */
+  unequip(slot: EquipSlot) {
+    this.pending.push({ type: 'unequip', actor: this.state.party.members[0].id, slot });
+    if (useHud.getState().screen === 'sheet') this.applyWhilePaused();
+  }
+
+  /** Changing equipment on the character sheet takes effect at once. */
+  private applyWhilePaused() {
+    this.tick();
+    this.syncPack();
+  }
+
   /** Raise or lower the guard. A guard raised just before a blow lands is a parry. */
   setGuard(held: boolean) {
     if (useHud.getState().screen !== 'playing' && held) return;
@@ -129,12 +152,12 @@ export class Game {
 
   private resetHud(screen: 'title' | 'playing') {
     const hero = this.world.def.characters.find((c) => c.id === this.state.party.members[0].id)!;
-    const weapon = this.world.def.items.find((i) => i.id === hero.equipment.mainHand)!;
+    const weapon = this.world.def.items.find((i) => i.id === hero.equipment.mainHand);
     useHud.setState({
       screen,
       heroName: hero.name,
       heroClass: hero.classId,
-      weaponName: weapon.name,
+      weaponName: weapon?.name ?? 'Unarmed',
       log: [],
       floaters: [],
       target: null,
@@ -234,6 +257,8 @@ export class Game {
         this.syncPack();
         break;
       case 'item.gained':
+      case 'item.equipped':
+      case 'item.unequipped':
       case 'quest.objective':
         this.syncPack();
         break;
@@ -320,7 +345,8 @@ export class Game {
     for (const item of def.items) {
       const count = this.state.inventory[item.id];
       if (!count) continue;
-      belt.push({ itemId: item.id, name: item.name, description: item.description, icon: item.visualAssetId, count, usable: item.category === 'consumable' });
+      const action = item.category === 'consumable' ? 'drink' : item.category === 'weapon' || item.category === 'armour' ? 'equip' : null;
+      belt.push({ itemId: item.id, name: item.name, description: item.description, icon: item.visualAssetId, count, action });
     }
     let quest: QuestView | null = null;
     const questId = Object.keys(this.state.quests)[0];
@@ -338,7 +364,15 @@ export class Game {
     const member = this.state.party.members[0];
     const character = def.characters.find((c) => c.id === member.id)!;
     const cls = CLASSES[member.classId];
-    const weapon = def.items.find((i) => i.id === character.equipment.mainHand);
+    const weapon = def.items.find((i) => i.id === member.equipment.mainHand);
+    const slotLabel: Record<EquipSlot, string> = { mainHand: 'Main hand', offHand: 'Off hand', head: 'Head', body: 'Body', hands: 'Hands', feet: 'Feet', accessory: 'Accessory' };
+    const equipment: SheetView['equipment'] = [];
+    for (const slot of EQUIP_SLOTS) {
+      const item = def.items.find((i) => i.id === member.equipment[slot]);
+      if (!item) continue;
+      const detail = item.category === 'armour' ? `Defence ${item.defence}` : item.category === 'weapon' ? 'Weapon' : '';
+      equipment.push({ slot, label: slotLabel[slot], itemId: item.id, name: item.name, detail });
+    }
     const bonus = damageBonus(member.attributes);
     const range = (d: { min: number; max: number }) => `${d.min + bonus}-${d.max + bonus}`;
     const levelStart = experienceForLevel(member.level);
@@ -355,12 +389,14 @@ export class Game {
       attributes: ATTRIBUTES.map((a) => ({ label: label[a], value: member.attributes[a], modifier: modifier(member.attributes[a]), primary: a === cls.primary })),
       health: `${member.hp}/${member.maxHp}`,
       stamina: `${member.stamina}/${member.maxStamina}`,
-      light: weapon?.category === 'weapon' ? range(weapon.weapon.light.damage) : '-',
-      heavy: weapon?.category === 'weapon' ? range(weapon.weapon.heavy.damage) : '-',
+      light: range(weapon?.category === 'weapon' ? weapon.weapon.light.damage : { min: 1, max: 2 }),
+      heavy: range(weapon?.category === 'weapon' ? weapon.weapon.heavy.damage : { min: 2, max: 4 }),
       critical: `${criticalChance(member.attributes)}%`,
       weapon: weapon?.name ?? 'Unarmed',
+      defence: defenceOf(this.world, member),
+      equipment,
     };
     const xpProgress = Math.max(0, Math.min(1, (member.xp - levelStart) / Math.max(1, nextLevel - levelStart)));
-    useHud.setState({ belt, quest, sheet, level: member.level, xpProgress });
+    useHud.setState({ belt, quest, sheet, level: member.level, xpProgress, weaponName: weapon?.name ?? 'Unarmed' });
   }
 }

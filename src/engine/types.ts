@@ -3,6 +3,7 @@
  * session can be saved, hashed, replayed or (later) sent to another player.
  */
 
+import type { EquipSlot } from '../schema/world';
 import type { Attributes, ClassId } from './classes';
 
 export const TICKS_PER_SECOND = 60;
@@ -49,7 +50,10 @@ export type Command =
   /** A quick step, backward unless a direction is given. */
   | { type: 'dodge'; actor: string; dir?: MoveDir }
   | { type: 'interact'; actor: string }
-  | { type: 'use'; actor: string; itemId: string };
+  | { type: 'use'; actor: string; itemId: string }
+  /** Wear or wield an item from the pack. What it replaces goes back in. */
+  | { type: 'equip'; actor: string; itemId: string }
+  | { type: 'unequip'; actor: string; slot: EquipSlot };
 
 export type Controller = 'local' | 'ai' | 'remote';
 
@@ -67,6 +71,8 @@ export interface PartyMember {
   xp: number;
   /** A copy of the character's attributes. These grow as levels are gained. */
   attributes: Attributes;
+  /** What is worn and held right now: slot to item ID. */
+  equipment: Partial<Record<EquipSlot, string>>;
   hp: number;
   maxHp: number;
   stamina: number;
@@ -132,7 +138,7 @@ export interface QuestProgress {
 }
 
 export interface SessionState {
-  stateVersion: 4;
+  stateVersion: 5;
   worldId: string;
   tick: number;
   rng: number;
@@ -173,6 +179,8 @@ export type GameEvent =
   | { type: 'secret.found'; doorId: string }
   | { type: 'chest.opened'; objectId: string }
   | { type: 'item.gained'; itemId: string; from: 'pickup' | 'chest' }
+  | { type: 'item.equipped'; actor: string; itemId: string; slot: EquipSlot; auto: boolean }
+  | { type: 'item.unequipped'; actor: string; itemId: string; slot: EquipSlot }
   | { type: 'item.used'; itemId: string; actor: string; healed: number }
   | { type: 'item.refused'; itemId: string; reason: 'full_health' | 'none_left' | 'not_usable' }
   | { type: 'encounter.started'; encounterId: string }

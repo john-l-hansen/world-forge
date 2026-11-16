@@ -62,6 +62,7 @@ const state = () =>
       unlocked: s.doorsUnlocked,
       chests: s.chestsOpened,
       inventory: s.inventory,
+      equipment: s.party.members[0].equipment,
       quest: s.quests.quest_clear_mines,
       enemies: s.enemies.map((e) => ({ ...e })),
       visited: s.visitedRoomIds.length,
@@ -274,6 +275,7 @@ check(s.chests.object_cache_chest === true, 'F opens the chest');
 check(s.inventory.item_healing_draught === 1 && s.inventory.item_gold_pouch === 1, 'the chest gives the draught and the gold');
 check(h.belt.includes('Healing draught') && h.belt.includes('Pouch of gold'), `the belt shows what is carried (${h.belt.join(', ')})`);
 check(s.quest.done.find_cache === true, 'the optional objective is marked done');
+check(s.equipment.body === 'item_studded_jerkin', 'the jerkin from the chest is put straight on');
 await shot('06-chest-open');
 
 // --- Journal -------------------------------------------------------------------
@@ -307,8 +309,18 @@ await key('KeyC', 300);
 h = await hud();
 check(/STRENGTH/i.test(h.overlay ?? '') && /level 2/i.test(h.overlay ?? '') && /15/.test(h.overlay ?? ''), 'C opens the character sheet with attributes and level');
 await shot('08b-character-sheet');
+// Take the jerkin off from the sheet, then put it back on from the belt.
+await page.locator('.overlay.sheet .worn .btn', { hasText: /jerkin/i }).dispatchEvent('pointerdown');
+await page.waitForTimeout(250);
+s = await state();
+h = await hud();
+check(!s.equipment.body && s.inventory.item_studded_jerkin === 1 && /DEFENCE\s*0/i.test(h.overlay ?? ''), 'clicking worn armour on the sheet takes it off');
 await key('KeyC', 300);
 check((await hud()).overlay === null, 'C closes the character sheet');
+await page.locator('.belt button[aria-label="Studded jerkin"]').dispatchEvent('pointerdown');
+await page.waitForTimeout(300);
+s = await state();
+check(s.equipment.body === 'item_studded_jerkin' && !s.inventory.item_studded_jerkin, 'clicking armour on the belt puts it on');
 
 // --- Key -----------------------------------------------------------------------
 await walkTo(8, 3);
@@ -321,6 +333,12 @@ s = await state();
 h = await hud();
 check(s.inventory.item_shaft_key === 1, 'walking over the key picks it up');
 check(h.belt.includes('Iron key'), 'the key appears on the belt');
+await walkTo(11, 2);
+await turnTo(N);
+await shot('09b-shield-on-floor');
+await walkTo(11, 1);
+s = await state();
+check(s.equipment.offHand === 'item_wooden_shield', 'the shield in the storeroom is picked up and worn');
 check(/Slay the chief/i.test(h.objective), `the objective moves on ("${h.objective}")`);
 
 // --- Draught -------------------------------------------------------------------

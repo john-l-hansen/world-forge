@@ -48,6 +48,15 @@ export function describeEvent(event: GameEvent, state: SessionState, world: Comp
       const item = def.items.find((i) => i.id === event.itemId);
       return { text: `You take the ${(item?.name ?? 'item').toLowerCase()}.`, tone: 'good' };
     }
+    case 'item.equipped': {
+      const item = def.items.find((i) => i.id === event.itemId);
+      const verb = event.slot === 'mainHand' ? 'draw' : event.slot === 'offHand' ? 'take up' : 'put on';
+      return { text: `You ${verb} the ${(item?.name ?? 'item').toLowerCase()}.`, tone: 'good' };
+    }
+    case 'item.unequipped': {
+      const item = def.items.find((i) => i.id === event.itemId);
+      return { text: `You put the ${(item?.name ?? 'item').toLowerCase()} away.`, tone: 'plain' };
+    }
     case 'item.used': {
       const item = def.items.find((i) => i.id === event.itemId);
       return { text: `${heroName(event.actor)} drinks the ${(item?.name ?? 'draught').toLowerCase()}. +${event.healed} health.`, tone: 'good' };

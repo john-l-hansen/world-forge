@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "0.4.0",
+  "schemaVersion": "0.5.0",
   "world": {
     "id": "world_forgotten_mines",
     "name": "The Forgotten Mines",
@@ -156,7 +156,8 @@
         "object_store_barrel_a",
         "object_store_barrel_b",
         "object_store_crate",
-        "object_shaft_key"
+        "object_shaft_key",
+        "object_store_shield"
       ]
     },
     {
@@ -551,8 +552,20 @@
       },
       "contents": [
         "item_healing_draught",
-        "item_gold_pouch"
+        "item_gold_pouch",
+        "item_studded_jerkin"
       ]
+    },
+    {
+      "id": "object_store_shield",
+      "type": "pickup",
+      "name": "Wooden shield",
+      "roomId": "room_storeroom",
+      "cell": {
+        "x": 11,
+        "y": 1
+      },
+      "itemId": "item_wooden_shield"
     }
   ],
   "items": [
@@ -610,6 +623,24 @@
       "category": "treasure",
       "value": 120,
       "visualAssetId": "coins"
+    },
+    {
+      "id": "item_studded_jerkin",
+      "name": "Studded jerkin",
+      "description": "Boiled leather set with iron studs.",
+      "category": "armour",
+      "slot": "body",
+      "defence": 2,
+      "visualAssetId": "jerkin"
+    },
+    {
+      "id": "item_wooden_shield",
+      "name": "Wooden shield",
+      "description": "Scarred oak with an iron boss.",
+      "category": "armour",
+      "slot": "offHand",
+      "defence": 1,
+      "visualAssetId": "shield"
     }
   ],
   "characters": [

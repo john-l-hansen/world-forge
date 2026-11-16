@@ -133,7 +133,7 @@ export function GameScreen({ world }: { world: CompiledWorld }) {
           {screen === 'title' && <TitleOverlay title={world.def.world.name} />}
           {screen === 'dead' && <DeathOverlay name={heroName} />}
           {screen === 'journal' && <JournalOverlay />}
-          {screen === 'sheet' && <SheetOverlay />}
+          {screen === 'sheet' && game && <SheetOverlay game={game} />}
           {screen === 'victory' && <VictoryOverlay world={world.def.world.name} />}
         </div>
 

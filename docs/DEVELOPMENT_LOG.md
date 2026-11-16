@@ -1,5 +1,50 @@
 # Development log — World Forge
 
+## Milestone 5 — Phase 3, part 2: equipment and armour (2026-11-15)
+
+### What was implemented
+
+- **World schema 0.5.0.** A new `armour` item category with a `slot` (off hand, head,
+  body, hands, feet, accessory) and a `defence` value. A character's `equipment` now has
+  seven optional slots. `0.4.0` worlds are migrated.
+- **Simulation.** Each party member carries their own equipment in the session. Armour
+  takes its defence off every blow that lands, down to a minimum of 1, before a block
+  is applied. `equip` and `unequip` commands move items between the pack and the
+  slots; whatever is replaced goes back in the pack. Armour found for an empty slot is
+  put straight on. A character with nothing in the main hand fights with bare hands.
+- **Content.** The miner's chest now also holds a studded jerkin (body, defence 2), and
+  a wooden shield (off hand, defence 1) lies in the storeroom.
+- **Interface.** The belt shows what is carried; clicking armour or a weapon equips it.
+  The character sheet lists what is worn and total defence, and clicking a worn item
+  takes it off. Floor pickups now have their own sprites (key, shield, or a sack for
+  anything without art). The sword is hidden when none is held.
+
+### Decisions made
+
+- **Changing equipment is immediate**, like raising the guard: it is not queued behind
+  a swing. Drinking a draught still takes its turn.
+- **Armour is flat damage reduction.** Simple to read and to balance; percentage armour
+  can come later if needed.
+- **A shield is armour in the off hand** and does not yet change how blocking works.
+
+### Tests executed
+
+- `npm run typecheck` and `npm run build` — pass.
+- `npm test` — 123 unit tests pass. New: 11 in `tests/equipment.test.ts` (starting
+  gear, auto-equip, equip and unequip, refusals, defence and its minimum, bare hands,
+  save and reload, and four validation cases).
+- `npm run test:browser` — 68 checks pass in headless Chrome, including wearing the
+  jerkin from the chest, taking it off on the character sheet, putting it back on from
+  the belt, and picking up the shield.
+
+### Known limitations
+
+- With the jerkin, the shield and two levels, the chief is now noticeably easier.
+  Balance has not been revisited and needs human play.
+- There is one weapon in the adventure, so swapping weapons is tested only with bare
+  hands against the sword.
+- No art shows worn armour on the portrait or in the view.
+
 ## Milestone 4 — Phase 3, part 1: attributes, levels and experience (2026-11-15)
 
 ### What was implemented

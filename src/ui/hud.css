@@ -188,6 +188,8 @@ html, body, #root {
 .overlay.sheet dd { text-align: right; }
 .overlay.sheet dd em { font-style: normal; color: var(--dim); }
 .overlay.sheet dt.primary { color: var(--gold-hi); }
+.overlay.sheet .worn { display: flex; flex-wrap: wrap; gap: 3px; justify-content: center; max-width: 300px; color: var(--dim); }
+.overlay.sheet .worn .btn { flex: none; padding: 1px 4px; }
 .overlay.victory { background: rgba(5, 4, 6, 0.72); }
 .overlay.victory h1 { font-size: 16px; line-height: 18px; max-width: 300px; }
 .overlay.victory h2 { color: var(--good); }

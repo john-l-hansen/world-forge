@@ -3,7 +3,7 @@
  * references resolve, geometry is consistent and every room can be reached.
  * A world that fails here must never reach the engine.
  */
-import { SCHEMA_VERSION, WorldSchema, type RoomDef, type WorldDefinition } from './world';
+import { EQUIP_SLOTS, SCHEMA_VERSION, WorldSchema, type RoomDef, type WorldDefinition } from './world';
 
 export interface ValidationIssue {
   code:
@@ -92,6 +92,10 @@ export function migrateWorld(input: unknown): unknown {
         return rest;
       }),
     };
+  }
+  if (data.schemaVersion === '0.4.0') {
+    // 0.5.0 added armour and more equipment slots. Nothing existing changes.
+    data = { ...data, schemaVersion: '0.5.0' };
   }
   return data;
 }
@@ -346,9 +350,14 @@ export function validateWorld(input: unknown): ValidationResult {
 
   // ---- Characters, items and start position ---------------------------------
   for (const c of world.characters) {
-    const item = items.get(c.equipment.mainHand);
-    if (!item) add('missing_reference', `Character "${c.id}" holds missing item "${c.equipment.mainHand}".`);
-    else if (item.category !== 'weapon') add('missing_reference', `Character "${c.id}" holds "${item.id}", which is not a weapon.`);
+    for (const slot of EQUIP_SLOTS) {
+      const itemId = c.equipment[slot];
+      if (!itemId) continue;
+      const item = items.get(itemId);
+      if (!item) add('missing_reference', `Character "${c.id}" has missing item "${itemId}" in the ${slot} slot.`);
+      else if (slot === 'mainHand' ? item.category !== 'weapon' : item.category !== 'armour' || item.slot !== slot)
+        add('missing_reference', `Character "${c.id}" has "${item.id}" in the ${slot} slot, where it does not belong.`);
+    }
   }
   for (const pid of world.settings.startingPartyIds) {
     if (!characters.has(pid)) add('missing_reference', `Starting party lists missing character "${pid}".`);

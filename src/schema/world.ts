@@ -7,10 +7,12 @@
  *   0.1.0  rooms, doors, enemies, encounters, torches, props, weapons
  *   0.2.0  locks, secret doors, pickups, chests, keys, consumables, treasure,
  *          boss encounters with an introduction, quests
+ *   0.3.0  light and heavy weapon attacks with stamina costs, character
+ *          stamina, enemy poise, and a list of attacks per enemy
  */
 import { z } from 'zod';
 
-export const SCHEMA_VERSION = '0.2.0';
+export const SCHEMA_VERSION = '0.3.0';
 
 const id = z.string().regex(/^[a-z][a-z0-9_]*$/, 'ids are lower_snake_case');
 const cell = z.object({ x: z.number().int().min(1), y: z.number().int().min(1) });
@@ -98,23 +100,43 @@ export const DoorSchema = z.object({
   lock: z.object({ keyItemId: id }).optional(),
 });
 
+export const EnemyAttackSchema = z.object({
+  id,
+  /** Used in the message log: "The goblin winds up a <name>!" */
+  name: z.string().min(1),
+  damage: damageRange,
+  /** The visible wind-up before the blow lands. */
+  telegraphTicks: ticks,
+  recoverTicks: ticks,
+  /**
+   * front  hits the one cell the enemy aimed at
+   * sweep  also hits the cells to either side of it, so a sidestep fails
+   */
+  pattern: z.enum(['front', 'sweep']).default('front'),
+  /** An unblockable attack can be neither blocked nor parried. */
+  blockable: z.boolean().default(true),
+  weight: z.number().int().min(1).default(1),
+});
+
 export const EnemySchema = z.object({
   id,
   name: z.string().min(1),
   description: z.string().default(''),
   archetype: z.enum(['goblin', 'goblin_chief']),
   health: z.number().int().min(1),
-  damage: damageRange,
   defence: z.number().int().min(0).default(0),
+  /**
+   * How hard a blow must land to break this enemy's wind-up. A light attack
+   * has impact 1 and a heavy attack 3, so poise 2 means only heavy blows
+   * interrupt, and poise 4 means nothing does.
+   */
+  poise: z.number().int().min(1).max(9).default(2),
   /** Ticks to cross one cell (60 ticks = 1 second). */
   moveTicks: ticks,
   /** How far, in cells, the enemy notices the party with a clear line of sight. */
   sightRange: z.number().int().min(1).max(20),
-  attack: z.object({
-    /** The visible wind-up before the blow lands. The player can step away. */
-    telegraphTicks: ticks,
-    recoverTicks: ticks,
-  }),
+  /** The attacks this enemy chooses between, by weight. */
+  attacks: z.array(EnemyAttackSchema).min(1),
   staggerTicks: ticks,
   /** Names an engine-supported behaviour. Never code. */
   behaviour: z.enum(['melee_aggressive']),
@@ -174,19 +196,24 @@ export const ObjectSchema = z.discriminatedUnion('type', [
   }),
 ]);
 
+export const WeaponAttackSchema = z.object({
+  damage: damageRange,
+  /** Ticks between pressing attack and the blow landing. */
+  windupTicks: ticks,
+  /** Ticks after the blow before another action. */
+  recoveryTicks: ticks,
+  staminaCost: z.number().int().min(0),
+  /** Compared with an enemy's poise to decide whether the blow interrupts. */
+  impact: z.number().int().min(0).max(9),
+});
+
 const itemBase = { id, name: z.string().min(1), description: z.string().default('') };
 
 export const ItemSchema = z.discriminatedUnion('category', [
   z.object({
     ...itemBase,
     category: z.literal('weapon'),
-    weapon: z.object({
-      damage: damageRange,
-      /** Ticks between pressing attack and the blow landing. */
-      windupTicks: ticks,
-      /** Ticks after the blow before another action. */
-      recoveryTicks: ticks,
-    }),
+    weapon: z.object({ light: WeaponAttackSchema, heavy: WeaponAttackSchema }),
     visualAssetId: z.enum(['short_sword']),
   }),
   z.object({ ...itemBase, category: z.literal('key'), visualAssetId: z.enum(['key']) }),
@@ -210,6 +237,7 @@ export const CharacterSchema = z.object({
   name: z.string().min(1),
   classId: z.enum(['fighter', 'rogue', 'mage', 'cleric']),
   maxHealth: z.number().int().min(1),
+  maxStamina: z.number().int().min(1).default(40),
   equipment: z.object({ mainHand: id }),
   portraitAssetId: z.enum(['fighter']),
 });
@@ -257,6 +285,8 @@ export type WorldDefinition = z.infer<typeof WorldSchema>;
 export type RoomDef = z.infer<typeof RoomSchema>;
 export type DoorDef = z.infer<typeof DoorSchema>;
 export type EnemyDef = z.infer<typeof EnemySchema>;
+export type EnemyAttackDef = z.infer<typeof EnemyAttackSchema>;
+export type WeaponAttackDef = z.infer<typeof WeaponAttackSchema>;
 export type EncounterDef = z.infer<typeof EncounterSchema>;
 export type ObjectDef = z.infer<typeof ObjectSchema>;
 export type ItemDef = z.infer<typeof ItemSchema>;

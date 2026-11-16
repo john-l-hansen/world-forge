@@ -305,7 +305,7 @@ describe('progression checks in validation', () => {
     expect(codes(data)).toContain('shape');
   });
 
-  it('migrates a 0.1.0 world and still rejects unknown versions', () => {
+  it('migrates a 0.1.0 world step by step and still rejects unknown versions', () => {
     const old = minesData();
     old.schemaVersion = '0.1.0';
     delete old.settings.startingQuestIds;
@@ -325,13 +325,31 @@ describe('progression checks in validation', () => {
       delete e.boss;
       delete e.intro;
     }
+    // Weapons had a single attack and enemies a single blow before 0.3.0.
+    for (const item of old.items) item.weapon = { damage: item.weapon.light.damage, windupTicks: 6, recoveryTicks: 20 };
+    for (const c of old.characters) delete c.maxStamina;
+    for (const e of old.enemies) {
+      e.damage = e.attacks[0].damage;
+      e.attack = { telegraphTicks: e.attacks[0].telegraphTicks, recoverTicks: e.attacks[0].recoverTicks };
+      delete e.attacks;
+      delete e.poise;
+    }
     const migrated = validateWorld(old);
     expect(migrated.ok ? [] : migrated.issues).toEqual([]);
-    expect(migrated.ok && migrated.world.schemaVersion).toBe('0.2.0');
-    expect(migrated.ok && migrated.world.settings.startingQuestIds).toEqual([]);
+    if (!migrated.ok) throw new Error('migration failed');
+    expect(migrated.world.schemaVersion).toBe('0.3.0');
+    expect(migrated.world.settings.startingQuestIds).toEqual([]);
+    const sword = migrated.world.items[0];
+    if (sword.category !== 'weapon') throw new Error('not a weapon');
+    expect(sword.weapon.light).toEqual({ damage: { min: 4, max: 7 }, windupTicks: 6, recoveryTicks: 20, staminaCost: 4, impact: 1 });
+    expect(sword.weapon.heavy.impact).toBe(3);
+    expect(sword.weapon.heavy.damage.min).toBeGreaterThan(sword.weapon.light.damage.max);
+    expect(migrated.world.enemies[0].attacks).toHaveLength(1);
+    expect(migrated.world.enemies[0].attacks[0]).toMatchObject({ id: 'strike', pattern: 'front', blockable: true, telegraphTicks: 34 });
+    expect(migrated.world.characters[0].maxStamina).toBe(40);
 
     const future = minesData();
-    future.schemaVersion = '0.3.0';
+    future.schemaVersion = '9.9.9';
     expect(codes(future)).toEqual(['unsupported_version']);
   });
 });

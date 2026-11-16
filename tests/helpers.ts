@@ -30,6 +30,9 @@ export function run(state: SessionState, world: CompiledWorld, ticks: number): G
 export const move = (dir: 'forward' | 'back' | 'left' | 'right'): Command => ({ type: 'move', actor: HERO, dir });
 export const turn = (dir: 'left' | 'right'): Command => ({ type: 'turn', actor: HERO, dir });
 export const attack = (): Command => ({ type: 'attack', actor: HERO });
+export const heavy = (): Command => ({ type: 'attack', actor: HERO, kind: 'heavy' });
+export const block = (held: boolean): Command => ({ type: 'block', actor: HERO, held });
+export const dodge = (dir?: 'forward' | 'back' | 'left' | 'right'): Command => ({ type: 'dodge', actor: HERO, dir });
 export const interact = (): Command => ({ type: 'interact', actor: HERO });
 
 // ---------------------------------------------------------------------------
@@ -126,7 +129,7 @@ export function fight(state: SessionState, world: CompiledWorld, enemy: EnemySta
       } else if (dist === 1 && enemy.ai !== 'telegraph') {
         const need = dirTo(p.x, p.y, enemy.x, enemy.y);
         if (p.facing !== need) command = turn((need - p.facing + 4) % 4 === 3 ? 'left' : 'right');
-        else command = attack();
+        else if (hero.stamina >= 4) command = attack();
       } else if (dist > 1 && (!enemy.alerted || enemy.ai === 'attack' || enemy.ai === 'recover')) {
         const path = adjacentPath(state, world, enemy);
         const next = path?.[0];

@@ -49,6 +49,36 @@ export function migrateWorld(input: unknown): unknown {
     const settings = (typeof data.settings === 'object' && data.settings !== null ? data.settings : {}) as Record<string, unknown>;
     data = { ...data, schemaVersion: '0.2.0', settings: { startingQuestIds: [], ...settings }, quests: data.quests ?? [] };
   }
+  if (data.schemaVersion === '0.2.0') {
+    // 0.3.0 split a weapon's attack into light and heavy, gave enemies a list
+    // of attacks, and added stamina and poise (both have defaults).
+    const items = Array.isArray(data.items) ? data.items : [];
+    const enemies = Array.isArray(data.enemies) ? data.enemies : [];
+    data = {
+      ...data,
+      schemaVersion: '0.3.0',
+      items: items.map((raw) => {
+        const item = raw as Record<string, any>;
+        const w = item.weapon;
+        if (item.category !== 'weapon' || !w || w.light) return item;
+        const light = { damage: w.damage, windupTicks: w.windupTicks, recoveryTicks: w.recoveryTicks, staminaCost: 4, impact: 1 };
+        const heavy = {
+          damage: { min: Math.round(w.damage.min * 1.8) + 1, max: Math.round(w.damage.max * 1.8) },
+          windupTicks: Math.round(w.windupTicks * 2.5),
+          recoveryTicks: Math.round(w.recoveryTicks * 1.5),
+          staminaCost: 14,
+          impact: 3,
+        };
+        return { ...item, weapon: { light, heavy } };
+      }),
+      enemies: enemies.map((raw) => {
+        const enemy = raw as Record<string, any>;
+        if (enemy.attacks || !enemy.attack) return enemy;
+        const { attack, damage, ...rest } = enemy;
+        return { ...rest, attacks: [{ id: 'strike', name: 'strike', damage, telegraphTicks: attack.telegraphTicks, recoverTicks: attack.recoverTicks }] };
+      }),
+    };
+  }
   return data;
 }
 
@@ -188,6 +218,14 @@ export function validateWorld(input: unknown): ValidationResult {
     const key = `${door.cell.x},${door.cell.y}`;
     if (doorCells.has(key)) add('geometry', `Two doors share the cell (${key}).`);
     doorCells.add(key);
+  }
+
+  for (const enemy of world.enemies) {
+    const attackIds = new Set<string>();
+    for (const attack of enemy.attacks) {
+      if (attackIds.has(attack.id)) add('duplicate_id', `Enemy "${enemy.id}" has two attacks called "${attack.id}".`);
+      attackIds.add(attack.id);
+    }
   }
 
   // ---- Encounters -----------------------------------------------------------

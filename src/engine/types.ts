@@ -11,6 +11,26 @@ export const INPUT_BUFFER_TICKS = 18;
 export const HIT_STOP_TICKS = 4;
 export const ENEMY_ATTACK_POSE_TICKS = 12;
 
+/** One point of stamina returns every this many ticks (12 a second). */
+export const STAMINA_REGEN_INTERVAL = 5;
+/** Stamina does not return for this long after it is spent. */
+export const STAMINA_REGEN_DELAY = 30;
+/** A block raised no more than this many ticks before the blow is a parry. */
+export const PARRY_WINDOW_TICKS = 9;
+/** A blocked blow does this share of its damage. */
+export const BLOCK_DAMAGE_SHARE = 0.3;
+export const BLOCK_STAMINA_COST = 10;
+/** A blow that breaks a tired guard does this share of its damage. */
+export const GUARD_BREAK_DAMAGE_SHARE = 0.7;
+export const PARRY_STAGGER_TICKS = 60;
+export const DODGE_TICKS = 7;
+export const DODGE_STAMINA_COST = 10;
+/** The party cannot be hit for this long after a dodge begins. */
+export const DODGE_INVULNERABLE_TICKS = 12;
+export const DODGE_COOLDOWN_TICKS = 24;
+
+export type AttackKind = 'light' | 'heavy';
+
 export type MoveDir = 'forward' | 'back' | 'left' | 'right';
 
 /**
@@ -21,7 +41,11 @@ export type MoveDir = 'forward' | 'back' | 'left' | 'right';
 export type Command =
   | { type: 'move'; actor: string; dir: MoveDir }
   | { type: 'turn'; actor: string; dir: 'left' | 'right' }
-  | { type: 'attack'; actor: string }
+  | { type: 'attack'; actor: string; kind?: AttackKind }
+  /** Raise (held: true) or lower the guard. Takes effect at once. */
+  | { type: 'block'; actor: string; held: boolean }
+  /** A quick step, backward unless a direction is given. */
+  | { type: 'dodge'; actor: string; dir?: MoveDir }
   | { type: 'interact'; actor: string }
   | { type: 'use'; actor: string; itemId: string };
 
@@ -29,7 +53,7 @@ export type Controller = 'local' | 'ai' | 'remote';
 
 export type MemberAction =
   | { kind: 'idle' }
-  | { kind: 'attack'; start: number; hitTick: number; end: number; resolved: boolean };
+  | { kind: 'attack'; attack: AttackKind; start: number; hitTick: number; end: number; resolved: boolean };
 
 export interface PartyMember {
   /** Character ID from the world definition. */
@@ -37,6 +61,14 @@ export interface PartyMember {
   controller: Controller;
   hp: number;
   maxHp: number;
+  stamina: number;
+  maxStamina: number;
+  /** Tick from which stamina starts to return. */
+  staminaRegenFrom: number;
+  /** The player is holding the guard up. It only counts while not attacking. */
+  blocking: boolean;
+  /** Tick the guard last became effective, which decides block or parry. */
+  blockStart: number;
   action: MemberAction;
 }
 
@@ -48,6 +80,11 @@ export interface PartyState {
   prevY: number;
   /** Tick the current step began, or -1000 when never moved. */
   moveStart: number;
+  /** How long the current step takes: a walk or a quicker dodge. */
+  moveTicks: number;
+  /** The party cannot be hit before this tick (set by a dodge). */
+  invulnerableUntil: number;
+  dodgeReadyAt: number;
   prevFacing: number;
   turnStart: number;
   bumpStart: number;
@@ -74,6 +111,8 @@ export interface EnemyState {
   /** The cell a telegraphed blow will land on. */
   targetX: number;
   targetY: number;
+  /** Which of its attacks the enemy is winding up or has just used. */
+  attackId: string;
   alerted: boolean;
   lastHitTick: number;
 }
@@ -85,7 +124,7 @@ export interface QuestProgress {
 }
 
 export interface SessionState {
-  stateVersion: 2;
+  stateVersion: 3;
   worldId: string;
   tick: number;
   rng: number;
@@ -132,14 +171,21 @@ export type GameEvent =
   | { type: 'quest.objective'; questId: string; objectiveId: string }
   | { type: 'quest.completed'; questId: string }
   | { type: 'interact.nothing' }
-  | { type: 'attack.swing'; actor: string }
-  | { type: 'attack.hit'; actor: string; enemyId: string; damage: number; killed: boolean }
+  | { type: 'attack.swing'; actor: string; kind: AttackKind }
+  | { type: 'stamina.low'; actor: string }
+  | { type: 'party.dodged'; dir: number }
+  | { type: 'attack.blocked'; enemyId: string; target: string; damage: number }
+  | { type: 'attack.parried'; enemyId: string; actor: string }
+  | { type: 'guard.broken'; enemyId: string; target: string; damage: number }
+  | { type: 'enemy.attack.dodged'; enemyId: string }
+  | { type: 'enemy.interrupted'; enemyId: string }
+  | { type: 'attack.hit'; actor: string; enemyId: string; damage: number; killed: boolean; kind: AttackKind }
   | { type: 'attack.miss'; actor: string }
   | { type: 'attack.clang'; actor: string }
   | { type: 'enemy.alerted'; enemyId: string }
   | { type: 'enemy.moved'; enemyId: string }
-  | { type: 'enemy.telegraph'; enemyId: string }
-  | { type: 'enemy.attack.hit'; enemyId: string; target: string; damage: number }
+  | { type: 'enemy.telegraph'; enemyId: string; attackId: string }
+  | { type: 'enemy.attack.hit'; enemyId: string; target: string; damage: number; attackId: string }
   | { type: 'enemy.attack.miss'; enemyId: string }
   | { type: 'enemy.died'; enemyId: string }
   | { type: 'encounter.cleared'; encounterId: string }

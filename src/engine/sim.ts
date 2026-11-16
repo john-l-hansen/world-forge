@@ -12,19 +12,31 @@ import {
   roomAtCell,
   type CompiledWorld,
 } from '../world/compile';
-import type { EnemyDef, WeaponDef } from '../schema/world';
+import type { EnemyAttackDef, EnemyDef, WeaponDef } from '../schema/world';
 import { randomInt } from './rng';
 import {
+  BLOCK_DAMAGE_SHARE,
+  BLOCK_STAMINA_COST,
   BUMP_TICKS,
+  DODGE_COOLDOWN_TICKS,
+  DODGE_INVULNERABLE_TICKS,
+  DODGE_STAMINA_COST,
+  DODGE_TICKS,
   ENEMY_ATTACK_POSE_TICKS,
+  GUARD_BREAK_DAMAGE_SHARE,
   HIT_STOP_TICKS,
   INPUT_BUFFER_TICKS,
   MOVE_TICKS,
+  PARRY_STAGGER_TICKS,
+  PARRY_WINDOW_TICKS,
+  STAMINA_REGEN_DELAY,
+  STAMINA_REGEN_INTERVAL,
   TURN_TICKS,
   type BumpReason,
   type Command,
   type EnemyState,
   type GameEvent,
+  type MoveDir,
   type PartyMember,
   type SessionState,
 } from './types';
@@ -39,7 +51,18 @@ export function createSession(world: CompiledWorld, seed = 1): SessionState {
   const def = world.def;
   const members: PartyMember[] = def.settings.startingPartyIds.map((charId) => {
     const c = def.characters.find((ch) => ch.id === charId)!;
-    return { id: c.id, controller: 'local', hp: c.maxHealth, maxHp: c.maxHealth, action: { kind: 'idle' } };
+    return {
+      id: c.id,
+      controller: 'local',
+      hp: c.maxHealth,
+      maxHp: c.maxHealth,
+      stamina: c.maxStamina,
+      maxStamina: c.maxStamina,
+      staminaRegenFrom: 0,
+      blocking: false,
+      blockStart: NEVER,
+      action: { kind: 'idle' },
+    };
   });
 
   const enemies: EnemyState[] = world.spawns.map((s) => {
@@ -60,6 +83,7 @@ export function createSession(world: CompiledWorld, seed = 1): SessionState {
       aiEnd: 0,
       targetX: s.x,
       targetY: s.y,
+      attackId: e.attacks[0].id,
       alerted: false,
       lastHitTick: NEVER,
     };
@@ -73,7 +97,7 @@ export function createSession(world: CompiledWorld, seed = 1): SessionState {
 
   const startRoom = roomAtCell(world, world.start.x, world.start.y);
   const state: SessionState = {
-    stateVersion: 2,
+    stateVersion: 3,
     worldId: def.world.id,
     tick: 0,
     rng: seed | 0,
@@ -86,6 +110,9 @@ export function createSession(world: CompiledWorld, seed = 1): SessionState {
       prevX: world.start.x,
       prevY: world.start.y,
       moveStart: NEVER,
+      moveTicks: MOVE_TICKS,
+      invulnerableUntil: NEVER,
+      dodgeReadyAt: 0,
       prevFacing: world.start.facing,
       turnStart: NEVER,
       bumpStart: NEVER,
@@ -115,7 +142,7 @@ export function serializeSession(state: SessionState): string {
 
 export function deserializeSession(json: string): SessionState {
   const state = JSON.parse(json) as SessionState;
-  if (state.stateVersion !== 2) throw new Error(`Unsupported session version ${String(state.stateVersion)}`);
+  if (state.stateVersion !== 3) throw new Error(`Unsupported session version ${String(state.stateVersion)}`);
   return state;
 }
 
@@ -183,11 +210,29 @@ export function hasLineOfSight(
 
 export function partyIsBusy(state: SessionState): boolean {
   const p = state.party;
-  if (state.tick < p.moveStart + MOVE_TICKS) return true;
+  if (state.tick < p.moveStart + p.moveTicks) return true;
   if (state.tick < p.turnStart + TURN_TICKS) return true;
   // A bump counts as a very short action so a held key does not spam it.
   if (state.tick < p.bumpStart + BUMP_TICKS) return true;
   return p.members.some((m) => m.action.kind === 'attack' && state.tick < m.action.end);
+}
+
+/** True while the guard is actually up: held, and not in the middle of a swing. */
+export function isGuarding(member: PartyMember): boolean {
+  return member.blocking && member.hp > 0 && member.action.kind === 'idle';
+}
+
+/** The cells an enemy's wound-up attack will hit. */
+export function attackCells(enemy: EnemyState, attack: EnemyAttackDef): { x: number; y: number }[] {
+  const cells = [{ x: enemy.targetX, y: enemy.targetY }];
+  if (attack.pattern === 'sweep') {
+    // The cells to the left and right of the target, as the enemy faces it.
+    for (const side of [1, 3]) {
+      const dir = (enemy.facing + side) % 4;
+      cells.push({ x: enemy.targetX + DIR_X[dir], y: enemy.targetY + DIR_Y[dir] });
+    }
+  }
+  return cells;
 }
 
 export function livingEnemies(state: SessionState): number {
@@ -207,7 +252,13 @@ export function step(state: SessionState, world: CompiledWorld, commands: readon
   if (state.status !== 'playing') return events;
 
   for (const command of commands) {
-    if (state.party.members.some((m) => m.id === command.actor && m.hp > 0)) {
+    const member = state.party.members.find((m) => m.id === command.actor && m.hp > 0);
+    if (!member) continue;
+    if (command.type === 'block') {
+      // Raising or lowering the guard is never queued behind other actions.
+      if (command.held && !member.blocking) member.blockStart = state.tick + 1;
+      member.blocking = command.held;
+    } else {
       state.buffered = { command, tick: state.tick };
     }
   }
@@ -229,6 +280,7 @@ export function step(state: SessionState, world: CompiledWorld, commands: readon
 
   resolvePartyAttacks(state, world, events);
   for (const enemy of state.enemies) updateEnemy(state, world, enemy, events);
+  restoreStamina(state);
   trackQuests(state, world, events);
 
   return events;
@@ -249,50 +301,45 @@ function runCommand(state: SessionState, world: CompiledWorld, command: Command,
       return;
     }
     case 'move': {
-      const offset = { forward: 0, right: 1, back: 2, left: 3 }[command.dir];
-      const dir = (p.facing + offset) % 4;
-      const nx = p.x + DIR_X[dir];
-      const ny = p.y + DIR_Y[dir];
-      const reason = blockReason(state, world, nx, ny);
-      if (reason) {
-        p.bumpStart = state.tick;
-        p.bumpDir = dir;
-        events.push({ type: 'party.bumped', reason });
+      const dir = (p.facing + MOVE_OFFSET[command.dir]) % 4;
+      moveParty(state, world, dir, MOVE_TICKS, events);
+      return;
+    }
+    case 'dodge': {
+      const member = p.members.find((m) => m.id === command.actor);
+      if (!member || member.hp <= 0) return;
+      if (state.tick < p.dodgeReadyAt) return;
+      if (member.stamina < DODGE_STAMINA_COST) {
+        events.push({ type: 'stamina.low', actor: member.id });
         return;
       }
-      p.prevX = p.x;
-      p.prevY = p.y;
-      p.x = nx;
-      p.y = ny;
-      p.moveStart = state.tick;
-      events.push({ type: 'party.moved', x: nx, y: ny });
-      reveal(state, world);
-      for (const pickup of world.pickups) {
-        if (pickup.x !== nx || pickup.y !== ny || state.pickupsTaken[pickup.id]) continue;
-        state.pickupsTaken[pickup.id] = true;
-        gainItem(state, pickup.itemId, 'pickup', events);
-      }
-      const room = roomAtCell(world, nx, ny);
-      if (room && room.id !== state.currentRoomId) {
-        const firstVisit = !state.visitedRoomIds.includes(room.id);
-        if (firstVisit) state.visitedRoomIds.push(room.id);
-        state.currentRoomId = room.id;
-        events.push({ type: 'room.entered', roomId: room.id, firstVisit });
-      }
+      const dir = (p.facing + MOVE_OFFSET[command.dir ?? 'back']) % 4;
+      if (!moveParty(state, world, dir, DODGE_TICKS, events)) return;
+      spendStamina(state, member, DODGE_STAMINA_COST);
+      p.invulnerableUntil = state.tick + DODGE_INVULNERABLE_TICKS;
+      p.dodgeReadyAt = state.tick + DODGE_COOLDOWN_TICKS;
+      events.push({ type: 'party.dodged', dir });
       return;
     }
     case 'attack': {
       const member = p.members.find((m) => m.id === command.actor);
       if (!member || member.hp <= 0) return;
-      const weapon = weaponOf(world, member);
+      const kind = command.kind ?? 'light';
+      const attack = weaponOf(world, member).weapon[kind];
+      if (member.stamina < attack.staminaCost) {
+        events.push({ type: 'stamina.low', actor: member.id });
+        return;
+      }
+      spendStamina(state, member, attack.staminaCost);
       member.action = {
         kind: 'attack',
+        attack: kind,
         start: state.tick,
-        hitTick: state.tick + weapon.weapon.windupTicks,
-        end: state.tick + weapon.weapon.windupTicks + weapon.weapon.recoveryTicks,
+        hitTick: state.tick + attack.windupTicks,
+        end: state.tick + attack.windupTicks + attack.recoveryTicks,
         resolved: false,
       };
-      events.push({ type: 'attack.swing', actor: member.id });
+      events.push({ type: 'attack.swing', actor: member.id, kind });
       return;
     }
     case 'interact': {
@@ -375,6 +422,58 @@ function runCommand(state: SessionState, world: CompiledWorld, command: Command,
   }
 }
 
+const MOVE_OFFSET: Record<MoveDir, number> = { forward: 0, right: 1, back: 2, left: 3 };
+
+/** Step the party one cell in an absolute direction. False if something is in the way. */
+function moveParty(state: SessionState, world: CompiledWorld, dir: number, ticks: number, events: GameEvent[]): boolean {
+  const p = state.party;
+  const nx = p.x + DIR_X[dir];
+  const ny = p.y + DIR_Y[dir];
+  const reason = blockReason(state, world, nx, ny);
+  if (reason) {
+    p.bumpStart = state.tick;
+    p.bumpDir = dir;
+    events.push({ type: 'party.bumped', reason });
+    return false;
+  }
+  p.prevX = p.x;
+  p.prevY = p.y;
+  p.x = nx;
+  p.y = ny;
+  p.moveStart = state.tick;
+  p.moveTicks = ticks;
+  events.push({ type: 'party.moved', x: nx, y: ny });
+  reveal(state, world);
+  for (const pickup of world.pickups) {
+    if (pickup.x !== nx || pickup.y !== ny || state.pickupsTaken[pickup.id]) continue;
+    state.pickupsTaken[pickup.id] = true;
+    gainItem(state, pickup.itemId, 'pickup', events);
+  }
+  const room = roomAtCell(world, nx, ny);
+  if (room && room.id !== state.currentRoomId) {
+    const firstVisit = !state.visitedRoomIds.includes(room.id);
+    if (firstVisit) state.visitedRoomIds.push(room.id);
+    state.currentRoomId = room.id;
+    events.push({ type: 'room.entered', roomId: room.id, firstVisit });
+  }
+  return true;
+}
+
+function spendStamina(state: SessionState, member: PartyMember, amount: number) {
+  member.stamina = Math.max(0, member.stamina - amount);
+  member.staminaRegenFrom = state.tick + STAMINA_REGEN_DELAY;
+}
+
+/** Stamina returns steadily, but not while swinging or holding the guard up. */
+function restoreStamina(state: SessionState) {
+  if (state.tick % STAMINA_REGEN_INTERVAL !== 0) return;
+  for (const member of state.party.members) {
+    if (member.hp <= 0 || member.stamina >= member.maxStamina) continue;
+    if (state.tick < member.staminaRegenFrom || member.blocking || member.action.kind !== 'idle') continue;
+    member.stamina += 1;
+  }
+}
+
 function gainItem(state: SessionState, itemId: string, from: 'pickup' | 'chest', events: GameEvent[]) {
   state.inventory[itemId] = (state.inventory[itemId] ?? 0) + 1;
   events.push({ type: 'item.gained', itemId, from });
@@ -410,26 +509,34 @@ function resolvePartyAttacks(state: SessionState, world: CompiledWorld, events: 
       const fy = p.y + DIR_Y[p.facing];
       const enemy = enemyAt(state, fx, fy);
       if (enemy) {
-        const weapon = weaponOf(world, member);
+        const attack = weaponOf(world, member).weapon[action.attack];
         const def = enemyDef(world, enemy);
-        const rolled = randomInt(state, weapon.weapon.damage.min, weapon.weapon.damage.max);
+        const rolled = randomInt(state, attack.damage.min, attack.damage.max);
         const damage = Math.max(1, rolled - def.defence);
+        const heavy = attack.impact >= 3;
         enemy.hp = Math.max(0, enemy.hp - damage);
         enemy.lastHitTick = state.tick;
         if (!enemy.alerted) alertEnemy(state, world, enemy, events);
         const killed = enemy.hp === 0;
-        events.push({ type: 'attack.hit', actor: member.id, enemyId: enemy.id, damage, killed });
-        state.hitStop = HIT_STOP_TICKS;
+        events.push({ type: 'attack.hit', actor: member.id, enemyId: enemy.id, damage, killed, kind: action.attack });
+        state.hitStop = heavy ? HIT_STOP_TICKS + 3 : HIT_STOP_TICKS;
+        const staggerTicks = def.staggerTicks * (heavy ? 2 : 1);
         if (killed) {
           killEnemy(state, world, enemy, events);
+        } else if (enemy.ai === 'telegraph') {
+          // Only a blow at least as heavy as the enemy's poise breaks a wind-up.
+          if (attack.impact >= def.poise) {
+            setAi(state, enemy, 'stagger', staggerTicks);
+            events.push({ type: 'enemy.interrupted', enemyId: enemy.id });
+          }
         } else if (enemy.ai === 'idle' || enemy.ai === 'move') {
           // A blow interrupts an enemy that is not already committed to a swing.
-          setAi(state, enemy, 'stagger', def.staggerTicks);
+          setAi(state, enemy, 'stagger', staggerTicks);
         } else if (enemy.ai === 'attack') {
-          setAi(state, enemy, 'recover', def.attack.recoverTicks);
-        } else if (enemy.ai === 'recover') {
+          setAi(state, enemy, 'recover', currentAttack(def, enemy).recoverTicks);
+        } else if (enemy.ai === 'recover' || enemy.ai === 'stagger') {
           // Never shorten a recovery: hitting an open enemy must not speed it up.
-          enemy.aiEnd = Math.max(enemy.aiEnd, state.tick + def.staggerTicks);
+          enemy.aiEnd = Math.max(enemy.aiEnd, state.tick + staggerTicks);
         }
       } else if (!inBounds(world, fx, fy) || world.tiles[fy * world.width + fx] === TILE_WALL || !isDoorOpenAt(state, world, fx, fy)) {
         events.push({ type: 'attack.clang', actor: member.id });
@@ -437,7 +544,11 @@ function resolvePartyAttacks(state: SessionState, world: CompiledWorld, events: 
         events.push({ type: 'attack.miss', actor: member.id });
       }
     }
-    if (state.tick >= action.end) member.action = { kind: 'idle' };
+    if (state.tick >= action.end) {
+      member.action = { kind: 'idle' };
+      // A guard held through the swing comes up now, and can parry from now.
+      if (member.blocking) member.blockStart = state.tick;
+    }
   }
 }
 
@@ -507,27 +618,15 @@ function updateEnemy(state: SessionState, world: CompiledWorld, enemy: EnemyStat
 
     case 'telegraph': {
       if (state.tick < enemy.aiEnd) return;
-      // The blow lands on the cell it was aimed at. Stepping away avoids it.
-      if (p.x === enemy.targetX && p.y === enemy.targetY) {
-        const target = p.members.find((m) => m.hp > 0);
-        if (target) {
-          const damage = randomInt(state, def.damage.min, def.damage.max);
-          target.hp = Math.max(0, target.hp - damage);
-          events.push({ type: 'enemy.attack.hit', enemyId: enemy.id, target: target.id, damage });
-          if (!p.members.some((m) => m.hp > 0)) {
-            state.status = 'dead';
-            events.push({ type: 'party.died' });
-          }
-        }
-      } else {
-        events.push({ type: 'enemy.attack.miss', enemyId: enemy.id });
-      }
-      setAi(state, enemy, 'attack', ENEMY_ATTACK_POSE_TICKS);
+      const attack = currentAttack(def, enemy);
+      resolveEnemyAttack(state, enemy, attack, events);
+      // A parry leaves the enemy reeling instead of following through.
+      if (enemy.ai === 'telegraph') setAi(state, enemy, 'attack', ENEMY_ATTACK_POSE_TICKS);
       return;
     }
 
     case 'attack':
-      if (state.tick >= enemy.aiEnd) setAi(state, enemy, 'recover', def.attack.recoverTicks);
+      if (state.tick >= enemy.aiEnd) setAi(state, enemy, 'recover', currentAttack(def, enemy).recoverTicks);
       return;
 
     case 'idle': {
@@ -546,8 +645,10 @@ function updateEnemy(state: SessionState, world: CompiledWorld, enemy: EnemyStat
         enemy.facing = facingToward(enemy.x, enemy.y, p.x, p.y, enemy.facing);
         enemy.targetX = p.x;
         enemy.targetY = p.y;
-        setAi(state, enemy, 'telegraph', def.attack.telegraphTicks);
-        events.push({ type: 'enemy.telegraph', enemyId: enemy.id });
+        const attack = chooseAttack(state, def);
+        enemy.attackId = attack.id;
+        setAi(state, enemy, 'telegraph', attack.telegraphTicks);
+        events.push({ type: 'enemy.telegraph', enemyId: enemy.id, attackId: attack.id });
         return;
       }
 
@@ -564,6 +665,77 @@ function updateEnemy(state: SessionState, world: CompiledWorld, enemy: EnemyStat
       }
       return;
     }
+  }
+}
+
+function currentAttack(def: EnemyDef, enemy: EnemyState): EnemyAttackDef {
+  return def.attacks.find((a) => a.id === enemy.attackId) ?? def.attacks[0];
+}
+
+/** Pick one of the enemy's attacks by weight, using the session's seed. */
+function chooseAttack(state: SessionState, def: EnemyDef): EnemyAttackDef {
+  if (def.attacks.length === 1) return def.attacks[0];
+  const total = def.attacks.reduce((sum, a) => sum + a.weight, 0);
+  let roll = randomInt(state, 1, total);
+  for (const attack of def.attacks) {
+    roll -= attack.weight;
+    if (roll <= 0) return attack;
+  }
+  return def.attacks[0];
+}
+
+/**
+ * The wind-up is over and the blow lands on the cells it was aimed at. The
+ * party can avoid it by not being there, by a dodge, by a parry, or soften
+ * it with a block.
+ */
+function resolveEnemyAttack(state: SessionState, enemy: EnemyState, attack: EnemyAttackDef, events: GameEvent[]) {
+  const p = state.party;
+  const inReach = attackCells(enemy, attack).some((c) => c.x === p.x && c.y === p.y);
+  if (!inReach) {
+    events.push({ type: 'enemy.attack.miss', enemyId: enemy.id });
+    return;
+  }
+  if (state.tick < p.invulnerableUntil) {
+    events.push({ type: 'enemy.attack.dodged', enemyId: enemy.id });
+    return;
+  }
+  const target = p.members.find((m) => m.hp > 0);
+  if (!target) return;
+
+  const rolled = randomInt(state, attack.damage.min, attack.damage.max);
+  const facingEnemy = p.x + DIR_X[p.facing] === enemy.x && p.y + DIR_Y[p.facing] === enemy.y;
+  let damage = rolled;
+
+  if (attack.blockable && facingEnemy && isGuarding(target)) {
+    if (state.tick - target.blockStart <= PARRY_WINDOW_TICKS) {
+      // Guard raised at the last moment: the blow is turned aside.
+      setAi(state, enemy, 'stagger', PARRY_STAGGER_TICKS);
+      state.hitStop = HIT_STOP_TICKS + 2;
+      events.push({ type: 'attack.parried', enemyId: enemy.id, actor: target.id });
+      return;
+    }
+    if (target.stamina >= BLOCK_STAMINA_COST) {
+      damage = Math.max(1, Math.ceil(rolled * BLOCK_DAMAGE_SHARE));
+      spendStamina(state, target, BLOCK_STAMINA_COST);
+      target.hp = Math.max(0, target.hp - damage);
+      events.push({ type: 'attack.blocked', enemyId: enemy.id, target: target.id, damage });
+    } else {
+      // Too tired to hold the guard: it is knocked aside.
+      damage = Math.max(1, Math.ceil(rolled * GUARD_BREAK_DAMAGE_SHARE));
+      spendStamina(state, target, target.stamina);
+      target.blocking = false;
+      target.hp = Math.max(0, target.hp - damage);
+      events.push({ type: 'guard.broken', enemyId: enemy.id, target: target.id, damage });
+    }
+  } else {
+    target.hp = Math.max(0, target.hp - damage);
+    events.push({ type: 'enemy.attack.hit', enemyId: enemy.id, target: target.id, damage, attackId: attack.id });
+  }
+
+  if (!p.members.some((m) => m.hp > 0)) {
+    state.status = 'dead';
+    events.push({ type: 'party.died' });
   }
 }
 

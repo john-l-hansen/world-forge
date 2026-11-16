@@ -1,7 +1,7 @@
 /**
  * Browser playthrough of The Forgotten Mines, driven through the real
  * keyboard handlers in headless Chrome: the whole quest from the title
- * screen to the victory screen, then a defeat and a restart.
+ * screen to the victory screen, then the combat moves, a defeat and a restart.
  *
  * Run `npm run build && npm run preview` first, then `npm run test:browser`.
  * Screenshots land in .shots/.
@@ -51,6 +51,8 @@ const state = () =>
       y: s.party.y,
       facing: s.party.facing,
       hp: s.party.members[0].hp,
+      stamina: s.party.members[0].stamina,
+      blocking: s.party.members[0].blocking,
       busy: s.party.members[0].action.kind !== 'idle',
       room: s.currentRoomId,
       doors: s.doorsOpen,
@@ -153,7 +155,8 @@ const fight = async (index, onFirstTelegraph) => {
     } else if (dist === 1 && enemy.ai !== 'telegraph' && !s.busy) {
       const need = [0, 1, 2, 3].find((d) => s.x + DX[d] === enemy.x && s.y + DY[d] === enemy.y);
       if (s.facing !== need) await turnTo(need);
-      else await key('Space', 60);
+      else if (s.stamina >= 4) await key('KeyJ', 60);
+      else await page.waitForTimeout(40);
     } else if (dist > 1 && (!enemy.alerted || enemy.ai === 'attack' || enemy.ai === 'recover') && !s.busy) {
       // Close the distance by one step.
       let best = null;
@@ -271,15 +274,15 @@ check(s.quest.done.find_cache === true, 'the optional objective is marked done')
 await shot('06-chest-open');
 
 // --- Journal -------------------------------------------------------------------
-await key('KeyJ', 300);
+await key('KeyB', 300);
 h = await hud();
-check(/JOURNAL/i.test(h.overlay ?? '') && /hidden cache/i.test(h.overlay ?? ''), 'J opens the journal with the objectives');
+check(/JOURNAL/i.test(h.overlay ?? '') && /hidden cache/i.test(h.overlay ?? ''), 'B opens the journal with the objectives');
 const tickBefore = (await state()).tick;
 await page.waitForTimeout(300);
 check((await state()).tick === tickBefore, 'the game waits while the journal is open');
 await shot('07-journal');
-await key('KeyJ', 300);
-check((await hud()).overlay === null, 'J closes the journal');
+await key('KeyB', 300);
+check((await hud()).overlay === null, 'B closes the journal');
 
 // --- Goblin patrol -------------------------------------------------------------
 await walkTo(5, 7);
@@ -342,15 +345,76 @@ s = await state();
 check(s.visited === 6, `all six rooms have been visited (${s.visited})`);
 await shot('13-boss-room');
 
-// --- Defeat and restart --------------------------------------------------------
+// --- Combat moves --------------------------------------------------------------
 await page.evaluate(() => window.__worldForge.restart());
 await page.waitForTimeout(200);
 s = await state();
 check(s.tick < 30 && Object.keys(s.inventory).length === 0 && s.quest.completed === false, 'a restart resets the inventory and the quest');
-await page.keyboard.down('KeyW');
-await page.waitForTimeout(2800);
-await page.keyboard.up('KeyW');
-await key('KeyF', 400);
+check(s.stamina === 40, 'the party starts with full stamina');
+await key('KeyK', 150);
+s = await state();
+check(s.stamina === 26, `K swings a heavy attack that costs 14 stamina (${s.stamina} left)`);
+await shot('15-heavy-windup');
+await page.waitForTimeout(900);
+await key('KeyJ', 150);
+s = await state();
+check(s.stamina < 40 && s.stamina >= 22, `J swings a light attack that costs less (${s.stamina} left)`);
+await page.waitForTimeout(3500);
+check((await state()).stamina === 40, 'stamina returns with rest');
+await key('Space', 300);
+s = await state();
+check(s.x === 5 && s.y === 15 && s.stamina === 30, `Space dodges one step back for 10 stamina (at ${s.x},${s.y}, ${s.stamina} left)`);
+await page.keyboard.down('KeyD');
+await page.waitForTimeout(60);
+await key('Space', 300);
+await page.keyboard.up('KeyD');
+await page.waitForTimeout(300);
+s = await state();
+check(s.x >= 6, `dodging while steering right goes right (at ${s.x},${s.y})`);
+await page.keyboard.down('KeyL');
+await page.waitForTimeout(150);
+s = await state();
+h = await hud();
+check(s.blocking === true && /GUARD UP/i.test(h.text), 'holding L raises the guard');
+await shot('16-guard');
+await page.keyboard.up('KeyL');
+await page.waitForTimeout(150);
+check((await state()).blocking === false, 'releasing L lowers the guard');
+
+// Block, then parry, the goblin.
+await page.waitForTimeout(3000);
+await walkTo(5, 7);
+await use(N, 300);
+await page.keyboard.down('KeyL');
+await page.waitForFunction(() => /You block/i.test(document.querySelector('.log').innerText), null, { timeout: 20000 }).catch(() => {});
+h = await hud();
+s = await state();
+check(/You block/i.test(h.text) && s.hp >= 37 && s.hp < 40, `a held guard blocks most of a blow (hp ${s.hp})`);
+await page.keyboard.up('KeyL');
+let parried = false;
+for (let attempt = 0; attempt < 6 && !parried; attempt++) {
+  // Wait for the last few ticks of a wind-up, then raise the guard.
+  await page.waitForFunction(
+    () => {
+      const g = window.__worldForge.state;
+      const e = g.enemies[0];
+      return g.status !== 'playing' || (e.ai === 'telegraph' && e.aiEnd - g.tick <= 6 && e.aiEnd - g.tick >= 3);
+    },
+    null,
+    { timeout: 20000, polling: 'raf' },
+  );
+  await page.keyboard.down('KeyL');
+  await page.waitForTimeout(400);
+  await page.keyboard.up('KeyL');
+  parried = /Parried/i.test((await hud()).text);
+  if (!parried) await page.waitForTimeout(500);
+}
+check(parried, 'raising the guard just before a blow lands parries it');
+await shot('17-parry');
+s = await state();
+check(s.status === 'playing', `the party is still standing after blocking and parrying (hp ${s.hp})`);
+
+// --- Defeat and restart --------------------------------------------------------
 await page.waitForFunction(() => window.__worldForge.state.status === 'dead', null, { timeout: 60000 });
 await page.waitForTimeout(1200);
 h = await hud();

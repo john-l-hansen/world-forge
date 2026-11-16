@@ -73,13 +73,30 @@ export function describeEvent(event: GameEvent, state: SessionState, world: Comp
     case 'attack.hit':
       return event.killed
         ? { text: `You strike the ${enemyName(event.enemyId)} down!`, tone: 'good' }
-        : { text: `You hit the ${enemyName(event.enemyId)} for ${event.damage}.`, tone: 'good' };
+        : { text: `You ${event.kind === 'heavy' ? 'cleave' : 'hit'} the ${enemyName(event.enemyId)} for ${event.damage}.`, tone: 'good' };
     case 'attack.clang':
       return { text: 'Your blade rings off the stone.', tone: 'plain' };
     case 'enemy.alerted':
       return { text: `A ${enemyName(event.enemyId).toLowerCase()} snarls in the dark!`, tone: 'warn' };
-    case 'enemy.telegraph':
-      return { text: `The ${enemyName(event.enemyId)} rears back to strike!`, tone: 'warn' };
+    case 'enemy.telegraph': {
+      const enemy = state.enemies.find((e) => e.id === event.enemyId);
+      const attack = def.enemies.find((d) => d.id === enemy?.defId)?.attacks.find((a) => a.id === event.attackId);
+      if (attack && !attack.blockable)
+        return { text: `The ${enemyName(event.enemyId)} draws back for a ${attack.name}. No guard will stop it!`, tone: 'bad' };
+      return { text: `The ${enemyName(event.enemyId)} rears back to ${attack?.name ?? 'strike'}!`, tone: 'warn' };
+    }
+    case 'stamina.low':
+      return { text: 'You are too winded.', tone: 'plain' };
+    case 'attack.blocked':
+      return { text: `You block. The blow still costs you ${event.damage}.`, tone: 'plain' };
+    case 'attack.parried':
+      return { text: `Parried! The ${enemyName(event.enemyId)} reels.`, tone: 'quest' };
+    case 'guard.broken':
+      return { text: `Your guard is smashed aside. ${event.damage} damage!`, tone: 'bad' };
+    case 'enemy.attack.dodged':
+      return { text: 'You slip past the blow.', tone: 'good' };
+    case 'enemy.interrupted':
+      return { text: `Your blow breaks the ${enemyName(event.enemyId)}'s wind-up!`, tone: 'good' };
     case 'enemy.attack.hit':
       return { text: `The ${enemyName(event.enemyId)} hits ${heroName(event.target)} for ${event.damage}.`, tone: 'bad' };
     case 'enemy.attack.miss':

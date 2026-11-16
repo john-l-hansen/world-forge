@@ -116,6 +116,7 @@ export function makeSpriteMaterial(sheet: THREE.Texture, shared: SharedUniforms,
       uFrames: { value: frames },
       uLight: { value: 0 },
       uFlash: { value: 0 },
+      uDanger: { value: 0 },
       uFullbright: { value: 0 },
     },
     side: THREE.DoubleSide,
@@ -135,6 +136,7 @@ export function makeSpriteMaterial(sheet: THREE.Texture, shared: SharedUniforms,
       uniform sampler2D uMap;
       uniform float uLight;
       uniform float uFlash;
+      uniform float uDanger;
       uniform float uFullbright;
       varying vec2 vUv;
       varying float vDist;
@@ -144,6 +146,8 @@ export function makeSpriteMaterial(sheet: THREE.Texture, shared: SharedUniforms,
         if (tex.a < 0.5) discard;
         float light = mix(shadeLight(uLight, vDist), 1.0, uFullbright);
         vec3 lit = tex.rgb * light * mix(${TORCH_TINT}, vec3(1.0), uFullbright);
+        // A red cast warns of a blow that cannot be blocked.
+        lit = mix(lit, vec3(0.95, 0.16, 0.08) * (0.35 + dot(lit, vec3(0.6))), uDanger);
         gl_FragColor = vec4(mix(lit, vec3(1.0, 0.96, 0.86), uFlash), 1.0);
       }
     `,
@@ -188,6 +192,7 @@ export function makePresentMaterial(frame: THREE.Texture): THREE.ShaderMaterial 
       uLevels: { value: 28 },
       uDamage: { value: 0 },
       uHeal: { value: 0 },
+      uSpark: { value: 0 },
       uFade: { value: 0 },
     },
     depthTest: false,
@@ -204,6 +209,7 @@ export function makePresentMaterial(frame: THREE.Texture): THREE.ShaderMaterial 
       uniform float uLevels;
       uniform float uDamage;
       uniform float uHeal;
+      uniform float uSpark;
       uniform float uFade;
       varying vec2 vUv;
       float bayer4(vec2 p) {
@@ -216,6 +222,7 @@ export function makePresentMaterial(frame: THREE.Texture): THREE.ShaderMaterial 
         vec3 c = texture2D(uFrame, vUv).rgb;
         c = mix(c, vec3(0.62, 0.05, 0.03), uDamage * 0.55);
         c += vec3(0.16, 0.30, 0.10) * uHeal * 0.6;
+        c += vec3(0.55, 0.50, 0.36) * uSpark;
         c = mix(c, vec3(0.16, 0.0, 0.0) * dot(c, vec3(0.5)), uFade);
         c = floor(c * uLevels + bayer4(gl_FragCoord.xy)) / uLevels;
         gl_FragColor = vec4(c, 1.0);

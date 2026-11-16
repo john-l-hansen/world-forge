@@ -14,7 +14,7 @@ export interface LogEntry {
 export interface Floater {
   id: number;
   text: string;
-  kind: 'dealt' | 'taken' | 'healed';
+  kind: 'dealt' | 'heavy' | 'taken' | 'healed' | 'parry' | 'block';
 }
 
 export interface BeltItem {
@@ -40,10 +40,13 @@ export interface HudState {
   weaponName: string;
   hp: number;
   maxHp: number;
+  stamina: number;
+  maxStamina: number;
+  guarding: boolean;
   facing: number;
   roomName: string;
   log: LogEntry[];
-  target: { name: string; hp: number; maxHp: number; winding: boolean; boss: boolean } | null;
+  target: { name: string; hp: number; maxHp: number; winding: boolean; danger: boolean; boss: boolean } | null;
   belt: BeltItem[];
   quest: QuestView | null;
   floaters: Floater[];
@@ -62,6 +65,9 @@ export const useHud = create<HudState>(() => ({
   weaponName: '',
   hp: 0,
   maxHp: 1,
+  stamina: 0,
+  maxStamina: 1,
+  guarding: false,
   facing: 0,
   roomName: '',
   log: [],

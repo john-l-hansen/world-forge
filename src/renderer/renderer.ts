@@ -80,6 +80,8 @@ export class DungeonRenderer {
   private chests: LootView[] = [];
   private pickups: LootView[] = [];
   private healFlash = 0;
+  private spark = 0;
+  private guard = 0;
   private torchMaterials: THREE.ShaderMaterial[] = [];
   private facers: THREE.Object3D[] = [];
   private sword: THREE.Mesh;
@@ -249,6 +251,18 @@ export class DungeonRenderer {
       case 'attack.clang':
         this.hitKick = 0.6;
         break;
+      case 'attack.parried':
+        this.spark = 1;
+        this.hitKick = 0.8;
+        break;
+      case 'attack.blocked':
+        this.hurtKick = 0.45;
+        this.spark = 0.35;
+        break;
+      case 'enemy.interrupted':
+        this.spark = 0.5;
+        break;
+      case 'guard.broken':
       case 'enemy.attack.hit':
         this.hurtKick = 1;
         this.damageFlash = 1;
@@ -275,6 +289,9 @@ export class DungeonRenderer {
     this.hurtKick = Math.max(0, this.hurtKick - dt * 4);
     this.damageFlash = Math.max(0, this.damageFlash - dt * 3.2);
     this.healFlash = Math.max(0, this.healFlash - dt * 2.2);
+    this.spark = Math.max(0, this.spark - dt * 6);
+    const guardGoal = state.status === 'playing' && state.party.members[0]?.blocking && state.party.members[0].action.kind === 'idle' ? 1 : 0;
+    this.guard += Math.sign(guardGoal - this.guard) * Math.min(Math.abs(guardGoal - this.guard), dt * 9);
     this.deathFade = state.status === 'dead' ? Math.min(1, this.deathFade + dt * 0.7) : 0;
 
     // Torch flicker: a slow wobble with the odd sharp gutter.
@@ -305,6 +322,7 @@ export class DungeonRenderer {
 
     this.present.uniforms.uDamage.value = this.damageFlash;
     this.present.uniforms.uHeal.value = this.healFlash;
+    this.present.uniforms.uSpark.value = this.spark;
     this.present.uniforms.uFade.value = this.deathFade;
 
     this.gl.setRenderTarget(this.target);
@@ -318,11 +336,13 @@ export class DungeonRenderer {
 
   private placeCamera(state: SessionState, now: number, timeSeconds: number) {
     const p = state.party;
-    const mt = clamp01((now - p.moveStart) / MOVE_TICKS);
+    const mt = clamp01((now - p.moveStart) / p.moveTicks);
     const ease = smooth(mt);
     let x = p.prevX + (p.x - p.prevX) * ease;
     let z = p.prevY + (p.y - p.prevY) * ease;
-    let y = EYE_HEIGHT + (mt < 1 ? Math.sin(mt * Math.PI) * -0.022 : 0);
+    // A dodge is a quick, low lunge; a walk has a gentle bob.
+    const dip = p.moveTicks < MOVE_TICKS ? -0.07 : -0.022;
+    let y = EYE_HEIGHT + (mt < 1 ? Math.sin(mt * Math.PI) * dip : 0);
 
     // Turn through the shorter way round.
     const tt = clamp01((now - p.turnStart) / TURN_TICKS);
@@ -400,38 +420,49 @@ export class DungeonRenderer {
     view.material.uniforms.uFrame.value = GOBLIN_POSES.indexOf(pose);
     view.material.uniforms.uLight.value = this.world.light[enemy.y * this.world.width + enemy.x];
     view.material.uniforms.uFlash.value = enemy.ai !== 'dead' || sinceHit < 6 ? Math.max(0, 1 - sinceHit / 5) * 0.85 : 0;
+    const unblockable = enemy.ai === 'telegraph' && def.attacks.find((a) => a.id === enemy.attackId)?.blockable === false;
+    view.material.uniforms.uDanger.value = unblockable ? 0.3 + 0.25 * Math.sin(now * 0.45) : 0;
   }
 
   private placeSword(state: SessionState, now: number, timeSeconds: number) {
     const p = state.party;
     const member = p.members[0];
-    const moving = now - p.moveStart < MOVE_TICKS;
-    const bobX = moving ? Math.sin(((now - p.moveStart) / MOVE_TICKS) * Math.PI * 2) * 3 : Math.sin(timeSeconds * 1.6) * 1.2;
-    const bobY = moving ? -Math.abs(Math.sin(((now - p.moveStart) / MOVE_TICKS) * Math.PI)) * 4 : Math.sin(timeSeconds * 2.1) * 1;
+    const moving = now - p.moveStart < p.moveTicks;
+    const stride = (now - p.moveStart) / p.moveTicks;
+    const bobX = moving ? Math.sin(stride * Math.PI * 2) * 3 : Math.sin(timeSeconds * 1.6) * 1.2;
+    const bobY = moving ? -Math.abs(Math.sin(stride * Math.PI)) * 4 : Math.sin(timeSeconds * 2.1) * 1;
 
     // Rest position of the fist, in screen pixels from the bottom left.
     let x = this.width * 0.915 + bobX;
     let y = this.height * 0.07 + bobY;
     let angle = 0;
 
+    // Guard: the blade comes across the body, between the party and the blow.
+    const g = smooth(this.guard);
+    x -= this.width * 0.2 * g;
+    y += this.height * 0.1 * g;
+    angle += 0.62 * g;
+
     const action = member?.action;
     if (action && action.kind === 'attack') {
+      // A heavy attack draws further back and cuts a wider arc.
+      const reach = action.attack === 'heavy' ? 1.45 : 1;
       const windup = action.hitTick - action.start;
       const t = now - action.start;
       if (t < windup) {
         // Draw back up and to the right.
         const k = smooth(clamp01(t / windup));
-        x += 18 * k;
-        y += 26 * k;
-        angle = -0.55 * k;
+        x += 18 * reach * k;
+        y += 26 * reach * k;
+        angle = -0.55 * reach * k;
       } else {
         // Cut down and across, then ease back to rest.
         const strike = clamp01((t - windup) / 7);
         const back = smooth(clamp01((t - windup - 9) / Math.max(1, action.end - action.hitTick - 9)));
         const k = Math.sin(strike * Math.PI * 0.5);
-        x += (18 - 150 * k) * (1 - back);
-        y += (26 - 44 * k) * (1 - back);
-        angle = (-0.55 + 1.75 * k) * (1 - back);
+        x += (18 * reach - 150 * reach * k) * (1 - back);
+        y += (26 * reach - 44 * reach * k) * (1 - back);
+        angle = (-0.55 * reach + 1.75 * reach * k) * (1 - back);
       }
     }
     this.sword.position.set(Math.round(x), Math.round(y), 0);

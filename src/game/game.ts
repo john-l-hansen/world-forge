@@ -4,7 +4,7 @@
  * in fixed 60 Hz ticks no matter how fast the screen refreshes.
  */
 import { AudioEngine } from '../audio/audio';
-import { createSession, enemyAt, hasLineOfSight, partyIsBusy, step } from '../engine/sim';
+import { createSession, enemyAt, hasLineOfSight, isGuarding, partyIsBusy, step } from '../engine/sim';
 import { TICKS_PER_SECOND, type Command, type GameEvent, type SessionState } from '../engine/types';
 import { DungeonRenderer } from '../renderer/renderer';
 import { DIR_X, DIR_Y, roomAtCell, type CompiledWorld } from '../world/compile';
@@ -27,6 +27,7 @@ export class Game {
   private pending: Command[] = [];
   /** Counts sessions, so a delayed effect never lands on a restarted game. */
   private sessionNumber = 0;
+  private tipShown = false;
   private lastBumpText = '';
   private lastBumpTick = -1000;
 
@@ -75,11 +76,18 @@ export class Game {
     if (itemId) this.pending.push({ type: 'use', actor: this.state.party.members[0].id, itemId });
   }
 
+  /** Raise or lower the guard. A guard raised just before a blow lands is a parry. */
+  setGuard(held: boolean) {
+    if (useHud.getState().screen !== 'playing' && held) return;
+    this.pending.push({ type: 'block', actor: this.state.party.members[0].id, held });
+  }
+
   /** Open or close the quest journal. The game waits while it is open. */
   toggleJournal() {
     const screen = useHud.getState().screen;
     if (screen === 'playing') {
       this.input.clear();
+      this.pending.push({ type: 'block', actor: this.state.party.members[0].id, held: false });
       useHud.setState({ screen: 'journal' });
     } else if (screen === 'journal') useHud.setState({ screen: 'playing' });
   }
@@ -147,12 +155,18 @@ export class Game {
   tick() {
     const actor = this.state.party.members[0].id;
     const free = !partyIsBusy(this.state) && !this.state.buffered && this.state.hitStop === 0;
-    let command: Command | null = this.pending.shift() ?? null;
-    if (!command && this.state.status === 'playing') {
+    // Guard changes and item use go straight in; at most one action joins them.
+    const commands: Command[] = this.pending;
+    this.pending = [];
+    if (this.state.status === 'playing' && !commands.some((c) => c.type !== 'block')) {
       const action = this.input.next(free);
-      if (action) command = commandFor(action, actor);
+      if (action) {
+        const command = commandFor(action, actor);
+        // A dodge goes the way the player is steering, or straight back.
+        commands.push(command.type === 'dodge' ? { ...command, dir: this.input.heldMove() ?? 'back' } : command);
+      }
     }
-    const events = step(this.state, this.world, command ? [command] : []);
+    const events = step(this.state, this.world, commands);
     for (const event of events) this.handle(event);
     this.syncHud();
   }
@@ -162,16 +176,34 @@ export class Game {
     this.audio.onEvent(event);
     const line = describeEvent(event, this.state, this.world);
     // Walking into something repeatedly should not flood the log.
-    const repeatedBump = event.type === 'party.bumped' && line?.text === this.lastBumpText && this.state.tick - this.lastBumpTick < 240;
+    const nagging = event.type === 'party.bumped' || event.type === 'stamina.low';
+    const repeatedBump = nagging && line?.text === this.lastBumpText && this.state.tick - this.lastBumpTick < 240;
     if (line && !repeatedBump) pushLog(line.text, line.tone);
-    if (event.type === 'party.bumped' && line && !repeatedBump) {
+    if (nagging && line && !repeatedBump) {
       this.lastBumpText = line.text;
       this.lastBumpTick = this.state.tick;
     }
 
     switch (event.type) {
       case 'attack.hit':
-        pushFloater(String(event.damage), 'dealt');
+        pushFloater(String(event.damage), event.kind === 'heavy' ? 'heavy' : 'dealt');
+        break;
+      case 'attack.parried':
+        pushFloater('Parry!', 'parry');
+        break;
+      case 'attack.blocked':
+        pushFloater(`-${event.damage}`, 'block');
+        useHud.setState((s) => ({ hurtPulse: s.hurtPulse + 1 }));
+        break;
+      case 'guard.broken':
+        pushFloater(`-${event.damage}`, 'taken');
+        useHud.setState((s) => ({ hurtPulse: s.hurtPulse + 1 }));
+        break;
+      case 'enemy.telegraph':
+        if (!this.tipShown) {
+          this.tipShown = true;
+          pushLog('Step away, dodge with Space, or raise your guard (L) just as it lands to parry.', 'lore');
+        }
         break;
       case 'enemy.attack.hit':
         pushFloater(`-${event.damage}`, 'taken');
@@ -238,14 +270,26 @@ export class Game {
       const def = this.world.def.enemies.find((d) => d.id === seen.defId)!;
       const encounter = this.world.def.encounters.find((e) => e.id === seen.id.split('#')[0]);
       const boss = encounter?.boss === true;
-      target = { name: boss ? encounter.name : def.name, hp: seen.hp, maxHp: seen.maxHp, winding: seen.ai === 'telegraph', boss };
+      const winding = seen.ai === 'telegraph';
+      const danger = winding && def.attacks.find((a) => a.id === seen.attackId)?.blockable === false;
+      target = { name: boss ? encounter.name : def.name, hp: seen.hp, maxHp: seen.maxHp, winding, danger, boss };
     }
     const sameTarget =
       (target === null && hud.target === null) ||
-      (target !== null && hud.target !== null && target.name === hud.target.name && target.hp === hud.target.hp && target.winding === hud.target.winding);
+      (target !== null && hud.target !== null && target.name === hud.target.name && target.hp === hud.target.hp && target.winding === hud.target.winding && target.danger === hud.target.danger);
 
-    if (hud.hp !== member.hp || hud.maxHp !== member.maxHp || hud.facing !== s.party.facing || hud.roomName !== roomName || !sameTarget) {
-      useHud.setState({ hp: member.hp, maxHp: member.maxHp, facing: s.party.facing, roomName, target });
+    const guarding = isGuarding(member);
+    if (
+      hud.hp !== member.hp ||
+      hud.maxHp !== member.maxHp ||
+      hud.stamina !== member.stamina ||
+      hud.maxStamina !== member.maxStamina ||
+      hud.guarding !== guarding ||
+      hud.facing !== s.party.facing ||
+      hud.roomName !== roomName ||
+      !sameTarget
+    ) {
+      useHud.setState({ hp: member.hp, maxHp: member.maxHp, stamina: member.stamina, maxStamina: member.maxStamina, guarding, facing: s.party.facing, roomName, target });
     }
   }
 

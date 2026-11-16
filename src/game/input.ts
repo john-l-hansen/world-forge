@@ -2,9 +2,9 @@
  * Input: turns keys and on-screen buttons into simulation commands.
  * The key map is plain data, so controls can be made configurable later.
  */
-import type { Command } from '../engine/types';
+import type { Command, MoveDir } from '../engine/types';
 
-export type Action = 'forward' | 'back' | 'strafeLeft' | 'strafeRight' | 'turnLeft' | 'turnRight' | 'attack' | 'interact';
+export type Action = 'forward' | 'back' | 'strafeLeft' | 'strafeRight' | 'turnLeft' | 'turnRight' | 'attack' | 'heavy' | 'dodge' | 'interact';
 
 export const DEFAULT_KEYMAP: Record<string, Action> = {
   KeyW: 'forward',
@@ -17,7 +17,9 @@ export const DEFAULT_KEYMAP: Record<string, Action> = {
   ArrowLeft: 'turnLeft',
   KeyE: 'turnRight',
   ArrowRight: 'turnRight',
-  Space: 'attack',
+  KeyJ: 'attack',
+  KeyK: 'heavy',
+  Space: 'dodge',
   KeyF: 'interact',
   Enter: 'interact',
 };
@@ -40,11 +42,18 @@ export function commandFor(action: Action, actor: string): Command {
     case 'turnRight':
       return { type: 'turn', actor, dir: 'right' };
     case 'attack':
-      return { type: 'attack', actor };
+      return { type: 'attack', actor, kind: 'light' };
+    case 'heavy':
+      return { type: 'attack', actor, kind: 'heavy' };
+    case 'dodge':
+      // The game fills in the direction from whichever way the player is steering.
+      return { type: 'dodge', actor };
     case 'interact':
       return { type: 'interact', actor };
   }
 }
+
+const STEP_OF: Partial<Record<Action, MoveDir>> = { forward: 'forward', back: 'back', strafeLeft: 'left', strafeRight: 'right' };
 
 export class InputState {
   /** Held actions, most recent last. */
@@ -71,6 +80,15 @@ export class InputState {
   clear() {
     this.held = [];
     this.pressed = [];
+  }
+
+  /** The step direction currently held, most recent first, if any. */
+  heldMove(): MoveDir | null {
+    for (let i = this.held.length - 1; i >= 0; i--) {
+      const dir = STEP_OF[this.held[i]];
+      if (dir) return dir;
+    }
+    return null;
   }
 
   /**

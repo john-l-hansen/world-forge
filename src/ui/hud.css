@@ -69,7 +69,9 @@ html, body, #root {
 .bar { height: 5px; background: #2a0d0d; border: 1px solid var(--ink); }
 .bar > i { display: block; height: 100%; }
 .target .bar { width: 82px; }
+.target.danger .target-name { color: var(--bad); animation: blink 0.25s steps(2) infinite; }
 .target.boss .target-name { color: var(--gold-hi); }
+.target.boss.danger .target-name { color: var(--bad); }
 .target.boss.winding .target-name { color: var(--warn); }
 .target.boss .bar { width: 180px; height: 7px; border-color: var(--gold-lo); }
 .target .bar > i { background: #b02a22; box-shadow: inset 0 1px 0 #e0604a; }
@@ -83,6 +85,9 @@ html, body, #root {
 .floater.dealt { top: 74px; color: var(--gold-hi); }
 .floater.taken { top: 150px; color: var(--bad); }
 .floater.healed { top: 150px; color: var(--good); }
+.floater.heavy { top: 70px; color: #fff2a8; font-size: 24px; line-height: 24px; }
+.floater.parry { top: 96px; color: var(--gold-hi); }
+.floater.block { top: 150px; color: var(--bone); }
 @keyframes rise { from { transform: translateY(0); opacity: 1; } 70% { opacity: 1; } to { transform: translateY(-24px); opacity: 0; } }
 
 .side { position: absolute; left: 332px; top: 4px; width: 144px; height: 262px; display: flex; flex-direction: column; gap: 4px; }
@@ -93,11 +98,15 @@ html, body, #root {
 .portrait.hurt img { animation: hurt 0.3s steps(3); }
 @keyframes hurt { 0%, 66% { filter: brightness(1.6) sepia(1) saturate(8) hue-rotate(-30deg); } 100% { filter: none; } }
 .card-body { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: space-between; padding: 1px 0; }
+.portrait.guarding { border-color: #e8f2f6 #7e828e #7e828e #e8f2f6; }
+.title-row { display: flex; justify-content: space-between; gap: 3px; white-space: nowrap; overflow: hidden; }
 .name { color: var(--gold-hi); font-weight: 700; }
 .class { color: var(--dim); }
 .hp-row { display: flex; align-items: center; gap: 3px; }
 .hp-row .bar { flex: 1; height: 7px; }
+.hp-row .bar.stamina { height: 5px; background: #2a210d; }
 .hp-row .bar > i { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -1px 0 rgba(0, 0, 0, 0.35); }
+.hp-row .num { min-width: 30px; text-align: right; color: var(--dim); }
 .weapon { display: flex; align-items: center; gap: 3px; color: var(--bone); white-space: nowrap; overflow: hidden; }
 .weapon img { width: 12px; height: 12px; }
 
@@ -119,11 +128,14 @@ html, body, #root {
 .map { flex: 1; min-height: 0; position: relative; }
 .map canvas { width: 140px; height: 100%; }
 
-.actions { height: 54px; display: flex; gap: 4px; }
-.compass { width: 54px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #17120e; }
-.compass b { font-size: 24px; line-height: 24px; color: var(--gold-hi); font-weight: 700; }
-.compass span { color: var(--dim); }
-.buttons { flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.actions { height: 54px; }
+.compass {
+  position: absolute; left: 2px; top: 2px; width: 13px; height: 13px; display: flex; align-items: center; justify-content: center;
+  color: var(--gold-hi); font-weight: 700; background: #17120e; border: 1px solid var(--gold-lo); pointer-events: auto;
+}
+.buttons { height: 100%; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(2, 1fr); gap: 2px; }
+.buttons .btn { flex-direction: column; gap: 0; line-height: 9px; }
+.btn.held { background: #655746; border-color: var(--stone-lo) var(--stone-hi) var(--stone-hi) var(--stone-lo); }
 
 .btn {
   flex: 1; display: flex; align-items: center; justify-content: center; gap: 4px;
@@ -155,6 +167,7 @@ html, body, #root {
 .overlay h1 { margin: 0; font-size: 24px; line-height: 26px; color: var(--gold-hi); font-weight: 700; text-shadow: 2px 2px 0 var(--gold-lo), 3px 3px 0 var(--ink); }
 .overlay h2 { margin: 0; font-size: 8px; font-weight: 400; color: var(--dim); }
 .overlay .keys { display: grid; grid-template-columns: auto auto; gap: 1px 10px; text-align: left; margin: 4px 0; }
+.overlay .keys.wide { grid-template-columns: auto auto auto auto; gap: 1px 8px; }
 .overlay .keys dt { color: var(--gold); }
 .overlay .keys dd { margin: 0; }
 .overlay h3 { margin: 0; font-size: 16px; line-height: 18px; font-weight: 400; color: var(--gold-hi); }

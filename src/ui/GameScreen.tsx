@@ -4,7 +4,7 @@ import { DEFAULT_KEYMAP } from '../game/input';
 import { useHud } from '../game/store';
 import type { CompiledWorld } from '../world/compile';
 import { uiArt } from './art';
-import { ActionButtons, AutoMap, Belt, Compass, DeathOverlay, Floaters, JournalOverlay, MessageLog, MovePad, ObjectivePlate, PartyCard, TargetBar, TitleOverlay, VictoryOverlay } from './Hud';
+import { ActionButtons, AutoMap, Belt, DeathOverlay, Floaters, JournalOverlay, MessageLog, MovePad, ObjectivePlate, PartyCard, TargetBar, TitleOverlay, VictoryOverlay } from './Hud';
 
 const LOGICAL_W = 480;
 const LOGICAL_H = 270;
@@ -65,7 +65,7 @@ export function GameScreen({ world }: { world: CompiledWorld }) {
         }
         return;
       }
-      if (e.code === 'KeyJ' || (current === 'journal' && e.code === 'Escape')) {
+      if (e.code === 'KeyB' || (current === 'journal' && e.code === 'Escape')) {
         game.toggleJournal();
         return;
       }
@@ -74,16 +74,25 @@ export function GameScreen({ world }: { world: CompiledWorld }) {
         game.drink();
         return;
       }
+      if (e.code === 'KeyL') {
+        e.preventDefault();
+        if (!e.repeat) game.setGuard(true);
+        return;
+      }
       const action = DEFAULT_KEYMAP[e.code];
       if (!action) return;
       e.preventDefault();
       if (!e.repeat) game.input.press(action);
     };
     const up = (e: KeyboardEvent) => {
+      if (e.code === 'KeyL') game.setGuard(false);
       const action = DEFAULT_KEYMAP[e.code];
       if (action) game.input.release(action);
     };
-    const blur = () => game.input.clear();
+    const blur = () => {
+      game.input.clear();
+      game.setGuard(false);
+    };
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
     window.addEventListener('blur', blur);
@@ -99,11 +108,19 @@ export function GameScreen({ world }: { world: CompiledWorld }) {
       <div className="screen" style={{ zoom: scale, backgroundImage: `url(${art.panel})` }}>
         <div
           className="viewport sunk"
-          onPointerDown={() => {
+          onContextMenu={(e) => e.preventDefault()}
+          onPointerDown={(e) => {
             if (!game) return;
             if (screen === 'title') game.begin();
-            else if (screen === 'playing') game.act('attack');
+            else if (screen !== 'playing') return;
+            // Left click attacks (Shift for a heavy attack); right click holds the guard.
+            else if (e.button === 2) game.setGuard(true);
+            else if (e.button === 0) game.act(e.shiftKey ? 'heavy' : 'attack');
           }}
+          onPointerUp={(e) => {
+            if (game && e.button === 2) game.setGuard(false);
+          }}
+          onPointerLeave={() => game?.setGuard(false)}
         >
           <canvas ref={canvasRef} width={320} height={200} />
           {screen === 'playing' && <TargetBar />}
@@ -120,10 +137,7 @@ export function GameScreen({ world }: { world: CompiledWorld }) {
           <ObjectivePlate />
           {game && <AutoMap game={game} />}
           {game && <Belt game={game} />}
-          <div className="actions">
-            <Compass />
-            {game && <ActionButtons game={game} />}
-          </div>
+          <div className="actions">{game && <ActionButtons game={game} />}</div>
         </div>
 
         <div className="bottom">

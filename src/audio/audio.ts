@@ -70,9 +70,48 @@ export class AudioEngine {
         this.noiseHit({ dur: 0.06, freq: 300, q: 0.7, gain: 0.25, type: 'lowpass' });
         break;
       case 'attack.swing':
-        this.noiseHit({ dur: 0.16, freq: 700, to: 2600, q: 2.5, gain: 0.3, type: 'bandpass', attack: 0.04 });
+        if (event.kind === 'heavy') {
+          // A slower, deeper whoosh that builds to the cut.
+          this.noiseHit({ dur: 0.36, freq: 300, to: 1500, q: 2, gain: 0.4, type: 'bandpass', attack: 0.22 });
+          this.tone({ wave: 'sine', from: 90, to: 60, dur: 0.3, gain: 0.15, attack: 0.2 });
+        } else {
+          this.noiseHit({ dur: 0.16, freq: 700, to: 2600, q: 2.5, gain: 0.3, type: 'bandpass', attack: 0.04 });
+        }
+        break;
+      case 'stamina.low':
+        this.tone({ wave: 'sine', from: 140, to: 90, dur: 0.12, gain: 0.2 });
+        this.noiseHit({ dur: 0.14, freq: 500, q: 0.6, gain: 0.12, type: 'lowpass', attack: 0.04 });
+        break;
+      case 'party.dodged':
+        this.noiseHit({ dur: 0.14, freq: 1400, to: 500, q: 1.6, gain: 0.35, type: 'bandpass', attack: 0.02 });
+        break;
+      case 'attack.blocked':
+        this.tone({ wave: 'triangle', from: 520, to: 360, dur: 0.1, gain: 0.25 });
+        this.noiseHit({ dur: 0.09, freq: 1100, q: 0.9, gain: 0.5, type: 'lowpass' });
+        this.tone({ wave: 'sine', from: 120, to: 60, dur: 0.14, gain: 0.35 });
+        break;
+      case 'attack.parried':
+        this.noiseHit({ dur: 0.03, freq: 5000, q: 1, gain: 0.4, type: 'highpass' });
+        this.tone({ wave: 'triangle', from: 1760, to: 1740, dur: 0.5, gain: 0.2 });
+        this.tone({ wave: 'triangle', from: 2637, to: 2610, dur: 0.4, gain: 0.1 });
+        this.tone({ wave: 'square', from: 3520, to: 3500, dur: 0.12, gain: 0.04 });
+        break;
+      case 'guard.broken':
+        this.noiseHit({ dur: 0.22, freq: 700, q: 0.7, gain: 0.7, type: 'lowpass' });
+        this.tone({ wave: 'square', from: 200, to: 50, dur: 0.3, gain: 0.35 });
+        this.tone({ wave: 'triangle', from: 700, to: 300, dur: 0.18, gain: 0.15 });
+        break;
+      case 'enemy.attack.dodged':
+        this.noiseHit({ dur: 0.2, freq: 2000, to: 500, q: 2, gain: 0.3, type: 'bandpass', attack: 0.03 });
+        break;
+      case 'enemy.interrupted':
+        this.tone({ wave: 'sawtooth', from: 320, to: 120, dur: 0.22, gain: 0.2, vibrato: 60, filter: 1500 });
         break;
       case 'attack.hit':
+        if (event.kind === 'heavy') {
+          this.noiseHit({ dur: 0.16, freq: 900, q: 0.7, gain: 0.7, type: 'lowpass' });
+          this.tone({ wave: 'square', from: 110, to: 40, dur: 0.22, gain: 0.4 });
+        }
         this.noiseHit({ dur: 0.1, freq: 1700, q: 0.8, gain: 0.55, type: 'lowpass' });
         this.tone({ wave: 'square', from: 150, to: 55, dur: 0.12, gain: 0.3 });
         this.tone({ wave: 'sawtooth', from: 260, to: 150, dur: 0.16, gain: 0.12, delay: 0.04, vibrato: 30 });

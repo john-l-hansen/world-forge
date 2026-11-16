@@ -16,7 +16,7 @@ export function TargetBar() {
   const target = useHud((s) => s.target);
   if (!target) return null;
   return (
-    <div className={`target${target.winding ? ' winding' : ''}${target.boss ? ' boss' : ''}`}>
+    <div className={`target${target.winding ? ' winding' : ''}${target.danger ? ' danger' : ''}${target.boss ? ' boss' : ''}`}>
       <span className="target-name">{target.name}</span>
       <div className="bar">
         <i style={{ width: `${(target.hp / target.maxHp) * 100}%` }} />
@@ -45,36 +45,43 @@ export function PartyCard() {
   const weapon = useHud((s) => s.weaponName);
   const hp = useHud((s) => s.hp);
   const maxHp = useHud((s) => s.maxHp);
+  const stamina = useHud((s) => s.stamina);
+  const maxStamina = useHud((s) => s.maxStamina);
+  const guarding = useHud((s) => s.guarding);
   const hurtPulse = useHud((s) => s.hurtPulse);
   const ratio = hp / maxHp;
   const colour = ratio > 0.5 ? '#4f9a3a' : ratio > 0.25 ? '#c9952a' : '#b02a22';
+  const wind = stamina / maxStamina;
   return (
     <div className="card raised">
       {/* The key restarts the flash animation each time damage lands. */}
-      <div key={hurtPulse} className={`portrait${hurtPulse ? ' hurt' : ''}`}>
+      <div key={hurtPulse} className={`portrait${hurtPulse ? ' hurt' : ''}${guarding ? ' guarding' : ''}`}>
         <img src={art.portrait} alt={name} />
       </div>
       <div className="card-body">
-        <div>
-          <div className="name">{name}</div>
-          <div className="class">{cls}</div>
+        <div className="title-row">
+          <span className="name">{name}</span>
+          <span className="class">{cls}</span>
         </div>
-        <div>
-          <div className="hp-row">
-            <span>HP</span>
-            <div className="bar">
-              <i style={{ width: `${Math.max(0, ratio) * 100}%`, background: colour }} />
-            </div>
+        <div className="hp-row" title="Health">
+          <span>HP</span>
+          <div className="bar">
+            <i style={{ width: `${Math.max(0, ratio) * 100}%`, background: colour }} />
           </div>
-          <div className="hp-row">
-            <span style={{ color: colour }}>
-              {hp}/{maxHp}
-            </span>
+          <span className="num" style={{ color: colour }}>
+            {hp}/{maxHp}
+          </span>
+        </div>
+        <div className="hp-row" title="Stamina: spent by attacks, blocks and dodges">
+          <span>ST</span>
+          <div className="bar stamina">
+            <i style={{ width: `${Math.max(0, wind) * 100}%`, background: wind < 0.25 ? '#8a6a1c' : '#d8b23a' }} />
           </div>
+          <span className="num">{stamina}</span>
         </div>
         <div className="weapon">
           <img src={art.sword} alt="" />
-          {weapon}
+          {guarding ? 'Guard up' : weapon}
         </div>
       </div>
     </div>
@@ -163,6 +170,7 @@ export function AutoMap({ game }: { game: Game }) {
   return (
     <div className="map sunk">
       <canvas ref={ref} />
+      <Compass />
     </div>
   );
 }
@@ -228,7 +236,7 @@ export function JournalOverlay() {
       ) : (
         <p>No quests yet.</p>
       )}
-      <div className="blink">Press J to close</div>
+      <div className="blink">Press B to close</div>
     </div>
   );
 }
@@ -263,12 +271,12 @@ export function VictoryOverlay({ world }: { world: string }) {
   );
 }
 
+/** Which way the party faces, shown in the corner of the map. */
 export function Compass() {
   const facing = useHud((s) => s.facing);
   return (
-    <div className="compass raised">
-      <b>{FACING_LETTER[facing]}</b>
-      <span>Facing</span>
+    <div className="compass" title="Facing">
+      {FACING_LETTER[facing]}
     </div>
   );
 }
@@ -304,13 +312,32 @@ export function MovePad({ game }: { game: Game }) {
 }
 
 export function ActionButtons({ game }: { game: Game }) {
+  const guarding = useHud((s) => s.guarding);
   return (
     <div className="buttons">
-      <button className="btn" onPointerDown={() => game.act('attack')}>
-        Attack <kbd>Space</kbd>
+      <button className="btn" title="Light attack: quick, cheap" onPointerDown={() => game.act('attack')}>
+        Attack <kbd>J</kbd>
       </button>
-      <button className="btn" onPointerDown={() => game.act('interact')}>
+      <button className="btn" title="Heavy attack: slow, hits hard, can break a wind-up" onPointerDown={() => game.act('heavy')}>
+        Heavy <kbd>K</kbd>
+      </button>
+      <button
+        className={`btn${guarding ? ' held' : ''}`}
+        title="Hold to block. Raise it just as a blow lands to parry."
+        onPointerDown={() => game.setGuard(true)}
+        onPointerUp={() => game.setGuard(false)}
+        onPointerLeave={() => game.setGuard(false)}
+      >
+        Block <kbd>L</kbd>
+      </button>
+      <button className="btn" title="Dodge: a quick step, back unless you are steering" onPointerDown={() => game.act('dodge')}>
+        Dodge <kbd>Space</kbd>
+      </button>
+      <button className="btn" title="Open, unlock, search" onPointerDown={() => game.act('interact')}>
         Use <kbd>F</kbd>
+      </button>
+      <button className="btn" title="Quest journal" onPointerDown={() => game.toggleJournal()}>
+        Journal <kbd>B</kbd>
       </button>
     </div>
   );
@@ -334,21 +361,27 @@ export function TitleOverlay({ title }: { title: string }) {
     <div className="overlay">
       <h2>World Forge presents</h2>
       <h1>{title}</h1>
-      <dl className="keys">
+      <dl className="keys wide">
         <dt>W A S D</dt>
         <dd>Step</dd>
         <dt>Q E</dt>
         <dd>Turn</dd>
-        <dt>Space / Click</dt>
+        <dt>J / Click</dt>
         <dd>Attack</dd>
+        <dt>K / Shift-click</dt>
+        <dd>Heavy attack</dd>
+        <dt>L / Right-click</dt>
+        <dd>Block, parry</dd>
+        <dt>Space</dt>
+        <dd>Dodge</dd>
         <dt>F / Enter</dt>
-        <dd>Open, unlock, search</dd>
+        <dd>Open, search</dd>
         <dt>H</dt>
-        <dd>Drink a draught</dd>
-        <dt>J</dt>
+        <dd>Drink</dd>
+        <dt>B</dt>
         <dd>Journal</dd>
         <dt>M</dt>
-        <dd>Sound on / off</dd>
+        <dd>Sound</dd>
       </dl>
       <div className="blink">Press any key or click to enter</div>
     </div>

@@ -149,7 +149,8 @@ export function describeEvent(event: GameEvent, state: SessionState, world: Comp
       const attack = def.enemies.find((d) => d.id === enemy?.defId)?.attacks.find((a) => a.id === event.attackId);
       if (attack && !attack.blockable)
         return { text: `The ${enemyName(event.enemyId)} draws back for a ${attack.name}. No guard will stop it!`, tone: 'bad' };
-      return { text: `The ${enemyName(event.enemyId)} rears back to ${attack?.name ?? 'strike'}!`, tone: 'warn' };
+      // An attack's name is a noun ("chop", "raking cut"), so the line reads for any world's attacks.
+      return { text: `The ${enemyName(event.enemyId)} rears back for a ${attack?.name ?? 'blow'}!`, tone: 'warn' };
     }
     case 'stamina.low':
       return event.actor === you ? { text: 'You are too winded.', tone: 'plain' } : null;

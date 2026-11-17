@@ -6,7 +6,7 @@
  * Run `npm run build && npm run preview` first, then `npm run test:browser`.
  * Screenshots land in .shots/.
  */
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { chromium } from 'playwright-core';
 
 const URL = process.env.URL ?? 'http://localhost:4173/?seed=7';
@@ -494,7 +494,7 @@ await page.evaluate(() => {
 });
 await page.waitForTimeout(400);
 h = await hud();
-check(/1 MINES/i.test(h.overlay ?? '') && /MINES: PARTY/i.test(h.overlay ?? '') && /3 CRYPT/i.test(h.overlay ?? '') && /OPEN FILE/i.test(h.overlay ?? ''), 'the title screen offers every adventure');
+check(/MINES: PARTY/i.test(h.overlay ?? '') && /CRYPT/i.test(h.overlay ?? '') && /OPEN FILE/i.test(h.overlay ?? ''), 'the title screen offers every adventure');
 const titleFits = await page.evaluate(() => {
   const box = document.querySelector('.viewport').getBoundingClientRect();
   return [...document.querySelectorAll('.overlay.title > *')].every((el) => {
@@ -626,6 +626,124 @@ if (cleric.hp > 0) {
   check(h.cells[3].fallen, 'a fallen character is shown as fallen');
 }
 await shot('22-party-cleric');
+
+// --- A second world: The Sunken Crypt ---------------------------------------------
+/** Average colour of the 3D view, to tell one tileset from another. */
+const viewColour = () =>
+  page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        requestAnimationFrame(() => {
+          const src = document.querySelector('.viewport canvas');
+          const copy = document.createElement('canvas');
+          copy.width = src.width;
+          copy.height = src.height;
+          const ctx = copy.getContext('2d');
+          ctx.drawImage(src, 0, 0);
+          // The upper half: walls and ceiling, clear of the held weapon.
+          const d = ctx.getImageData(0, 0, copy.width, copy.height / 2).data;
+          let r = 0, g = 0, b = 0;
+          for (let i = 0; i < d.length; i += 4) { r += d[i]; g += d[i + 1]; b += d[i + 2]; }
+          const n = d.length / 4;
+          resolve({ r: r / n, g: g / n, b: b / n });
+        });
+      }),
+  );
+await page.goto(URL);
+await page.waitForFunction(() => window.__worldForge);
+await page.waitForTimeout(400);
+await key('Digit3', 900);
+await page.waitForFunction(() => window.__worldForge.world.def.world.id === 'world_sunken_crypt', null, { timeout: 5000 }).catch(() => {});
+s = await state();
+h = await hud();
+check((await page.evaluate(() => window.__worldForge.world.def.world.name)) === 'The Sunken Crypt' && (await page.evaluate(() => location.hash)) === '#crypt', 'pressing 3 on the title loads The Sunken Crypt');
+check(h.cells.map((c) => c.name).join(',').toUpperCase() === 'WREN,HALE' && s.held === 'dagger', `a different party of two is shown (${h.cells.map((c) => c.name).join(', ')})`);
+check(/THE BROKEN ADIT/i.test(h.text) && /Get into the vault/i.test(h.objective), `the room and first objective come from the new world ("${h.objective}")`);
+const aditColour = await viewColour();
+await shot('23-crypt-adit');
+await key('KeyB', 300);
+h = await hud();
+check(/THE ASHEN CHALICE/i.test(h.overlay ?? '') && /THE EMBALMERS' COFFER/i.test(h.overlay ?? '') && /SIDE QUEST/i.test(h.overlay ?? ''), 'the journal lists the main quest and the side quest');
+await shot('24-crypt-journal');
+await key('KeyB', 300);
+await walkTo(7, 11);
+await turnTo(N);
+await page.waitForTimeout(300);
+const hallColour = await viewColour();
+check(aditColour.r > aditColour.b * 1.15, `the adit is drawn in the mine's warm stone (r ${aditColour.r.toFixed(0)}, b ${aditColour.b.toFixed(0)})`);
+check(hallColour.r / hallColour.b < 1.4 && hallColour.r / hallColour.b < (aditColour.r / aditColour.b) * 0.7, `the hall is drawn in the crypt's grey stone (r ${hallColour.r.toFixed(0)}, b ${hallColour.b.toFixed(0)})`);
+await shot('25-crypt-hall');
+await walkTo(7, 9);
+await use(N, 500);
+check(/locked/i.test((await hud()).text) && (await state()).doors.door_hall_vault === false, 'the vault door is locked without the sigil');
+
+// Into the ossuary: two skeletons.
+await walkTo(9, 10);
+await use(E, 600);
+await page.waitForFunction(() => window.__worldForge.state.enemies.some((e) => e.alerted), null, { timeout: 8000 }).catch(() => {});
+await page.waitForTimeout(300);
+h = await hud();
+check(/Bones rattle upright/i.test(h.text), 'the skeleton announces itself with its own line');
+check(/SKELETON/i.test(h.target ?? ''), `the target bar names the new enemy ("${(h.target ?? '').trim()}")`);
+await shot('26-crypt-skeleton');
+await fight(0);
+await fight(1);
+s = await state();
+check(s.status === 'playing' && s.enemies[0].ai === 'dead' && s.enemies[1].ai === 'dead', 'the party beats the skeletons in the ossuary');
+check(s.members.filter((m) => m.hp > 0).every((m) => m.xp >= 60), `both characters earn the experience (${s.members.map((m) => m.xp).join(', ')})`);
+await shot('27-crypt-ossuary');
+
+// The walled-up way: through the chapel, search the west wall.
+await walkTo(12, 8);
+await use(N, 600);
+await fight(2);
+await walkTo(10, 5);
+await use(W, 700);
+s = await state();
+h = await hud();
+check(s.doors.door_chapel_vault === true && /hidden way opens/i.test(h.text), 'searching the chapel wall opens the walled-up way');
+check(s.unlocked.door_hall_vault !== true && s.inventory.item_bronze_sigil === undefined, 'the vault can be reached without the sigil');
+await page.waitForFunction(() => window.__worldForge.state.enemies[4].alerted, null, { timeout: 8000 }).catch(() => {});
+await page.waitForTimeout(400);
+h = await hud();
+check(/keeper of ash/i.test(h.text) && /WARDEN OF ASH/i.test(h.target ?? ''), 'the Warden speaks and is shown as the boss');
+await shot('28-crypt-warden');
+
+// --- Opening a world file ---------------------------------------------------------
+const cryptFile = JSON.parse(readFileSync(new globalThis.URL('../src/worlds/sunken-crypt.json', import.meta.url), 'utf8'));
+const asFile = (name, data) => ({ name, mimeType: 'application/json', buffer: Buffer.from(typeof data === 'string' ? data : JSON.stringify(data)) });
+await page.goto(URL);
+await page.waitForFunction(() => window.__worldForge);
+await page.waitForTimeout(300);
+const borrowed = structuredClone(cryptFile);
+borrowed.world.name = 'The Borrowed Crypt';
+borrowed.world.id = 'world_borrowed_crypt';
+await page.setInputFiles('input.world-file', asFile('borrowed-crypt.json', borrowed));
+await page.waitForFunction(() => window.__worldForge?.world.def.world.id === 'world_borrowed_crypt', null, { timeout: 5000 }).catch(() => {});
+await page.waitForTimeout(500);
+s = await state();
+h = await hud();
+check((await page.evaluate(() => window.__worldForge.world.def.world.name)) === 'The Borrowed Crypt' && h.overlay === null && s.tick > 0, 'a world file from the computer is loaded and played');
+await key('KeyW', 300);
+check((await state()).y === 14, 'the opened world plays like any other');
+
+const broken = structuredClone(cryptFile);
+broken.encounters[0].placements[0].enemyId = 'enemy_that_is_not_there';
+broken.doors[0].cell = { x: 1, y: 1 };
+await page.setInputFiles('input.world-file', asFile('broken-crypt.json', broken));
+await page.waitForSelector('.fatal', { timeout: 5000 }).catch(() => {});
+let fatal = await page.evaluate(() => document.querySelector('.fatal')?.innerText ?? '');
+check(/broken-crypt\.json cannot be played/i.test(fatal) && /missing_reference/.test(fatal) && /enemy_that_is_not_there/.test(fatal), 'a world file with faults is reported with its faults');
+check((await page.evaluate(() => document.querySelector('.viewport canvas'))) === null, 'and is not played');
+await shot('29-world-file-refused');
+await page.setInputFiles('input.world-file', asFile('notes.json', 'this is not a world'));
+await page.waitForFunction(() => /notes\.json/.test(document.querySelector('.fatal')?.innerText ?? ''), null, { timeout: 5000 }).catch(() => {});
+fatal = await page.evaluate(() => document.querySelector('.fatal')?.innerText ?? '');
+check(/Not valid JSON/i.test(fatal), 'a file that is not JSON is reported, not run');
+await page.getByRole('button', { name: 'Back to the adventures' }).click();
+await page.waitForFunction(() => document.querySelector('.overlay.title'), null, { timeout: 5000 }).catch(() => {});
+h = await hud();
+check(/THE FORGOTTEN MINES/i.test(h.overlay ?? ''), 'the way back leads to the title screen');
 
 check(problems.length === 0, `no console errors or failed requests${problems.length ? `: ${problems.join(' | ')}` : ''}`);
 await browser.close();

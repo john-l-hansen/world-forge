@@ -1,5 +1,95 @@
 # Development log — World Forge
 
+## Milestone 8 — Phase 4: the world engine, and a second world (2026-11-16)
+
+The engine now plays a second adventure that shares nothing with The Forgotten Mines
+but the engine itself. Phase 4's acceptance criteria are met.
+
+### What was implemented
+
+- **One loader** (`src/world/load.ts`). Migrate, validate, compile: the only way a
+  world reaches the engine, whether it is bundled or opened from a file. Nothing in a
+  world file is executed. A world that fails is reported with its faults and is never
+  compiled or played.
+- **World schema 0.8.0.** A second environment (`crypt`), two more enemy visuals
+  (`skeleton`, `warden`), three more props (`sarcophagus`, `urn`, `bones`), a quest
+  `kind` (`main` or `side`), and an optional `alertText` on an enemy. `0.7.0` worlds
+  are migrated with nothing changed.
+- **Tilesets by environment.** Each region names an environment. The compiler records
+  the environment of every cell, the renderer builds one atlas row per environment the
+  world uses, and each cell, door and secret door is dressed from its own. One world
+  can mix environments.
+- **The crypt's art, drawn in code.** A tileset of dressed grey stone with burial
+  niches, flagstones, a vaulted ceiling and bronze doors; a skeleton and the Warden in
+  all nine poses; a sarcophagus, an urn and a scatter of bones.
+- **Several quests.** The journal lists every quest the party holds, main quests
+  first. The objective plate shows the next thing to do. The adventure is won when
+  every main quest is done; a side quest is reported and does not end anything.
+- **The Sunken Crypt** (`src/worlds/sunken-crypt.json`). Seven rooms joined in a loop,
+  the first in the mine's stone and the rest in the crypt's. A rogue and a cleric. Four
+  skeletons and the Warden of Ash. A main quest in three steps (get into the vault, lay
+  the Warden to rest, take the chalice) and a side quest (the embalmers' coffer). Two
+  ways into the vault: the sigil from the coffer unlocks the bronze door, or a
+  walled-up door in the chapel can be found by searching.
+- **Opening a world file.** The title screen's "Open file" (or O) takes a `.json` world
+  from the player's computer and plays it. A file with faults gets a page listing them
+  and a way back.
+- **Sound by place and by enemy.** The crypt has its own ambience (a low beating hum
+  and distant knocks), and the dead rattle and clatter where goblins snarl.
+- **Title screen.** Four choices: Mines, Mines: party, Crypt, Open file. The mouse
+  controls moved into the key list.
+
+### What the audit found
+
+Before starting, the code was searched for anything tied to the Mines. The engine,
+renderer and interface named no rooms, items, enemies or quests. Three assumptions did
+need removing: one tileset whatever the region said, only the first quest shown, and a
+goblin's snarl for every enemy's alert line and sound. A fourth turned up in play: the
+wind-up message assumed an attack's name was a verb ("rears back to chop"), which read
+badly for "raking cut". It now reads "rears back for a chop".
+
+### Tests executed
+
+- `npm run typecheck` and `npm run build` — pass.
+- `npm test` — 193 unit tests pass in 11 files. New: 13 in `tests/crypt.test.ts`. The
+  crypt loads through the loader, uses two environments, shares no IDs with the Mines,
+  and is won by a scripted player by both routes (with the sigil, and by the walled-up
+  way without it), identically from the same seed. The loader refuses text that is not
+  JSON, a broken reference, an unknown schema version and a behaviour that is not on
+  the engine's list, and migrates a 0.7.0 world.
+- `tests/adventure.test.ts`, the standing regression for the Mines — passes unchanged.
+- `npm run test:browser` — 117 checks pass in headless Chrome. The 97 earlier checks
+  pass, with one reworded for the new title labels. The 20 new ones load the crypt
+  from the title screen, check the party, journal and objective, compare the colour of
+  the view in the adit and in the hall to confirm the two tilesets, find the vault door
+  locked, beat the skeletons in the ossuary, open the walled-up way, meet the Warden,
+  then open a good world file, a faulty one and one that is not JSON.
+
+### Known limitations
+
+- **Nobody has played the crypt.** Its numbers are first guesses. In the browser it
+  has been played as far as meeting the Warden; the whole of it has been won only by
+  the scripted player in the unit tests.
+- Rooms are still rectangles on one grid, on one level. There are no stairs between
+  levels, no outdoor places, and no room shapes other than rectangles.
+- Two environments exist. Each new one needs a tileset drawn in code and an entry in
+  the engine's list; a world cannot bring its own art.
+- Enemies have one behaviour (`melee_aggressive`). There are no ranged or casting
+  enemies yet.
+- The crypt's new art has been checked in contact sheets and screenshots only, and its
+  sounds have not been heard by a person.
+- An opened world file is not remembered: reloading the page returns to the bundled
+  adventures. Saving and importing projects is Phase 7.
+- The Ashen Chalice uses the coin-pouch icon, and the Warden's glaive swings like a
+  sword.
+
+### Next milestone
+
+Phase 4 is complete, and the roadmap's next phase in order is Phase 5 (the AI world
+creator). Before that, both earlier phases still want a person's judgement: play the
+Mines, the party and the crypt, and tune from that. Phase 3b (co-op) is still open and
+needs a decision about where its server runs.
+
 ## Milestone 7 — Phase 3, part 4: the party (2026-11-16)
 
 Phase 3 is complete with this milestone.

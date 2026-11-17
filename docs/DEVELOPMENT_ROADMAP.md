@@ -4,9 +4,10 @@ Phases 0, 1 and 2 are built and tested, and The Forgotten Mines is complete as t
 Phase 2 still needs one thing no test can give: a person playing it and judging whether the combat feels good. Its numbers are first guesses.
 The code lives at https://github.com/john-l-hansen/world-forge.
 Phase 3 is built and tested: attributes, classes, levels and experience, equipment and armour, consumables, spells and mana, and a party of up to four with rows, character switching and party AI. The party model is one body with a front and a back row (decided 2026-11-16; see the development log, milestone 7). A second adventure, the same mine for a party of four, can be chosen from the title screen.
-Next: a person plays both adventures, combat and the party are tuned from that, then a choice between Phase 3b (co-op) and Phase 4.
+Phase 4 is built and tested: one loader for every world, tilesets chosen by each region's environment, a second adventure (The Sunken Crypt) that shares nothing with the Mines but the engine, and world files opened from the player's computer (see the development log, milestone 8).
+Next: a person plays the Mines, the party and the crypt, and combat is tuned from that. Then Phase 5 (the AI world creator), with Phase 3b (co-op) still open.
 Two phases were added on 2026-11-15: Phase 3b (co-op play) and Phase 6b (dynamic world simulation).
-The world schema and world validation were brought forward from Phase 4, so that The Forgotten Mines loads from world data and is not hard-coded. The schema is at version 0.7.0 (rooms, doors, locks, secret doors, enemies with attack lists, poise and experience, encounters, bosses, objects, chests, pickups, weapons with light and heavy attacks, armour, keys, consumables, scrolls, treasure, spells, characters with class, level, attributes, equipment, row and known spells, bolt and healing spells, quests).
+The world schema and world validation were brought forward from Phase 4, so that The Forgotten Mines loads from world data and is not hard-coded. The schema is at version 0.8.0 (rooms, doors, locks, secret doors, enemies with attack lists, poise and experience, encounters, bosses, objects, chests, pickups, weapons with light and heavy attacks, armour, keys, consumables, scrolls, treasure, spells, characters with class, level, attributes, equipment, row and known spells, bolt and healing spells, main and side quests, two environments).
 1. Development philosophy
 Build incrementally.
 Every milestone must produce functioning software.
@@ -167,7 +168,7 @@ A player can drop out and rejoin without ending the session.
 The single-player game still runs with no server.
 Groundwork already in place
 See the co-op principles in ENGINE_PRINCIPLES.md: inputs are commands, the simulation is deterministic, session state is serializable, and every party member has a controller.
-6. Phase 4: World engine
+6. Phase 4: World engine (complete)
 Objectives
 Separate world definitions from the playable engine.
 Tasks
@@ -187,6 +188,17 @@ World data is validated.
 Room references resolve.
 Room connections work.
 Invalid worlds fail safely.
+Status of each task
+World schema: done. Version 0.8.0, with step-by-step migration from 0.1.0.
+Region definitions: done. A region names an environment, which chooses the tileset and ambience. One world can mix environments.
+Room definitions and room generation: done for rectangular rooms on one grid, on one level.
+Connection handling: done. Archways, doors, locked doors and secret doors; loops are allowed.
+Object placement: done. Torches, props, pickups and chests.
+Enemy placement and encounter definitions: done. Encounters place enemies; a boss has an introduction.
+World loading: done. One loader for bundled worlds and for files opened from the title screen.
+World validation: done. A world with faults is reported and never played.
+Proof: The Sunken Crypt, a second adventure in world data only, won by a scripted player by two different routes.
+Not done: more than one level, room shapes other than rectangles, outdoor places, and worlds that bring their own art.
 7. Phase 5: AI world creator
 Objectives
 Create adventures through conversation.
@@ -308,7 +320,7 @@ Large-scale asset generation.
 These belong to future development.
 Multiplayer was on this list until 2026-11-15. Co-op play is now Phase 3b. Other forms of multiplayer (competitive play, large shared worlds) remain out of scope.
 15. Immediate priority
-The immediate goal is for a person to play both adventures (Brannoc alone, and the party of four), tune combat and the party from that, and then choose between Phase 3b (co-op) and Phase 4.
+The immediate goal is for a person to play the three adventures (the Mines alone, the Mines with a party, and the Sunken Crypt) and tune combat and the party from that. After that comes Phase 5, the AI world creator, which will produce worlds for the loader built in Phase 4.
 Do not spend the initial development effort building the entire creator platform.
 Build a playable retro dungeon first.
 Then make it extensible.

@@ -18,7 +18,9 @@ function setup(seed = 3) {
   state.inventory.item_storm_scroll = 1;
   const goblin = state.enemies[0];
   const place = (x: number, y: number) => Object.assign(goblin, { x, y, prevX: x, prevY: y, ai: 'recover', aiEnd: 100000, alerted: true });
-  return { world, state, goblin, place, spell: world.def.spells[0] };
+  const spell = world.def.spells[0];
+  if (spell.shape !== 'bolt') throw new Error('expected a bolt spell');
+  return { world, state, goblin, place, spell };
 }
 
 describe('spell scrolls', () => {

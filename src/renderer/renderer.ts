@@ -297,8 +297,8 @@ export class DungeonRenderer {
         this.healFlash = 1;
         break;
       case 'spell.hit': {
-        const element = this.world.def.spells.find((sp) => sp.id === event.spellId)?.element ?? 'lightning';
-        this.boltMaterial.color.setHex(BOLT_COLOUR[element]);
+        const spell = this.world.def.spells.find((sp) => sp.id === event.spellId);
+        this.boltMaterial.color.setHex(BOLT_COLOUR[spell?.shape === 'bolt' ? spell.element : 'lightning']);
         this.bolt = { enemyId: event.enemyId, life: 0.3 };
         this.spark = 0.9;
         this.hitKick = 0.7;

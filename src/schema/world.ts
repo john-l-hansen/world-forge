@@ -13,10 +13,12 @@
  *          derived from them), and experience awarded by enemies
  *   0.5.0  armour items and seven equipment slots per character
  *   0.6.0  spells, and scrolls that cast them
+ *   0.7.0  parties of up to four with front and back rows, spells known by
+ *          characters, healing spells, and more weapon and portrait art
  */
 import { z } from 'zod';
 
-export const SCHEMA_VERSION = '0.6.0';
+export const SCHEMA_VERSION = '0.7.0';
 
 const id = z.string().regex(/^[a-z][a-z0-9_]*$/, 'ids are lower_snake_case');
 const cell = z.object({ x: z.number().int().min(1), y: z.number().int().min(1) });
@@ -220,7 +222,7 @@ export const ItemSchema = z.discriminatedUnion('category', [
     ...itemBase,
     category: z.literal('weapon'),
     weapon: z.object({ light: WeaponAttackSchema, heavy: WeaponAttackSchema }),
-    visualAssetId: z.enum(['short_sword']),
+    visualAssetId: z.enum(['short_sword', 'dagger', 'staff', 'mace']),
   }),
   z.object({
     ...itemBase,
@@ -271,6 +273,14 @@ export const CharacterSchema = z.object({
    * Left out, the class's usual starting attributes are used.
    */
   attributes: AttributesSchema.optional(),
+  /**
+   * Where the character stands in the party. The front row takes the blows
+   * that come from ahead and is the only row that can strike with a weapon.
+   * Left out, fighters, rogues and clerics stand in front and mages behind.
+   */
+  row: z.enum(['front', 'back']).optional(),
+  /** Spells the character knows and can cast with mana. */
+  spells: z.array(id).default([]),
   /** What the character starts out wearing and holding. Every slot is optional. */
   equipment: z
     .object({
@@ -283,28 +293,42 @@ export const CharacterSchema = z.object({
       accessory: id.optional(),
     })
     .default({}),
-  portraitAssetId: z.enum(['fighter']),
+  portraitAssetId: z.enum(['fighter', 'rogue', 'mage', 'cleric']),
 });
 
-export const SpellSchema = z.object({
+const spellBase = {
   id,
   name: z.string().min(1),
   description: z.string().default(''),
-  /** Chooses the look and sound of the effect. */
-  element: z.enum(['fire', 'ice', 'lightning']),
-  /** Names an engine-supported shape. A bolt strikes the first enemy straight ahead. */
-  shape: z.enum(['bolt']),
-  /** How many cells ahead it reaches. */
-  range: z.number().int().min(1).max(12),
-  damage: damageRange,
-  /** Compared with an enemy's poise, like a weapon's impact. */
-  impact: z.number().int().min(0).max(9).default(3),
   /** Ticks between starting the cast and the effect. */
   castTicks: ticks,
   recoveryTicks: ticks,
   /** What it costs a caster. A scroll ignores this. */
   manaCost: z.number().int().min(0).default(0),
-});
+};
+
+/** Each shape names an engine-supported effect. Never code. */
+export const SpellSchema = z.discriminatedUnion('shape', [
+  /** Strikes the first enemy straight ahead. */
+  z.object({
+    ...spellBase,
+    shape: z.literal('bolt'),
+    /** Chooses the look and sound of the effect. */
+    element: z.enum(['fire', 'ice', 'lightning']),
+    /** How many cells ahead it reaches. */
+    range: z.number().int().min(1).max(12),
+    damage: damageRange,
+    /** Compared with an enemy's poise, like a weapon's impact. */
+    impact: z.number().int().min(0).max(9).default(3),
+  }),
+  /** Restores health to the most badly hurt member of the party. */
+  z.object({
+    ...spellBase,
+    shape: z.literal('heal'),
+    element: z.literal('life').default('life'),
+    amount: z.number().int().min(1),
+  }),
+]);
 
 export const QuestObjectiveSchema = z.object({
   id,
@@ -362,5 +386,7 @@ export type EquipSlot = (typeof EQUIP_SLOTS)[number];
 export type CharacterDef = z.infer<typeof CharacterSchema>;
 export type QuestDef = z.infer<typeof QuestSchema>;
 export type SpellDef = z.infer<typeof SpellSchema>;
+export type BoltSpellDef = Extract<SpellDef, { shape: 'bolt' }>;
+export type HealSpellDef = Extract<SpellDef, { shape: 'heal' }>;
 export type QuestObjectiveDef = z.infer<typeof QuestObjectiveSchema>;
 export type Cell = z.infer<typeof cell>;

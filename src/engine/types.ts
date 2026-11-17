@@ -31,6 +31,10 @@ export const DODGE_STAMINA_COST = 10;
 /** The party cannot be hit for this long after a dodge begins. */
 export const DODGE_INVULNERABLE_TICKS = 12;
 export const DODGE_COOLDOWN_TICKS = 24;
+/** One point of mana returns every this many ticks. */
+export const MANA_REGEN_INTERVAL = 45;
+/** The party AI heals a companion whose health falls to this share or below. */
+export const AI_HEAL_THRESHOLD = 0.6;
 
 export type AttackKind = 'light' | 'heavy';
 
@@ -53,7 +57,15 @@ export type Command =
   | { type: 'use'; actor: string; itemId: string }
   /** Wear or wield an item from the pack. What it replaces goes back in. */
   | { type: 'equip'; actor: string; itemId: string }
-  | { type: 'unequip'; actor: string; slot: EquipSlot };
+  | { type: 'unequip'; actor: string; slot: EquipSlot }
+  /** Cast a spell the character knows, spending mana. */
+  | { type: 'cast'; actor: string; spellId: string }
+  /** The player takes this character over. Whoever they played before goes to the party AI. */
+  | { type: 'control'; actor: string }
+  /** Move a character to the front or back row. */
+  | { type: 'row'; actor: string; row: Row };
+
+export type Row = 'front' | 'back';
 
 export type Controller = 'local' | 'ai' | 'remote';
 
@@ -74,6 +86,14 @@ export interface PartyMember {
   attributes: Attributes;
   /** What is worn and held right now: slot to item ID. */
   equipment: Partial<Record<EquipSlot, string>>;
+  /** Front-row members take blows from ahead and can strike with weapons. */
+  row: Row;
+  /** Spell IDs this character can cast with mana. */
+  spells: string[];
+  mana: number;
+  maxMana: number;
+  /** The party AI leaves this character alone until this tick. */
+  aiReadyAt: number;
   hp: number;
   maxHp: number;
   stamina: number;
@@ -139,7 +159,7 @@ export interface QuestProgress {
 }
 
 export interface SessionState {
-  stateVersion: 6;
+  stateVersion: 7;
   worldId: string;
   tick: number;
   rng: number;
@@ -184,6 +204,12 @@ export type GameEvent =
   | { type: 'item.unequipped'; actor: string; itemId: string; slot: EquipSlot }
   | { type: 'item.used'; itemId: string; actor: string; healed: number }
   | { type: 'item.refused'; itemId: string; reason: 'full_health' | 'none_left' | 'not_usable' | 'no_target' }
+  | { type: 'party.control'; actor: string }
+  | { type: 'member.row'; actor: string; row: Row }
+  | { type: 'member.fell'; actor: string }
+  | { type: 'attack.out_of_reach'; actor: string }
+  | { type: 'spell.refused'; actor: string; spellId: string; reason: 'unknown' | 'no_mana' | 'no_target' }
+  | { type: 'spell.healed'; actor: string; spellId: string; target: string; healed: number }
   | { type: 'spell.cast'; actor: string; spellId: string; itemId?: string }
   | { type: 'spell.hit'; actor: string; spellId: string; enemyId: string; damage: number; killed: boolean }
   | { type: 'spell.fizzled'; actor: string; spellId: string }

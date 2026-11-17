@@ -21,7 +21,7 @@ export interface BeltItem {
   itemId: string;
   name: string;
   description: string;
-  icon: 'key' | 'flask' | 'coins' | 'short_sword' | 'shield' | 'jerkin' | 'helm' | 'scroll';
+  icon: 'key' | 'flask' | 'coins' | 'short_sword' | 'dagger' | 'staff' | 'mace' | 'shield' | 'jerkin' | 'helm' | 'scroll';
   count: number;
   /** What clicking it does, if anything. */
   action: 'drink' | 'read' | 'equip' | null;

@@ -12,10 +12,10 @@ import {
   roomAtCell,
   type CompiledWorld,
 } from '../world/compile';
-import type { EnemyAttackDef, EnemyDef, EquipSlot, ItemDef, SpellDef, WeaponAttackDef } from '../schema/world';
+import type { BoltSpellDef, EnemyAttackDef, EnemyDef, EquipSlot, HealSpellDef, ItemDef, SpellDef, WeaponAttackDef } from '../schema/world';
 import { CLASSES } from './classes';
 import { randomInt } from './rng';
-import { CRITICAL_MULTIPLIER, criticalChance, damageBonus, levelForExperience, maxHealth, maxStamina, experienceForLevel, modifier } from './stats';
+import { CRITICAL_MULTIPLIER, criticalChance, damageBonus, levelForExperience, maxHealth, maxMana, maxStamina, experienceForLevel, modifier } from './stats';
 import {
   BLOCK_DAMAGE_SHARE,
   BLOCK_STAMINA_COST,
@@ -37,6 +37,9 @@ import {
   type BumpReason,
   type Command,
   type EnemyState,
+  AI_HEAL_THRESHOLD,
+  MANA_REGEN_INTERVAL,
+  type AttackKind,
   type GameEvent,
   type MoveDir,
   type PartyMember,
@@ -51,20 +54,27 @@ const NEVER = -1000;
 
 export function createSession(world: CompiledWorld, seed = 1): SessionState {
   const def = world.def;
-  const members: PartyMember[] = def.settings.startingPartyIds.map((charId) => {
+  const members: PartyMember[] = def.settings.startingPartyIds.map((charId, index) => {
     const c = def.characters.find((ch) => ch.id === charId)!;
     const attributes = { ...(c.attributes ?? CLASSES[c.classId].defaults) };
     const health = maxHealth(c.classId, c.level, attributes);
     const stamina = maxStamina(c.classId, c.level, attributes);
     return {
       id: c.id,
-      controller: 'local',
+      // The player starts as the first character; the party AI plays the rest.
+      controller: index === 0 ? 'local' : 'ai',
       classId: c.classId,
       level: c.level,
       // A character who starts above level 1 starts with that level's experience.
       xp: experienceForLevel(c.level),
       attributes,
       equipment: { ...c.equipment },
+      row: c.row ?? CLASSES[c.classId].row,
+      spells: [...c.spells],
+      mana: maxMana(c.classId, c.level, attributes),
+      maxMana: maxMana(c.classId, c.level, attributes),
+      // Companions do not all act on the same tick.
+      aiReadyAt: 30 + index * 13,
       hp: health,
       maxHp: health,
       stamina,
@@ -108,7 +118,7 @@ export function createSession(world: CompiledWorld, seed = 1): SessionState {
 
   const startRoom = roomAtCell(world, world.start.x, world.start.y);
   const state: SessionState = {
-    stateVersion: 6,
+    stateVersion: 7,
     worldId: def.world.id,
     tick: 0,
     rng: seed | 0,
@@ -153,7 +163,7 @@ export function serializeSession(state: SessionState): string {
 
 export function deserializeSession(json: string): SessionState {
   const state = JSON.parse(json) as SessionState;
-  if (state.stateVersion !== 6) throw new Error(`Unsupported session version ${String(state.stateVersion)}`);
+  if (state.stateVersion !== 7) throw new Error(`Unsupported session version ${String(state.stateVersion)}`);
   return state;
 }
 
@@ -225,7 +235,23 @@ export function partyIsBusy(state: SessionState): boolean {
   if (state.tick < p.turnStart + TURN_TICKS) return true;
   // A bump counts as a very short action so a held key does not spam it.
   if (state.tick < p.bumpStart + BUMP_TICKS) return true;
-  return p.members.some((m) => m.action.kind !== 'idle' && state.tick < m.action.end);
+  // Only a character the player is driving holds the party in place. Companions
+  // played by the party AI swing and cast without stopping anyone moving.
+  return p.members.some((m) => m.controller !== 'ai' && m.hp > 0 && m.action.kind !== 'idle' && state.tick < m.action.end);
+}
+
+/** The character the player is driving: the first living one not played by the AI. */
+export function activeMember(state: SessionState): PartyMember {
+  const members = state.party.members;
+  return members.find((m) => m.controller !== 'ai' && m.hp > 0) ?? members.find((m) => m.hp > 0) ?? members[0];
+}
+
+/**
+ * Whether a character stands where blows from ahead land and weapons reach:
+ * in the front row, or in the back row once nobody in front is left standing.
+ */
+export function inFrontLine(state: SessionState, member: PartyMember): boolean {
+  return member.row === 'front' || !state.party.members.some((m) => m.row === 'front' && m.hp > 0);
 }
 
 /** True while the guard is actually up: held, and not in the middle of a swing. */
@@ -265,13 +291,23 @@ export function step(state: SessionState, world: CompiledWorld, commands: readon
   for (const command of commands) {
     const member = state.party.members.find((m) => m.id === command.actor && m.hp > 0);
     if (!member) continue;
-    if (command.type === 'block') {
-      // Raising or lowering the guard is never queued behind other actions.
-      if (command.held && !member.blocking) member.blockStart = state.tick + 1;
-      member.blocking = command.held;
+    if (command.type === 'control') {
+      takeControl(state, member, events);
+    } else if (command.type === 'row') {
+      if (member.row !== command.row) {
+        member.row = command.row;
+        events.push({ type: 'member.row', actor: member.id, row: command.row });
+      }
     } else if (command.type === 'equip' || command.type === 'unequip') {
       // Changing equipment is a pack action: it does not wait for a swing to finish.
       runCommand(state, world, command, events);
+    } else if (member.controller === 'ai') {
+      // Everything else must come from whoever is driving the character.
+      continue;
+    } else if (command.type === 'block') {
+      // Raising or lowering the guard is never queued behind other actions.
+      if (command.held && !member.blocking) member.blockStart = state.tick + 1;
+      member.blocking = command.held;
     } else {
       state.buffered = { command, tick: state.tick };
     }
@@ -293,6 +329,7 @@ export function step(state: SessionState, world: CompiledWorld, commands: readon
   }
 
   resolvePartyAttacks(state, world, events);
+  updatePartyAi(state, world, events);
   for (const enemy of state.enemies) updateEnemy(state, world, enemy, events);
   restoreStamina(state);
   trackQuests(state, world, events);
@@ -337,25 +374,18 @@ function runCommand(state: SessionState, world: CompiledWorld, command: Command,
     }
     case 'attack': {
       const member = p.members.find((m) => m.id === command.actor);
-      if (!member || member.hp <= 0) return;
-      const kind = command.kind ?? 'light';
-      const attack = weaponOf(world, member)[kind];
-      if (member.stamina < attack.staminaCost) {
-        events.push({ type: 'stamina.low', actor: member.id });
-        return;
-      }
-      spendStamina(state, member, attack.staminaCost);
-      member.action = {
-        kind: 'attack',
-        attack: kind,
-        start: state.tick,
-        hitTick: state.tick + attack.windupTicks,
-        end: state.tick + attack.windupTicks + attack.recoveryTicks,
-        resolved: false,
-      };
-      events.push({ type: 'attack.swing', actor: member.id, kind });
+      if (member && member.hp > 0) startAttack(state, world, member, command.kind ?? 'light', events);
       return;
     }
+    case 'cast': {
+      const member = p.members.find((m) => m.id === command.actor);
+      if (member && member.hp > 0) castKnownSpell(state, world, member, command.spellId, events);
+      return;
+    }
+    case 'block':
+    case 'control':
+    case 'row':
+      return; // handled as soon as they arrive, in step()
     case 'interact': {
       const fx = p.x + DIR_X[p.facing];
       const fy = p.y + DIR_Y[p.facing];
@@ -442,23 +472,15 @@ function runCommand(state: SessionState, world: CompiledWorld, command: Command,
       }
       const effect = item.effect;
       if (effect.type === 'cast') {
-        // A scroll casts its spell once, for no mana. It is kept if there is nothing to strike.
+        // A scroll casts its spell once, for no mana. It is kept if it would do nothing.
         const spell = world.def.spells.find((sp) => sp.id === effect.spellId)!;
-        if (!spellTarget(state, world, spell)) {
+        if (!spellHasTarget(state, world, spell)) {
           events.push({ type: 'item.refused', itemId: item.id, reason: 'no_target' });
           return;
         }
         state.inventory[item.id] -= 1;
         if (state.inventory[item.id] === 0) delete state.inventory[item.id];
-        member.action = {
-          kind: 'cast',
-          spellId: spell.id,
-          start: state.tick,
-          hitTick: state.tick + spell.castTicks,
-          end: state.tick + spell.castTicks + spell.recoveryTicks,
-          resolved: false,
-        };
-        events.push({ type: 'spell.cast', actor: member.id, spellId: spell.id, itemId: item.id });
+        startCast(state, member, spell, events, item.id);
         return;
       }
       if (member.hp >= member.maxHp) {
@@ -476,6 +498,88 @@ function runCommand(state: SessionState, world: CompiledWorld, command: Command,
 }
 
 const MOVE_OFFSET: Record<MoveDir, number> = { forward: 0, right: 1, back: 2, left: 3 };
+
+/** The player takes over a character; whoever they were driving goes to the party AI. */
+function takeControl(state: SessionState, member: PartyMember, events: GameEvent[]) {
+  if (member.controller !== 'ai') return;
+  for (const other of state.party.members) {
+    if (other.controller === 'local') {
+      other.controller = 'ai';
+      other.blocking = false;
+      other.aiReadyAt = state.tick + CLASSES[other.classId].aiPace;
+    }
+  }
+  member.controller = 'local';
+  // Anything queued was meant for the previous character.
+  state.buffered = null;
+  events.push({ type: 'party.control', actor: member.id });
+}
+
+/** Begin a weapon swing. False if the character is out of reach or too tired. */
+function startAttack(state: SessionState, world: CompiledWorld, member: PartyMember, kind: AttackKind, events: GameEvent[]): boolean {
+  if (!inFrontLine(state, member)) {
+    events.push({ type: 'attack.out_of_reach', actor: member.id });
+    return false;
+  }
+  const attack = weaponOf(world, member)[kind];
+  if (member.stamina < attack.staminaCost) {
+    events.push({ type: 'stamina.low', actor: member.id });
+    return false;
+  }
+  spendStamina(state, member, attack.staminaCost);
+  member.action = {
+    kind: 'attack',
+    attack: kind,
+    start: state.tick,
+    hitTick: state.tick + attack.windupTicks,
+    end: state.tick + attack.windupTicks + attack.recoveryTicks,
+    resolved: false,
+  };
+  events.push({ type: 'attack.swing', actor: member.id, kind });
+  return true;
+}
+
+/** The living member with the least health left, as a share, who is not at full health. */
+function mostHurt(state: SessionState): PartyMember | null {
+  let worst: PartyMember | null = null;
+  for (const m of state.party.members) {
+    if (m.hp <= 0 || m.hp >= m.maxHp) continue;
+    if (!worst || m.hp / m.maxHp < worst.hp / worst.maxHp) worst = m;
+  }
+  return worst;
+}
+
+/** Would casting this spell right now do anything? */
+export function spellHasTarget(state: SessionState, world: CompiledWorld, spell: SpellDef): boolean {
+  return spell.shape === 'bolt' ? spellTarget(state, world, spell) !== null : mostHurt(state) !== null;
+}
+
+function startCast(state: SessionState, member: PartyMember, spell: SpellDef, events: GameEvent[], itemId?: string) {
+  member.action = {
+    kind: 'cast',
+    spellId: spell.id,
+    start: state.tick,
+    hitTick: state.tick + spell.castTicks,
+    end: state.tick + spell.castTicks + spell.recoveryTicks,
+    resolved: false,
+  };
+  events.push(itemId ? { type: 'spell.cast', actor: member.id, spellId: spell.id, itemId } : { type: 'spell.cast', actor: member.id, spellId: spell.id });
+}
+
+/** Cast a spell the character knows, for mana. False if it could not be cast. */
+function castKnownSpell(state: SessionState, world: CompiledWorld, member: PartyMember, spellId: string, events: GameEvent[]): boolean {
+  const spell = member.spells.includes(spellId) ? world.def.spells.find((sp) => sp.id === spellId) : undefined;
+  const refuse = (reason: 'unknown' | 'no_mana' | 'no_target') => {
+    events.push({ type: 'spell.refused', actor: member.id, spellId, reason });
+    return false;
+  };
+  if (!spell) return refuse('unknown');
+  if (member.mana < spell.manaCost) return refuse('no_mana');
+  if (!spellHasTarget(state, world, spell)) return refuse('no_target');
+  member.mana -= spell.manaCost;
+  startCast(state, member, spell, events);
+  return true;
+}
 
 /** Step the party one cell in an absolute direction. False if something is in the way. */
 function moveParty(state: SessionState, world: CompiledWorld, dir: number, ticks: number, events: GameEvent[]): boolean {
@@ -525,6 +629,10 @@ function restoreStamina(state: SessionState) {
     if (state.tick < member.staminaRegenFrom || member.blocking || member.action.kind !== 'idle') continue;
     member.stamina += 1;
   }
+  if (state.tick % MANA_REGEN_INTERVAL !== 0) return;
+  for (const member of state.party.members) {
+    if (member.hp > 0 && member.mana < member.maxMana && member.action.kind === 'idle') member.mana += 1;
+  }
 }
 
 function gainItem(state: SessionState, world: CompiledWorld, itemId: string, from: 'pickup' | 'chest', events: GameEvent[]) {
@@ -532,8 +640,11 @@ function gainItem(state: SessionState, world: CompiledWorld, itemId: string, fro
   events.push({ type: 'item.gained', itemId, from });
   // Armour for an empty slot is put straight on.
   const item = world.def.items.find((it) => it.id === itemId);
-  const wearer = state.party.members.find((m) => m.hp > 0);
-  if (item?.category === 'armour' && wearer && !wearer.equipment[item.slot]) equipItem(state, wearer, item, true, events);
+  if (item?.category !== 'armour') return;
+  const living = state.party.members.filter((m) => m.hp > 0);
+  const active = activeMember(state);
+  const wearer = [active, ...living.filter((m) => m !== active)].find((m) => m.hp > 0 && !m.equipment[item.slot]);
+  if (wearer) equipItem(state, wearer, item, true, events);
 }
 
 /** The slot an item goes in, or null if it cannot be worn or wielded. */
@@ -597,7 +708,9 @@ function resolvePartyAttacks(state: SessionState, world: CompiledWorld, events: 
     if (action.kind === 'cast') {
       if (!action.resolved && state.tick >= action.hitTick) {
         action.resolved = true;
-        resolveSpell(state, world, member, world.def.spells.find((sp) => sp.id === action.spellId)!, events);
+        const spell = world.def.spells.find((sp) => sp.id === action.spellId)!;
+        if (spell.shape === 'bolt') resolveSpell(state, world, member, spell, events);
+        else resolveHeal(state, member, spell, events);
       }
       if (state.tick >= action.end) {
         member.action = { kind: 'idle' };
@@ -616,14 +729,17 @@ function resolvePartyAttacks(state: SessionState, world: CompiledWorld, events: 
         const def = enemyDef(world, enemy);
         const rolled = randomInt(state, attack.damage.min, attack.damage.max) + damageBonus(member.attributes);
         const critical = randomInt(state, 1, 100) <= criticalChance(member.attributes);
-        const damage = Math.max(1, Math.round(rolled * (critical ? CRITICAL_MULTIPLIER : 1)) - def.defence);
+        // Some classes hit harder when the enemy is reeling or recovering.
+        const opening = enemy.ai === 'stagger' || enemy.ai === 'recover' ? CLASSES[member.classId].opportunist : 1;
+        const damage = Math.max(1, Math.round(rolled * (critical ? CRITICAL_MULTIPLIER : 1) * opening) - def.defence);
         const heavy = attack.impact >= 3;
         enemy.hp = Math.max(0, enemy.hp - damage);
         enemy.lastHitTick = state.tick;
         if (!enemy.alerted) alertEnemy(state, world, enemy, events);
         const killed = enemy.hp === 0;
         events.push({ type: 'attack.hit', actor: member.id, enemyId: enemy.id, damage, killed, kind: action.attack, critical });
-        state.hitStop = heavy ? HIT_STOP_TICKS + 3 : HIT_STOP_TICKS;
+        // The world only holds its breath for the player's own blows.
+        if (member.controller !== 'ai') state.hitStop = heavy ? HIT_STOP_TICKS + 3 : HIT_STOP_TICKS;
         const staggerTicks = def.staggerTicks * (heavy ? 2 : 1);
         if (killed) {
           killEnemy(state, world, enemy, events);
@@ -657,7 +773,7 @@ function resolvePartyAttacks(state: SessionState, world: CompiledWorld, events: 
 }
 
 /** The first living enemy straight ahead within a spell's reach, if the way is clear. */
-export function spellTarget(state: SessionState, world: CompiledWorld, spell: SpellDef): EnemyState | null {
+export function spellTarget(state: SessionState, world: CompiledWorld, spell: BoltSpellDef): EnemyState | null {
   const p = state.party;
   let x = p.x;
   let y = p.y;
@@ -671,7 +787,7 @@ export function spellTarget(state: SessionState, world: CompiledWorld, spell: Sp
   return null;
 }
 
-function resolveSpell(state: SessionState, world: CompiledWorld, member: PartyMember, spell: SpellDef, events: GameEvent[]) {
+function resolveSpell(state: SessionState, world: CompiledWorld, member: PartyMember, spell: BoltSpellDef, events: GameEvent[]) {
   const enemy = spellTarget(state, world, spell);
   if (!enemy) {
     // The target moved out of the line while the words were being spoken.
@@ -686,7 +802,7 @@ function resolveSpell(state: SessionState, world: CompiledWorld, member: PartyMe
   if (!enemy.alerted) alertEnemy(state, world, enemy, events);
   const killed = enemy.hp === 0;
   events.push({ type: 'spell.hit', actor: member.id, spellId: spell.id, enemyId: enemy.id, damage, killed });
-  state.hitStop = HIT_STOP_TICKS + 2;
+  if (member.controller !== 'ai') state.hitStop = HIT_STOP_TICKS + 2;
   if (killed) killEnemy(state, world, enemy, events);
   else if (enemy.ai === 'telegraph') {
     if (spell.impact >= def.poise) {
@@ -695,6 +811,68 @@ function resolveSpell(state: SessionState, world: CompiledWorld, member: PartyMe
     }
   } else if (enemy.ai === 'idle' || enemy.ai === 'move') setAi(state, enemy, 'stagger', def.staggerTicks * 2);
   else if (enemy.ai === 'recover' || enemy.ai === 'stagger') enemy.aiEnd = Math.max(enemy.aiEnd, state.tick + def.staggerTicks * 2);
+}
+
+function resolveHeal(state: SessionState, member: PartyMember, spell: HealSpellDef, events: GameEvent[]) {
+  const target = mostHurt(state);
+  if (!target) {
+    events.push({ type: 'spell.fizzled', actor: member.id, spellId: spell.id });
+    return;
+  }
+  // Wisdom deepens a healing.
+  const healed = Math.min(spell.amount + Math.max(0, modifier(member.attributes.wisdom)), target.maxHp - target.hp);
+  target.hp += healed;
+  events.push({ type: 'spell.healed', actor: member.id, spellId: spell.id, target: target.id, healed });
+}
+
+// ---------------------------------------------------------------------------
+// Party AI: simple, predictable rules for companions the player is not driving
+// ---------------------------------------------------------------------------
+
+function updatePartyAi(state: SessionState, world: CompiledWorld, events: GameEvent[]) {
+  const p = state.party;
+  for (const member of p.members) {
+    if (member.controller !== 'ai' || member.hp <= 0 || member.action.kind !== 'idle' || state.tick < member.aiReadyAt) continue;
+    const cls = CLASSES[member.classId];
+    let acted = false;
+    const quiet: GameEvent[] = []; // refusals a companion triggers are not worth reporting
+
+    // 1. Heal a badly hurt companion, if this character can.
+    const hurt = mostHurt(state);
+    if (hurt && hurt.hp / hurt.maxHp <= AI_HEAL_THRESHOLD) {
+      const heal = knownSpell(world, member, 'heal');
+      if (heal && member.mana >= heal.manaCost) acted = castKnownSpell(state, world, member, heal.id, events);
+    }
+
+    // 2. Strike with a bolt spell at whatever is ahead and aware of the party.
+    if (!acted) {
+      const bolt = knownSpell(world, member, 'bolt');
+      if (bolt && bolt.shape === 'bolt' && member.mana >= bolt.manaCost) {
+        const target = spellTarget(state, world, bolt);
+        if (target?.alerted) acted = castKnownSpell(state, world, member, bolt.id, events);
+      }
+    }
+
+    // 3. Otherwise fight with a weapon, from the front line.
+    if (!acted && inFrontLine(state, member)) {
+      const enemy = enemyAt(state, p.x + DIR_X[p.facing], p.y + DIR_Y[p.facing]);
+      // An opportunist waits for an opening; everyone else just engages.
+      const opening = enemy && (enemy.ai === 'stagger' || enemy.ai === 'recover' || enemy.ai === 'attack');
+      if (enemy && (cls.opportunist === 1 || opening)) acted = startAttack(state, world, member, 'light', quiet);
+      if (acted) events.push(...quiet);
+    }
+
+    // After acting, rest for the class's pace; otherwise look again shortly.
+    member.aiReadyAt = state.tick + (acted ? cls.aiPace : 6);
+  }
+}
+
+function knownSpell(world: CompiledWorld, member: PartyMember, shape: SpellDef['shape']): SpellDef | undefined {
+  for (const spellId of member.spells) {
+    const spell = world.def.spells.find((sp) => sp.id === spellId);
+    if (spell?.shape === shape) return spell;
+  }
+  return undefined;
 }
 
 function reveal(state: SessionState, world: CompiledWorld) {
@@ -747,6 +925,9 @@ function awardExperience(state: SessionState, amount: number, enemyId: string, e
       member.hp += healthGained;
       member.maxStamina = stamina;
       member.stamina += staminaGained;
+      const mana = maxMana(member.classId, member.level, member.attributes);
+      member.mana += mana - member.maxMana;
+      member.maxMana = mana;
       events.push({ type: 'level.up', actor: member.id, level: member.level, healthGained, staminaGained });
     }
   }
@@ -871,43 +1052,81 @@ function resolveEnemyAttack(state: SessionState, world: CompiledWorld, enemy: En
     events.push({ type: 'enemy.attack.dodged', enemyId: enemy.id });
     return;
   }
-  const target = p.members.find((m) => m.hp > 0);
-  if (!target) return;
-
-  // Armour takes its defence off the blow before anything else, down to 1.
-  const rolled = Math.max(1, randomInt(state, attack.damage.min, attack.damage.max) - defenceOf(world, target));
+  const targets = attackTargets(state, enemy, attack);
   const facingEnemy = p.x + DIR_X[p.facing] === enemy.x && p.y + DIR_Y[p.facing] === enemy.y;
-  let damage = rolled;
 
-  if (attack.blockable && facingEnemy && isGuarding(target)) {
-    if (state.tick - target.blockStart <= PARRY_WINDOW_TICKS) {
-      // Guard raised at the last moment: the blow is turned aside.
-      setAi(state, enemy, 'stagger', PARRY_STAGGER_TICKS);
-      state.hitStop = HIT_STOP_TICKS + 2;
-      events.push({ type: 'attack.parried', enemyId: enemy.id, actor: target.id });
-      return;
-    }
-    if (target.stamina >= BLOCK_STAMINA_COST) {
-      damage = Math.max(1, Math.ceil(rolled * BLOCK_DAMAGE_SHARE));
-      spendStamina(state, target, BLOCK_STAMINA_COST);
-      target.hp = Math.max(0, target.hp - damage);
-      events.push({ type: 'attack.blocked', enemyId: enemy.id, target: target.id, damage });
+  for (const target of targets) {
+    // Armour takes its defence off the blow before anything else, down to 1.
+    const rolled = Math.max(1, randomInt(state, attack.damage.min, attack.damage.max) - defenceOf(world, target));
+    let damage = rolled;
+
+    if (attack.blockable && facingEnemy && isGuarding(target)) {
+      if (state.tick - target.blockStart <= PARRY_WINDOW_TICKS) {
+        // Guard raised at the last moment: the blow is turned aside for everyone.
+        setAi(state, enemy, 'stagger', PARRY_STAGGER_TICKS);
+        state.hitStop = HIT_STOP_TICKS + 2;
+        events.push({ type: 'attack.parried', enemyId: enemy.id, actor: target.id });
+        return;
+      }
+      if (target.stamina >= BLOCK_STAMINA_COST) {
+        damage = Math.max(1, Math.ceil(rolled * BLOCK_DAMAGE_SHARE));
+        spendStamina(state, target, BLOCK_STAMINA_COST);
+        target.hp = Math.max(0, target.hp - damage);
+        events.push({ type: 'attack.blocked', enemyId: enemy.id, target: target.id, damage });
+      } else {
+        // Too tired to hold the guard: it is knocked aside.
+        damage = Math.max(1, Math.ceil(rolled * GUARD_BREAK_DAMAGE_SHARE));
+        spendStamina(state, target, target.stamina);
+        target.blocking = false;
+        target.hp = Math.max(0, target.hp - damage);
+        events.push({ type: 'guard.broken', enemyId: enemy.id, target: target.id, damage });
+      }
     } else {
-      // Too tired to hold the guard: it is knocked aside.
-      damage = Math.max(1, Math.ceil(rolled * GUARD_BREAK_DAMAGE_SHARE));
-      spendStamina(state, target, target.stamina);
-      target.blocking = false;
       target.hp = Math.max(0, target.hp - damage);
-      events.push({ type: 'guard.broken', enemyId: enemy.id, target: target.id, damage });
+      events.push({ type: 'enemy.attack.hit', enemyId: enemy.id, target: target.id, damage, attackId: attack.id });
     }
-  } else {
-    target.hp = Math.max(0, target.hp - damage);
-    events.push({ type: 'enemy.attack.hit', enemyId: enemy.id, target: target.id, damage, attackId: attack.id });
+    if (target.hp === 0) memberFell(state, target, events);
   }
 
   if (!p.members.some((m) => m.hp > 0)) {
     state.status = 'dead';
     events.push({ type: 'party.died' });
+  }
+}
+
+/**
+ * Who a blow lands on. From ahead it falls on the front row and from behind
+ * on the back row; from the side it can find anyone. An ordinary blow picks
+ * one of them; a sweep catches the whole row.
+ */
+function attackTargets(state: SessionState, enemy: EnemyState, attack: EnemyAttackDef): PartyMember[] {
+  const p = state.party;
+  const living = p.members.filter((m) => m.hp > 0);
+  const ahead = p.x + DIR_X[p.facing] === enemy.x && p.y + DIR_Y[p.facing] === enemy.y;
+  const behind = p.x - DIR_X[p.facing] === enemy.x && p.y - DIR_Y[p.facing] === enemy.y;
+  let exposed = living;
+  if (ahead || behind) {
+    const row = ahead ? 'front' : 'back';
+    const inRow = living.filter((m) => m.row === row);
+    if (inRow.length) exposed = inRow;
+  }
+  if (attack.pattern === 'sweep' || exposed.length <= 1) return exposed;
+  return [exposed[randomInt(state, 0, exposed.length - 1)]];
+}
+
+/** A character drops. If the player was driving them, the next one standing is taken over. */
+function memberFell(state: SessionState, member: PartyMember, events: GameEvent[]) {
+  member.blocking = false;
+  member.action = { kind: 'idle' };
+  const survivors = state.party.members.filter((m) => m.hp > 0);
+  if (survivors.length === 0) return; // the party is dead; party.died says so
+  events.push({ type: 'member.fell', actor: member.id });
+  if (member.controller !== 'ai') {
+    member.controller = 'ai';
+    const next = survivors[0];
+    next.controller = 'local';
+    state.buffered = null;
+    events.push({ type: 'party.control', actor: next.id });
   }
 }
 

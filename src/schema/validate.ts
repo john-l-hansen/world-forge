@@ -101,6 +101,10 @@ export function migrateWorld(input: unknown): unknown {
     // 0.6.0 added spells and scrolls. Nothing existing changes.
     data = { ...data, schemaVersion: '0.6.0', spells: data.spells ?? [] };
   }
+  if (data.schemaVersion === '0.6.0') {
+    // 0.7.0 added party rows, known spells and healing spells. Nothing existing changes.
+    data = { ...data, schemaVersion: '0.7.0' };
+  }
   return data;
 }
 
@@ -360,6 +364,9 @@ export function validateWorld(input: unknown): ValidationResult {
 
   // ---- Characters, items and start position ---------------------------------
   for (const c of world.characters) {
+    for (const spellId of c.spells) {
+      if (!world.spells.some((sp) => sp.id === spellId)) add('missing_reference', `Character "${c.id}" knows missing spell "${spellId}".`);
+    }
     for (const slot of EQUIP_SLOTS) {
       const itemId = c.equipment[slot];
       if (!itemId) continue;
@@ -372,6 +379,8 @@ export function validateWorld(input: unknown): ValidationResult {
   for (const pid of world.settings.startingPartyIds) {
     if (!characters.has(pid)) add('missing_reference', `Starting party lists missing character "${pid}".`);
   }
+  if (new Set(world.settings.startingPartyIds).size !== world.settings.startingPartyIds.length)
+    add('duplicate_id', 'The starting party lists the same character more than once.');
   const startRoom = rooms.get(world.settings.startRoomId);
   if (!startRoom) {
     add('missing_reference', `Start room "${world.settings.startRoomId}" does not exist.`);

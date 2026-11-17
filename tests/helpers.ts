@@ -1,4 +1,5 @@
 import minesJson from '../src/worlds/forgotten-mines.json';
+import { minesForParty } from '../src/worlds';
 import { validateWorld } from '../src/schema/validate';
 import { DIR_X, DIR_Y, compileWorld, type CompiledWorld } from '../src/world/compile';
 import { enemyAt, isOpenCell, partyIsBusy, step } from '../src/engine/sim';
@@ -8,6 +9,13 @@ export const minesData = (): any => structuredClone(minesJson);
 
 export function loadMines(): CompiledWorld {
   const result = validateWorld(minesData());
+  if (!result.ok) throw new Error(result.issues.map((i) => i.message).join('\n'));
+  return compileWorld(result.world);
+}
+
+/** The party-of-four version of the Mines, validated and compiled. */
+export function loadPartyMines(): CompiledWorld {
+  const result = validateWorld(minesForParty(minesData()));
   if (!result.ok) throw new Error(result.issues.map((i) => i.message).join('\n'));
   return compileWorld(result.world);
 }

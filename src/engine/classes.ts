@@ -22,6 +22,12 @@ export interface ClassDef {
   primary: Attribute;
   /** Typical starting attributes, used when a world does not give its own. */
   defaults: Attributes;
+  /** Where the class stands unless a world says otherwise. */
+  row: 'front' | 'back';
+  /** Extra damage, as a multiplier, against an enemy that is reeling or recovering. */
+  opportunist: number;
+  /** Ticks a companion of this class waits between actions when the party AI plays it. */
+  aiPace: number;
 }
 
 export const CLASSES: Record<ClassId, ClassDef> = {
@@ -37,6 +43,9 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     manaPerLevel: 0,
     primary: 'strength',
     defaults: { strength: 14, dexterity: 12, constitution: 14, intelligence: 9, wisdom: 10 },
+    row: 'front',
+    opportunist: 1,
+    aiPace: 55,
   },
   rogue: {
     id: 'rogue',
@@ -50,6 +59,9 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     manaPerLevel: 0,
     primary: 'dexterity',
     defaults: { strength: 11, dexterity: 16, constitution: 11, intelligence: 12, wisdom: 10 },
+    row: 'front',
+    opportunist: 1.5,
+    aiPace: 40,
   },
   mage: {
     id: 'mage',
@@ -63,6 +75,9 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     manaPerLevel: 5,
     primary: 'intelligence',
     defaults: { strength: 8, dexterity: 12, constitution: 10, intelligence: 16, wisdom: 13 },
+    row: 'back',
+    opportunist: 1,
+    aiPace: 75,
   },
   cleric: {
     id: 'cleric',
@@ -76,5 +91,8 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     manaPerLevel: 4,
     primary: 'wisdom',
     defaults: { strength: 12, dexterity: 10, constitution: 13, intelligence: 10, wisdom: 15 },
+    row: 'front',
+    opportunist: 1,
+    aiPace: 60,
   },
 };

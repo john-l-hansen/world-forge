@@ -155,6 +155,16 @@ function helmIcon(): Pix {
   return p;
 }
 
+function staffIcon(): Pix {
+  const p = new Pix(12, 12);
+  p.line(2, 10, 9, 3, 0x7b5629, 1);
+  p.line(3, 10, 10, 3, 0x473016, 1);
+  p.ellipse(9.5, 2.5, 1.6, 1.6, 0x6f8fd0);
+  p.set(9, 2, 0xe8f2f6);
+  p.outline(INK);
+  return p;
+}
+
 function scrollIcon(): Pix {
   const p = new Pix(12, 12);
   p.rect(2, 2, 8, 8, 0xd8cfb4);
@@ -167,7 +177,7 @@ function scrollIcon(): Pix {
   return p;
 }
 
-export type ItemIcon = 'key' | 'flask' | 'coins' | 'short_sword' | 'shield' | 'jerkin' | 'helm' | 'scroll';
+export type ItemIcon = 'key' | 'flask' | 'coins' | 'short_sword' | 'dagger' | 'staff' | 'mace' | 'shield' | 'jerkin' | 'helm' | 'scroll';
 
 export interface UiArt {
   panel: string;
@@ -191,6 +201,9 @@ export function uiArt(): UiArt {
       flask: pixToDataUrl(flaskIcon()),
       coins: pixToDataUrl(coinsIcon()),
       short_sword: pixToDataUrl(swordIcon()),
+      dagger: pixToDataUrl(swordIcon()),
+      staff: pixToDataUrl(staffIcon()),
+      mace: pixToDataUrl(staffIcon()),
       shield: pixToDataUrl(shieldIcon()),
       jerkin: pixToDataUrl(jerkinIcon()),
       helm: pixToDataUrl(helmIcon()),

@@ -3,7 +3,7 @@
  * simulation to the renderer, audio and interface. The simulation advances
  * in fixed 60 Hz ticks no matter how fast the screen refreshes.
  */
-import { AudioEngine } from '../audio/audio';
+import { AudioEngine, type Voice } from '../audio/audio';
 import { activeMember, createSession, defenceOf, enemyAt, hasLineOfSight, isGuarding, partyIsBusy, step } from '../engine/sim';
 import { EQUIP_SLOTS, type EquipSlot } from '../schema/world';
 import { TICKS_PER_SECOND, type Command, type GameEvent, type SessionState } from '../engine/types';
@@ -50,10 +50,19 @@ export class Game {
     this.raf = requestAnimationFrame(this.frame);
   }
 
+  /** Whether an enemy sounds like a living thing or like dry bone. */
+  private voiceOf(enemyId: string): Voice {
+    const defId = this.state.enemies.find((e) => e.id === enemyId)?.defId;
+    const visual = this.world.def.enemies.find((d) => d.id === defId)?.visualAssetId;
+    return visual === 'skeleton' || visual === 'warden' ? 'bones' : 'beast';
+  }
+
   /** Leave the title screen. Called from a key press or click, so audio may start. */
   begin() {
     if (useHud.getState().screen !== 'title') return;
-    this.audio.start();
+    // The place the party starts in sets the ambience.
+    const { x, y } = this.world.start;
+    this.audio.start(this.world.environments[this.world.envAt[y * this.world.width + x]]);
     this.input.clear();
     useHud.setState({ screen: 'playing' });
     this.announceStart();
@@ -264,7 +273,7 @@ export class Game {
   private handle(event: GameEvent) {
     const driven = this.driven.id;
     this.renderer.onEvent(event, driven);
-    this.audio.onEvent(event, driven);
+    this.audio.onEvent(event, driven, 'enemyId' in event ? this.voiceOf(event.enemyId) : undefined);
     const line = describeEvent(event, this.state, this.world);
     // Walking into something repeatedly should not flood the log.
     const nagging = event.type === 'party.bumped' || event.type === 'stamina.low';

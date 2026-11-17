@@ -554,7 +554,7 @@ export interface TitleChoice {
   blurb: string;
 }
 
-export function TitleOverlay({ title, choices, current, onChoose }: { title: string; choices: TitleChoice[]; current: string; onChoose: (key: string) => void }) {
+export function TitleOverlay({ title, choices, current, onChoose, onOpenFile }: { title: string; choices: TitleChoice[]; current: string; onChoose: (key: string) => void; onOpenFile: () => void }) {
   return (
     <div className="overlay title">
       <h2>World Forge presents</h2>
@@ -574,6 +574,17 @@ export function TitleOverlay({ title, choices, current, onChoose }: { title: str
               <kbd>{i + 1}</kbd> {choice.label}
             </button>
           ))}
+          <button
+            className="btn"
+            title="Open a world file (.json) from this computer. It is checked before it is played."
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenFile();
+            }}
+          >
+            <kbd>O</kbd> Open file
+          </button>
         </div>
       )}
       <dl className="keys wide">
@@ -581,14 +592,14 @@ export function TitleOverlay({ title, choices, current, onChoose }: { title: str
         <dd>Step</dd>
         <dt>Q E</dt>
         <dd>Turn</dd>
-        <dt>J</dt>
+        <dt>J / Click</dt>
         <dd>Attack</dd>
-        <dt>K</dt>
+        <dt>K / Shift-click</dt>
         <dd>Heavy attack</dd>
-        <dt>L</dt>
-        <dd>Block, parry</dd>
         <dt>Space</dt>
         <dd>Dodge</dd>
+        <dt>L / Right-click</dt>
+        <dd>Block, parry</dd>
         <dt>F / Enter</dt>
         <dd>Open, search</dd>
         <dt>H / R</dt>
@@ -602,8 +613,7 @@ export function TitleOverlay({ title, choices, current, onChoose }: { title: str
         <dt>1 - 4</dt>
         <dd>Cast a spell</dd>
       </dl>
-      <h2>Mouse: click to attack, Shift-click for a heavy blow, right-click to block</h2>
-      <div className="blink">{choices.length > 1 ? 'Press 1 or 2 to choose - any other key to enter' : 'Press any key or click to enter'}</div>
+      <div className="blink">{choices.length > 1 ? `Press 1 to ${choices.length} to choose - any other key to enter` : 'Press any key or click to enter'}</div>
     </div>
   );
 }

@@ -3,6 +3,7 @@
  * goes through the same validation before the engine sees it.
  */
 import minesJson from './forgotten-mines.json';
+import cryptJson from './sunken-crypt.json';
 
 export interface WorldEntry {
   key: string;
@@ -88,6 +89,7 @@ export function minesForParty(base: unknown): unknown {
 }
 
 export const WORLDS: WorldEntry[] = [
-  { key: 'solo', label: 'Brannoc alone', blurb: 'One fighter. The adventure as first built.', data: minesJson },
-  { key: 'party', label: 'A party of four', blurb: 'Fighter, rogue, mage and cleric against a stronger mine.', data: minesForParty(minesJson) },
+  { key: 'solo', label: 'Mines', blurb: 'The Forgotten Mines with Brannoc alone. The adventure as first built.', data: minesJson },
+  { key: 'party', label: 'Mines: party', blurb: 'The Forgotten Mines with a party of four: fighter, rogue, mage and cleric against a stronger mine.', data: minesForParty(minesJson) },
+  { key: 'crypt', label: 'Crypt', blurb: 'The Sunken Crypt. A different place: a rogue and a cleric, the dead, and two ways in.', data: cryptJson },
 ];

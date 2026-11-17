@@ -1,0 +1,1006 @@
+{
+  "schemaVersion": "0.8.0",
+  "world": {
+    "id": "world_sunken_crypt",
+    "name": "The Sunken Crypt",
+    "description": "Below the old workings lies a burial place older than the mine. Something in it still keeps watch.",
+    "theme": "dark_fantasy",
+    "difficulty": "classic",
+    "author": "World Forge"
+  },
+  "settings": {
+    "movementMode": "grid",
+    "startRoomId": "room_stair",
+    "startCell": {
+      "x": 7,
+      "y": 15
+    },
+    "startFacing": "north",
+    "startingPartyIds": [
+      "char_wren",
+      "char_hale"
+    ],
+    "startingQuestIds": [
+      "quest_ashen_chalice",
+      "quest_embalmers"
+    ]
+  },
+  "regions": [
+    {
+      "id": "region_adit",
+      "name": "The Old Workings",
+      "description": "The last of the mine before the stone changes.",
+      "environment": "mine",
+      "roomIds": [
+        "room_stair"
+      ]
+    },
+    {
+      "id": "region_crypt",
+      "name": "The Sunken Crypt",
+      "description": "Dressed stone, burial niches and bronze doors.",
+      "environment": "crypt",
+      "roomIds": [
+        "room_hall",
+        "room_cell",
+        "room_ossuary",
+        "room_chapel",
+        "room_vault",
+        "room_reliquary"
+      ]
+    }
+  ],
+  "rooms": [
+    {
+      "id": "room_stair",
+      "regionId": "region_adit",
+      "name": "The Broken Adit",
+      "type": "entrance",
+      "description": "The miners broke through here, and wished they had not.",
+      "layout": {
+        "x": 6,
+        "y": 14,
+        "width": 3,
+        "height": 2
+      },
+      "connections": [
+        {
+          "targetRoomId": "room_hall",
+          "doorId": "door_stair_hall"
+        }
+      ],
+      "encounterIds": [],
+      "objectIds": [
+        "object_torch_stair",
+        "object_stair_rubble"
+      ]
+    },
+    {
+      "id": "room_hall",
+      "regionId": "region_crypt",
+      "name": "Hall of the Dead",
+      "type": "corridor",
+      "description": "Cut stone, cold as a held breath. Doors on every side.",
+      "layout": {
+        "x": 5,
+        "y": 9,
+        "width": 5,
+        "height": 4
+      },
+      "connections": [
+        {
+          "targetRoomId": "room_stair",
+          "doorId": "door_stair_hall"
+        },
+        {
+          "targetRoomId": "room_cell",
+          "doorId": "door_hall_cell"
+        },
+        {
+          "targetRoomId": "room_ossuary",
+          "doorId": "door_hall_ossuary"
+        },
+        {
+          "targetRoomId": "room_vault",
+          "doorId": "door_hall_vault"
+        }
+      ],
+      "encounterIds": [],
+      "objectIds": [
+        "object_torch_hall_w",
+        "object_torch_hall_e",
+        "object_torch_hall_n",
+        "object_hall_tomb_w",
+        "object_hall_tomb_e"
+      ]
+    },
+    {
+      "id": "room_cell",
+      "regionId": "region_crypt",
+      "name": "Embalmers' Cell",
+      "type": "treasure",
+      "description": "Shelves of dust where the jars once stood.",
+      "layout": {
+        "x": 1,
+        "y": 9,
+        "width": 3,
+        "height": 3
+      },
+      "connections": [
+        {
+          "targetRoomId": "room_hall",
+          "doorId": "door_hall_cell"
+        }
+      ],
+      "encounterIds": [
+        "encounter_coffer_guard"
+      ],
+      "objectIds": [
+        "object_torch_cell",
+        "object_cell_bones",
+        "object_cell_coffer"
+      ]
+    },
+    {
+      "id": "room_ossuary",
+      "regionId": "region_crypt",
+      "name": "The Ossuary",
+      "type": "combat",
+      "description": "Bones stacked to the vault. Some of them are not stacked.",
+      "layout": {
+        "x": 11,
+        "y": 8,
+        "width": 3,
+        "height": 5
+      },
+      "connections": [
+        {
+          "targetRoomId": "room_hall",
+          "doorId": "door_hall_ossuary"
+        },
+        {
+          "targetRoomId": "room_chapel",
+          "doorId": "door_ossuary_chapel"
+        }
+      ],
+      "encounterIds": [
+        "encounter_restless_dead"
+      ],
+      "objectIds": [
+        "object_torch_ossuary_e",
+        "object_torch_ossuary_s",
+        "object_ossuary_urn",
+        "object_ossuary_bones",
+        "object_ossuary_draught"
+      ]
+    },
+    {
+      "id": "room_chapel",
+      "regionId": "region_crypt",
+      "name": "Chapel of Ash",
+      "type": "story",
+      "description": "An altar, long cold. The west wall is newer than the rest.",
+      "layout": {
+        "x": 10,
+        "y": 3,
+        "width": 5,
+        "height": 4
+      },
+      "connections": [
+        {
+          "targetRoomId": "room_ossuary",
+          "doorId": "door_ossuary_chapel"
+        },
+        {
+          "targetRoomId": "room_vault",
+          "doorId": "door_chapel_vault"
+        }
+      ],
+      "encounterIds": [
+        "encounter_chapel_watch"
+      ],
+      "objectIds": [
+        "object_torch_chapel_n",
+        "object_torch_chapel_e",
+        "object_chapel_urn_w",
+        "object_chapel_urn_e",
+        "object_chapel_draught"
+      ]
+    },
+    {
+      "id": "room_vault",
+      "regionId": "region_crypt",
+      "name": "The Warden's Vault",
+      "type": "boss",
+      "description": "One tomb, set apart. Its lid lies on the floor.",
+      "layout": {
+        "x": 5,
+        "y": 4,
+        "width": 4,
+        "height": 4
+      },
+      "connections": [
+        {
+          "targetRoomId": "room_hall",
+          "doorId": "door_hall_vault"
+        },
+        {
+          "targetRoomId": "room_chapel",
+          "doorId": "door_chapel_vault"
+        },
+        {
+          "targetRoomId": "room_reliquary",
+          "doorId": "door_vault_reliquary"
+        }
+      ],
+      "encounterIds": [
+        "encounter_warden"
+      ],
+      "objectIds": [
+        "object_torch_vault_w",
+        "object_torch_vault_e",
+        "object_vault_tomb",
+        "object_vault_bones"
+      ]
+    },
+    {
+      "id": "room_reliquary",
+      "regionId": "region_crypt",
+      "name": "The Reliquary",
+      "type": "treasure",
+      "description": "What the Warden was set to keep.",
+      "layout": {
+        "x": 5,
+        "y": 1,
+        "width": 4,
+        "height": 2
+      },
+      "connections": [
+        {
+          "targetRoomId": "room_vault",
+          "doorId": "door_vault_reliquary"
+        }
+      ],
+      "encounterIds": [],
+      "objectIds": [
+        "object_torch_reliquary",
+        "object_reliquary_urn",
+        "object_reliquary_chest"
+      ]
+    }
+  ],
+  "doors": [
+    {
+      "id": "door_stair_hall",
+      "name": "Breach",
+      "kind": "archway",
+      "cell": {
+        "x": 7,
+        "y": 13
+      }
+    },
+    {
+      "id": "door_hall_cell",
+      "name": "Cell door",
+      "kind": "door",
+      "cell": {
+        "x": 4,
+        "y": 10
+      }
+    },
+    {
+      "id": "door_hall_ossuary",
+      "name": "Ossuary door",
+      "kind": "door",
+      "cell": {
+        "x": 10,
+        "y": 10
+      }
+    },
+    {
+      "id": "door_ossuary_chapel",
+      "name": "Chapel door",
+      "kind": "door",
+      "cell": {
+        "x": 12,
+        "y": 7
+      }
+    },
+    {
+      "id": "door_hall_vault",
+      "name": "Vault door",
+      "kind": "door",
+      "cell": {
+        "x": 7,
+        "y": 8
+      },
+      "lock": {
+        "keyItemId": "item_bronze_sigil"
+      }
+    },
+    {
+      "id": "door_chapel_vault",
+      "name": "Walled-up way",
+      "kind": "secret",
+      "cell": {
+        "x": 9,
+        "y": 5
+      }
+    },
+    {
+      "id": "door_vault_reliquary",
+      "name": "Reliquary door",
+      "kind": "door",
+      "cell": {
+        "x": 6,
+        "y": 3
+      }
+    }
+  ],
+  "enemies": [
+    {
+      "id": "enemy_skeleton",
+      "name": "Skeleton",
+      "description": "Dry, quick and past caring.",
+      "archetype": "skeleton",
+      "health": 20,
+      "defence": 0,
+      "moveTicks": 22,
+      "sightRange": 6,
+      "staggerTicks": 16,
+      "behaviour": "melee_aggressive",
+      "visualAssetId": "skeleton",
+      "poise": 2,
+      "alertText": "Bones rattle upright in the dark!",
+      "attacks": [
+        {
+          "id": "slash",
+          "name": "slash",
+          "damage": {
+            "min": 3,
+            "max": 6
+          },
+          "telegraphTicks": 28,
+          "recoverTicks": 34,
+          "pattern": "front",
+          "blockable": true,
+          "weight": 3
+        },
+        {
+          "id": "rake",
+          "name": "raking cut",
+          "damage": {
+            "min": 4,
+            "max": 7
+          },
+          "telegraphTicks": 40,
+          "recoverTicks": 44,
+          "pattern": "sweep",
+          "blockable": true,
+          "weight": 1
+        }
+      ],
+      "xp": 30
+    },
+    {
+      "id": "enemy_warden",
+      "name": "Warden",
+      "description": "It was set to guard the chalice, and nobody told it to stop.",
+      "archetype": "warden",
+      "health": 110,
+      "defence": 2,
+      "moveTicks": 34,
+      "sightRange": 7,
+      "staggerTicks": 6,
+      "behaviour": "melee_aggressive",
+      "visualAssetId": "warden",
+      "poise": 5,
+      "alertText": "The Warden turns its hollow gaze on you.",
+      "attacks": [
+        {
+          "id": "crush",
+          "name": "crush",
+          "damage": {
+            "min": 8,
+            "max": 12
+          },
+          "telegraphTicks": 46,
+          "recoverTicks": 44,
+          "pattern": "front",
+          "blockable": true,
+          "weight": 2
+        },
+        {
+          "id": "reap",
+          "name": "reaping sweep",
+          "damage": {
+            "min": 10,
+            "max": 14
+          },
+          "telegraphTicks": 60,
+          "recoverTicks": 56,
+          "pattern": "sweep",
+          "blockable": false,
+          "weight": 1
+        }
+      ],
+      "xp": 200
+    }
+  ],
+  "encounters": [
+    {
+      "id": "encounter_restless_dead",
+      "name": "The restless dead",
+      "roomId": "room_ossuary",
+      "placements": [
+        {
+          "enemyId": "enemy_skeleton",
+          "cell": {
+            "x": 12,
+            "y": 10
+          },
+          "facing": "west"
+        },
+        {
+          "enemyId": "enemy_skeleton",
+          "cell": {
+            "x": 13,
+            "y": 11
+          },
+          "facing": "north"
+        }
+      ]
+    },
+    {
+      "id": "encounter_chapel_watch",
+      "name": "Chapel watch",
+      "roomId": "room_chapel",
+      "placements": [
+        {
+          "enemyId": "enemy_skeleton",
+          "cell": {
+            "x": 12,
+            "y": 4
+          },
+          "facing": "south"
+        }
+      ]
+    },
+    {
+      "id": "encounter_coffer_guard",
+      "name": "Coffer guard",
+      "roomId": "room_cell",
+      "placements": [
+        {
+          "enemyId": "enemy_skeleton",
+          "cell": {
+            "x": 2,
+            "y": 10
+          },
+          "facing": "east"
+        }
+      ]
+    },
+    {
+      "id": "encounter_warden",
+      "name": "The Warden of Ash",
+      "roomId": "room_vault",
+      "boss": true,
+      "intro": "Who wakes the keeper of ash?",
+      "placements": [
+        {
+          "enemyId": "enemy_warden",
+          "cell": {
+            "x": 7,
+            "y": 5
+          },
+          "facing": "south"
+        }
+      ]
+    }
+  ],
+  "objects": [
+    {
+      "id": "object_torch_stair",
+      "type": "torch",
+      "roomId": "room_stair",
+      "cell": {
+        "x": 6,
+        "y": 14
+      },
+      "wall": "west"
+    },
+    {
+      "id": "object_stair_rubble",
+      "type": "prop",
+      "name": "Rubble",
+      "roomId": "room_stair",
+      "cell": {
+        "x": 8,
+        "y": 15
+      },
+      "visualAssetId": "rubble"
+    },
+    {
+      "id": "object_torch_hall_w",
+      "type": "torch",
+      "roomId": "room_hall",
+      "cell": {
+        "x": 5,
+        "y": 11
+      },
+      "wall": "west"
+    },
+    {
+      "id": "object_torch_hall_e",
+      "type": "torch",
+      "roomId": "room_hall",
+      "cell": {
+        "x": 9,
+        "y": 11
+      },
+      "wall": "east"
+    },
+    {
+      "id": "object_torch_hall_n",
+      "type": "torch",
+      "roomId": "room_hall",
+      "cell": {
+        "x": 6,
+        "y": 9
+      },
+      "wall": "north"
+    },
+    {
+      "id": "object_hall_tomb_w",
+      "type": "prop",
+      "name": "Sarcophagus",
+      "roomId": "room_hall",
+      "cell": {
+        "x": 5,
+        "y": 12
+      },
+      "visualAssetId": "sarcophagus"
+    },
+    {
+      "id": "object_hall_tomb_e",
+      "type": "prop",
+      "name": "Sarcophagus",
+      "roomId": "room_hall",
+      "cell": {
+        "x": 9,
+        "y": 12
+      },
+      "visualAssetId": "sarcophagus"
+    },
+    {
+      "id": "object_torch_cell",
+      "type": "torch",
+      "roomId": "room_cell",
+      "cell": {
+        "x": 2,
+        "y": 9
+      },
+      "wall": "north"
+    },
+    {
+      "id": "object_cell_bones",
+      "type": "prop",
+      "name": "Old bones",
+      "roomId": "room_cell",
+      "cell": {
+        "x": 3,
+        "y": 11
+      },
+      "visualAssetId": "bones",
+      "blocking": false
+    },
+    {
+      "id": "object_cell_coffer",
+      "type": "chest",
+      "name": "Embalmers' coffer",
+      "roomId": "room_cell",
+      "cell": {
+        "x": 1,
+        "y": 9
+      },
+      "contents": [
+        "item_bronze_sigil",
+        "item_ember_scroll"
+      ]
+    },
+    {
+      "id": "object_torch_ossuary_e",
+      "type": "torch",
+      "roomId": "room_ossuary",
+      "cell": {
+        "x": 13,
+        "y": 10
+      },
+      "wall": "east"
+    },
+    {
+      "id": "object_torch_ossuary_s",
+      "type": "torch",
+      "roomId": "room_ossuary",
+      "cell": {
+        "x": 11,
+        "y": 12
+      },
+      "wall": "south"
+    },
+    {
+      "id": "object_ossuary_urn",
+      "type": "prop",
+      "name": "Burial urn",
+      "roomId": "room_ossuary",
+      "cell": {
+        "x": 11,
+        "y": 8
+      },
+      "visualAssetId": "urn"
+    },
+    {
+      "id": "object_ossuary_bones",
+      "type": "prop",
+      "name": "Old bones",
+      "roomId": "room_ossuary",
+      "cell": {
+        "x": 13,
+        "y": 9
+      },
+      "visualAssetId": "bones",
+      "blocking": false
+    },
+    {
+      "id": "object_ossuary_draught",
+      "type": "pickup",
+      "name": "Healing draught",
+      "roomId": "room_ossuary",
+      "cell": {
+        "x": 13,
+        "y": 12
+      },
+      "itemId": "item_healing_draught"
+    },
+    {
+      "id": "object_torch_chapel_n",
+      "type": "torch",
+      "roomId": "room_chapel",
+      "cell": {
+        "x": 12,
+        "y": 3
+      },
+      "wall": "north"
+    },
+    {
+      "id": "object_torch_chapel_e",
+      "type": "torch",
+      "roomId": "room_chapel",
+      "cell": {
+        "x": 14,
+        "y": 5
+      },
+      "wall": "east"
+    },
+    {
+      "id": "object_chapel_urn_w",
+      "type": "prop",
+      "name": "Burial urn",
+      "roomId": "room_chapel",
+      "cell": {
+        "x": 10,
+        "y": 3
+      },
+      "visualAssetId": "urn"
+    },
+    {
+      "id": "object_chapel_urn_e",
+      "type": "prop",
+      "name": "Burial urn",
+      "roomId": "room_chapel",
+      "cell": {
+        "x": 14,
+        "y": 3
+      },
+      "visualAssetId": "urn"
+    },
+    {
+      "id": "object_chapel_draught",
+      "type": "pickup",
+      "name": "Healing draught",
+      "roomId": "room_chapel",
+      "cell": {
+        "x": 14,
+        "y": 6
+      },
+      "itemId": "item_healing_draught"
+    },
+    {
+      "id": "object_torch_vault_w",
+      "type": "torch",
+      "roomId": "room_vault",
+      "cell": {
+        "x": 5,
+        "y": 5
+      },
+      "wall": "west"
+    },
+    {
+      "id": "object_torch_vault_e",
+      "type": "torch",
+      "roomId": "room_vault",
+      "cell": {
+        "x": 8,
+        "y": 6
+      },
+      "wall": "east"
+    },
+    {
+      "id": "object_vault_tomb",
+      "type": "prop",
+      "name": "The Warden's tomb",
+      "roomId": "room_vault",
+      "cell": {
+        "x": 5,
+        "y": 4
+      },
+      "visualAssetId": "sarcophagus"
+    },
+    {
+      "id": "object_vault_bones",
+      "type": "prop",
+      "name": "Old bones",
+      "roomId": "room_vault",
+      "cell": {
+        "x": 8,
+        "y": 7
+      },
+      "visualAssetId": "bones",
+      "blocking": false
+    },
+    {
+      "id": "object_torch_reliquary",
+      "type": "torch",
+      "roomId": "room_reliquary",
+      "cell": {
+        "x": 7,
+        "y": 1
+      },
+      "wall": "north"
+    },
+    {
+      "id": "object_reliquary_urn",
+      "type": "prop",
+      "name": "Burial urn",
+      "roomId": "room_reliquary",
+      "cell": {
+        "x": 5,
+        "y": 1
+      },
+      "visualAssetId": "urn"
+    },
+    {
+      "id": "object_reliquary_chest",
+      "type": "chest",
+      "name": "Reliquary",
+      "roomId": "room_reliquary",
+      "cell": {
+        "x": 8,
+        "y": 1
+      },
+      "contents": [
+        "item_ashen_chalice",
+        "item_warden_helm"
+      ]
+    }
+  ],
+  "items": [
+    {
+      "id": "item_dagger",
+      "name": "Dagger",
+      "description": "Short, quick and easily hidden.",
+      "category": "weapon",
+      "weapon": {
+        "light": {
+          "damage": {
+            "min": 2,
+            "max": 4
+          },
+          "windupTicks": 4,
+          "recoveryTicks": 14,
+          "staminaCost": 3,
+          "impact": 1
+        },
+        "heavy": {
+          "damage": {
+            "min": 5,
+            "max": 8
+          },
+          "windupTicks": 12,
+          "recoveryTicks": 22,
+          "staminaCost": 10,
+          "impact": 2
+        }
+      },
+      "visualAssetId": "dagger"
+    },
+    {
+      "id": "item_mace",
+      "name": "Flanged mace",
+      "description": "Blunt, heavy and blessed.",
+      "category": "weapon",
+      "weapon": {
+        "light": {
+          "damage": {
+            "min": 2,
+            "max": 5
+          },
+          "windupTicks": 7,
+          "recoveryTicks": 22,
+          "staminaCost": 5,
+          "impact": 1
+        },
+        "heavy": {
+          "damage": {
+            "min": 6,
+            "max": 10
+          },
+          "windupTicks": 18,
+          "recoveryTicks": 30,
+          "staminaCost": 14,
+          "impact": 3
+        }
+      },
+      "visualAssetId": "mace"
+    },
+    {
+      "id": "item_bronze_sigil",
+      "name": "Bronze sigil",
+      "description": "A seal the size of a palm. It fits a plate on the vault door.",
+      "category": "key",
+      "visualAssetId": "key"
+    },
+    {
+      "id": "item_healing_draught",
+      "name": "Healing draught",
+      "description": "Bitter, but it closes wounds.",
+      "category": "consumable",
+      "effect": {
+        "type": "heal",
+        "amount": 20
+      },
+      "visualAssetId": "flask"
+    },
+    {
+      "id": "item_ember_scroll",
+      "name": "Scroll of embers",
+      "description": "The ink is still warm. Read it at something you want burnt.",
+      "category": "consumable",
+      "effect": {
+        "type": "cast",
+        "spellId": "spell_ember_bolt"
+      },
+      "visualAssetId": "scroll"
+    },
+    {
+      "id": "item_ashen_chalice",
+      "name": "Ashen chalice",
+      "description": "Grey silver, heavier than it looks.",
+      "category": "treasure",
+      "value": 300,
+      "visualAssetId": "coins"
+    },
+    {
+      "id": "item_warden_helm",
+      "name": "Warden's helm",
+      "description": "Old iron, and it still fits somebody.",
+      "category": "armour",
+      "slot": "head",
+      "defence": 1,
+      "visualAssetId": "helm"
+    }
+  ],
+  "spells": [
+    {
+      "id": "spell_mend",
+      "name": "Mend",
+      "description": "Closes the wounds of whoever is hurt worst.",
+      "shape": "heal",
+      "element": "life",
+      "amount": 14,
+      "castTicks": 24,
+      "recoveryTicks": 24,
+      "manaCost": 7
+    },
+    {
+      "id": "spell_ember_bolt",
+      "name": "Ember bolt",
+      "description": "A lance of fire for the nearest foe ahead.",
+      "shape": "bolt",
+      "element": "fire",
+      "range": 4,
+      "damage": {
+        "min": 12,
+        "max": 18
+      },
+      "impact": 3,
+      "castTicks": 18,
+      "recoveryTicks": 24,
+      "manaCost": 8
+    }
+  ],
+  "characters": [
+    {
+      "id": "char_wren",
+      "name": "Wren",
+      "classId": "rogue",
+      "level": 1,
+      "row": "front",
+      "equipment": {
+        "mainHand": "item_dagger"
+      },
+      "portraitAssetId": "rogue"
+    },
+    {
+      "id": "char_hale",
+      "name": "Hale",
+      "classId": "cleric",
+      "level": 1,
+      "row": "front",
+      "spells": [
+        "spell_mend"
+      ],
+      "equipment": {
+        "mainHand": "item_mace"
+      },
+      "portraitAssetId": "cleric"
+    }
+  ],
+  "quests": [
+    {
+      "id": "quest_ashen_chalice",
+      "title": "The Ashen Chalice",
+      "kind": "main",
+      "description": "The chalice lies in the reliquary, past the Warden's vault. Find a way in, and bring it out.",
+      "objectives": [
+        {
+          "id": "enter_vault",
+          "description": "Get into the vault",
+          "type": "reach_room",
+          "targetId": "room_vault"
+        },
+        {
+          "id": "lay_warden",
+          "description": "Lay the Warden to rest",
+          "type": "defeat_encounter",
+          "targetId": "encounter_warden"
+        },
+        {
+          "id": "take_chalice",
+          "description": "Take the Ashen Chalice",
+          "type": "collect_item",
+          "targetId": "item_ashen_chalice"
+        }
+      ],
+      "completionText": "The Warden is ash, and the chalice is yours."
+    },
+    {
+      "id": "quest_embalmers",
+      "title": "The Embalmers' Coffer",
+      "kind": "side",
+      "description": "The embalmers kept what the dead no longer needed.",
+      "objectives": [
+        {
+          "id": "open_coffer",
+          "description": "Open the embalmers' coffer",
+          "type": "open_chest",
+          "targetId": "object_cell_coffer"
+        }
+      ],
+      "completionText": "Nothing in it was theirs to keep."
+    }
+  ],
+  "npcs": [],
+  "factions": []
+}

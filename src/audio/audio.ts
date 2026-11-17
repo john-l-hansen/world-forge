@@ -4,6 +4,10 @@
  * touches game state.
  */
 import type { GameEvent } from '../engine/types';
+import type { Environment } from '../schema/world';
+
+/** How an enemy sounds: flesh and breath, or dry bone. */
+export type Voice = 'beast' | 'bones';
 
 type Wave = OscillatorType;
 
@@ -18,7 +22,7 @@ export class AudioEngine {
   muted = false;
 
   /** Must be called from a user gesture (browsers block audio until then). */
-  start() {
+  start(environment: Environment = 'mine') {
     if (this.ctx) {
       void this.ctx.resume();
       return;
@@ -44,7 +48,7 @@ export class AudioEngine {
       seed = (seed * 1664525 + 1013904223) | 0;
       data[i] = (seed >>> 0) / 2147483648 - 1;
     }
-    this.startAmbience();
+    this.startAmbience(environment);
   }
 
   setMuted(muted: boolean) {
@@ -64,7 +68,7 @@ export class AudioEngine {
    * `driven` is the character the player is playing. Their sounds are in the
    * foreground; a companion's swings and blows are quieter.
    */
-  onEvent(event: GameEvent, driven?: string) {
+  onEvent(event: GameEvent, driven?: string, voice: Voice = 'beast') {
     const actor = 'actor' in event ? event.actor : undefined;
     const companion = driven !== undefined && actor !== undefined && actor !== driven;
     this.level = 1;
@@ -73,6 +77,7 @@ export class AudioEngine {
       if (event.type === 'stamina.low' || event.type === 'attack.clang' || event.type === 'spell.refused' || event.type === 'level.up') return;
       if (event.type === 'attack.swing' || event.type === 'attack.hit' || event.type === 'spell.cast') this.level = 0.45;
     }
+    if (voice === 'bones' && this.bones(event)) return;
     switch (event.type) {
       case 'spell.healed':
         // A warm rising chord.
@@ -310,8 +315,37 @@ export class AudioEngine {
     src.stop(t0 + o.dur + 0.05);
   }
 
-  /** A low mine rumble with the occasional drip of water. */
-  private startAmbience() {
+  /** The dead make dry sounds: a rattle on waking, a clatter on falling. True if this event was voiced here. */
+  private bones(event: GameEvent): boolean {
+    const rattle = (count: number, start: number, gap: number, gain: number) => {
+      for (let i = 0; i < count; i++) {
+        this.noiseHit({ dur: 0.03, freq: 1800 + ((i * 617) % 1400), q: 6, gain, type: 'bandpass', delay: start + i * gap + ((i * 37) % 11) / 400 });
+      }
+    };
+    switch (event.type) {
+      case 'enemy.alerted':
+        rattle(9, 0, 0.045, 0.4);
+        this.tone({ wave: 'sine', from: 90, to: 70, dur: 0.5, gain: 0.12, attack: 0.2 });
+        return true;
+      case 'enemy.telegraph':
+        // A long dry creak as the arm goes back.
+        this.tone({ wave: 'sawtooth', from: 150, to: 260, dur: 0.4, gain: 0.1, vibrato: 45, filter: 1800, attack: 0.15 });
+        rattle(3, 0.05, 0.1, 0.2);
+        return true;
+      case 'enemy.interrupted':
+        rattle(5, 0, 0.03, 0.45);
+        return true;
+      case 'enemy.died':
+        rattle(14, 0, 0.04, 0.5);
+        this.noiseHit({ dur: 0.2, freq: 260, q: 0.7, gain: 0.35, type: 'lowpass', delay: 0.5 });
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  /** The place's own quiet: a mine's rumble and drips, or a crypt's cold hum and distant knocks. */
+  private startAmbience(environment: Environment) {
     const ctx = this.ctx;
     if (!ctx || !this.master || !this.noise) return;
     const src = ctx.createBufferSource();
@@ -325,13 +359,35 @@ export class AudioEngine {
     src.connect(filter).connect(gain).connect(this.master);
     src.start();
 
+    if (environment === 'crypt') {
+      // Two low notes a hair apart, beating slowly against each other.
+      filter.frequency.value = 90;
+      gain.gain.value = 0.14;
+      for (const hz of [55, 55.7]) {
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.value = hz;
+        const g = ctx.createGain();
+        g.gain.value = 0.05;
+        osc.connect(g).connect(this.master);
+        osc.start();
+      }
+    }
+
     let n = 0;
     const drip = () => {
       n++;
-      const pitch = 900 + ((n * 137) % 500);
-      this.tone({ wave: 'sine', from: pitch * 1.5, to: pitch, dur: 0.09, gain: 0.05 });
-      this.tone({ wave: 'sine', from: pitch * 1.1, to: pitch * 0.8, dur: 0.12, gain: 0.02, delay: 0.16 });
-      this.dripTimer = setTimeout(drip, 2500 + ((n * 2971) % 6000));
+      this.level = 1;
+      if (environment === 'crypt') {
+        // Something settling, a long way off.
+        this.noiseHit({ dur: 0.12, freq: 220 + ((n * 53) % 120), q: 1.2, gain: 0.07, type: 'lowpass' });
+        this.tone({ wave: 'sine', from: 110, to: 70, dur: 0.3, gain: 0.04 });
+      } else {
+        const pitch = 900 + ((n * 137) % 500);
+        this.tone({ wave: 'sine', from: pitch * 1.5, to: pitch, dur: 0.09, gain: 0.05 });
+        this.tone({ wave: 'sine', from: pitch * 1.1, to: pitch * 0.8, dur: 0.12, gain: 0.02, delay: 0.16 });
+      }
+      this.dripTimer = setTimeout(drip, (environment === 'crypt' ? 5000 : 2500) + ((n * 2971) % 6000));
     };
     this.dripTimer = setTimeout(drip, 3000);
   }

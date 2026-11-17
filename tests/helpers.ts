@@ -2,7 +2,9 @@ import minesJson from '../src/worlds/forgotten-mines.json';
 import { minesForParty } from '../src/worlds';
 import { validateWorld } from '../src/schema/validate';
 import { DIR_X, DIR_Y, compileWorld, type CompiledWorld } from '../src/world/compile';
-import { enemyAt, isOpenCell, partyIsBusy, step } from '../src/engine/sim';
+import { activeMember, enemyAt, isOpenCell, partyIsBusy, step } from '../src/engine/sim';
+import { loadWorld } from '../src/world/load';
+import cryptJson from '../src/worlds/sunken-crypt.json';
 import type { Command, EnemyState, GameEvent, SessionState } from '../src/engine/types';
 
 export const minesData = (): any => structuredClone(minesJson);
@@ -20,11 +22,27 @@ export function loadPartyMines(): CompiledWorld {
   return compileWorld(result.world);
 }
 
+/** The Sunken Crypt, validated and compiled through the loader. */
+export function loadCrypt(): CompiledWorld {
+  const result = loadWorld(structuredClone(cryptJson));
+  if (!result.ok) throw new Error(result.issues.map((i) => i.message).join('\n'));
+  return result.world;
+}
+
 export const HERO = 'char_fighter';
+
+/**
+ * The helpers were written for Brannoc. In a world without him, their commands
+ * go to whoever the player is driving.
+ */
+function send(state: SessionState, world: CompiledWorld, commands: Command[]): GameEvent[] {
+  const known = (id: string) => state.party.members.some((m) => m.id === id);
+  return step(state, world, commands.map((c) => (c.actor === HERO && !known(HERO) ? { ...c, actor: activeMember(state).id } : c)));
+}
 
 /** Send one command, then run until the party is free again. */
 export function act(state: SessionState, world: CompiledWorld, command: Command, extraTicks = 40): GameEvent[] {
-  const events = step(state, world, [command]);
+  const events = send(state, world, [command]);
   for (let i = 0; i < extraTicks; i++) events.push(...step(state, world, []));
   return events;
 }
@@ -114,7 +132,7 @@ export function walkTo(state: SessionState, world: CompiledWorld, tx: number, ty
  */
 export function fight(state: SessionState, world: CompiledWorld, enemy: EnemyState, tickLimit = 30000): GameEvent[] {
   const events: GameEvent[] = [];
-  const hero = state.party.members[0];
+  const hero = activeMember(state);
   for (let i = 0; i < tickLimit && enemy.ai !== 'dead' && state.status === 'playing'; i++) {
     const p = state.party;
     let command: Command | null = null;
@@ -150,7 +168,7 @@ export function fight(state: SessionState, world: CompiledWorld, enemy: EnemySta
         }
       }
     }
-    events.push(...step(state, world, command ? [command] : []));
+    events.push(...send(state, world, command ? [command] : []));
   }
   return events;
 }

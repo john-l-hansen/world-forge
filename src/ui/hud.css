@@ -219,9 +219,9 @@ html, body, #root {
 .overlay h3 { margin: 0; font-size: 16px; line-height: 18px; font-weight: 400; color: var(--gold-hi); }
 .overlay.title { gap: 4px; }
 .overlay.title .keys { margin: 0; white-space: nowrap; }
-.overlay.title h2 { max-width: 250px; }
-.choices { display: flex; gap: 4px; }
-.choices .btn { flex: none; padding: 2px 6px; }
+.overlay.title h2 { max-width: 316px; white-space: nowrap; }
+.choices { display: flex; gap: 2px; }
+.choices .btn { flex: none; padding: 2px 4px; gap: 3px; white-space: nowrap; }
 .choices .btn.chosen { color: var(--gold-hi); border-color: var(--gold-hi) var(--gold-lo) var(--gold-lo) var(--gold-hi); background: #4e4237; }
 .overlay.sheet .worn .btn.row { color: var(--gold-hi); }
 .overlay.journal { padding: 0 24px; background: rgba(5, 4, 6, 0.9); }
@@ -252,6 +252,8 @@ html, body, #root {
 
 .mute { position: absolute; right: 6px; bottom: 5px; color: var(--dim); pointer-events: none; }
 
+.world-file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.fatal button { font: inherit; padding: 4px 10px; cursor: pointer; }
 .fatal { max-width: 640px; margin: 10vh auto; padding: 24px; color: #e8e2d0; font: 15px/1.5 system-ui, sans-serif; }
 .fatal h1 { font-size: 20px; }
 .fatal li { margin: 4px 0; }

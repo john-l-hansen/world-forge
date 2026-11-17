@@ -17,7 +17,7 @@ describe('worlds on offer', () => {
       expect(result.ok, entry.key).toBe(true);
       if (result.ok) expect(compileWorld(result.world).def.settings.startingPartyIds.length).toBeGreaterThan(0);
     }
-    expect(WORLDS.map((w) => w.key)).toEqual(['solo', 'party']);
+    expect(WORLDS.map((w) => w.key)).toEqual(['solo', 'party', 'crypt']);
   });
 });
 

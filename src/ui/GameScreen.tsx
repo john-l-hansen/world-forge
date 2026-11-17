@@ -28,9 +28,11 @@ export interface GameScreenProps {
   /** Go straight into the game: the player has just picked this adventure. */
   autoBegin: boolean;
   onChoose: (key: string) => void;
+  /** Ask the player for a world file to load. */
+  onOpenFile: () => void;
 }
 
-export function GameScreen({ world, choices, current, autoBegin, onChoose }: GameScreenProps) {
+export function GameScreen({ world, choices, current, autoBegin, onChoose, onOpenFile }: GameScreenProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [game, setGame] = useState<Game | null>(null);
   const scale = useWholeNumberScale();
@@ -70,6 +72,7 @@ export function GameScreen({ world, choices, current, autoBegin, onChoose }: Gam
         e.preventDefault();
         const picked = /^(Digit|Numpad)[1-9]$/.test(e.code) ? choices[Number(e.code.slice(-1)) - 1] : undefined;
         if (picked) chooseRef.current(picked.key);
+        else if (e.code === 'KeyO') onOpenFile();
         else game.begin();
         return;
       }
@@ -144,7 +147,7 @@ export function GameScreen({ world, choices, current, autoBegin, onChoose }: Gam
       window.removeEventListener('keyup', up);
       window.removeEventListener('blur', blur);
     };
-  }, [game, choices]);
+  }, [game, choices, onOpenFile]);
 
   return (
     <div className="stage">
@@ -168,7 +171,7 @@ export function GameScreen({ world, choices, current, autoBegin, onChoose }: Gam
           <canvas ref={canvasRef} width={320} height={200} />
           {screen === 'playing' && <TargetBar />}
           {screen === 'playing' && <Floaters />}
-          {screen === 'title' && <TitleOverlay title={world.def.world.name} choices={choices} current={current} onChoose={choose} />}
+          {screen === 'title' && <TitleOverlay title={world.def.world.name} choices={choices} current={current} onChoose={choose} onOpenFile={onOpenFile} />}
           {screen === 'dead' && <DeathOverlay name={heroName} />}
           {screen === 'journal' && <JournalOverlay />}
           {screen === 'sheet' && game && <SheetOverlay game={game} />}

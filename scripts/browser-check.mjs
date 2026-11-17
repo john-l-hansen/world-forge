@@ -494,7 +494,7 @@ await page.evaluate(() => {
 });
 await page.waitForTimeout(400);
 h = await hud();
-check(/BRANNOC ALONE/i.test(h.overlay ?? '') && /A PARTY OF FOUR/i.test(h.overlay ?? ''), 'the title screen offers both adventures');
+check(/1 MINES/i.test(h.overlay ?? '') && /MINES: PARTY/i.test(h.overlay ?? '') && /3 CRYPT/i.test(h.overlay ?? '') && /OPEN FILE/i.test(h.overlay ?? ''), 'the title screen offers every adventure');
 const titleFits = await page.evaluate(() => {
   const box = document.querySelector('.viewport').getBoundingClientRect();
   return [...document.querySelectorAll('.overlay.title > *')].every((el) => {

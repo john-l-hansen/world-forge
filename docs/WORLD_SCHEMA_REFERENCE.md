@@ -1,4 +1,4 @@
-# World schema reference — version 0.6.0
+# World schema reference — version 0.7.0
 
 What the engine actually reads today. The source of truth is `src/schema/world.ts`
 (shapes) and `src/schema/validate.ts` (meaning). A world is one JSON object; see
@@ -8,9 +8,9 @@ What the engine actually reads today. The source of truth is `src/schema/world.t
 
 | Field | Contents |
 | --- | --- |
-| `schemaVersion` | `"0.6.0"`. Worlds from `0.1.0` onward are migrated on load, one version at a time. Anything else is rejected. |
+| `schemaVersion` | `"0.7.0"`. Worlds from `0.1.0` onward are migrated on load, one version at a time. Anything else is rejected. |
 | `world` | id, name, description, theme, difficulty, optional author and timestamps |
-| `settings` | movement mode, start room, start cell, start facing, starting party, starting quests |
+| `settings` | movement mode, start room, start cell, start facing, starting party (one to four characters; the first is the one the player drives at the start), starting quests |
 | `regions` | id, name, environment (tileset), room IDs |
 | `rooms` | id, region, name, type, description, `layout` rectangle, connections, encounter IDs, object IDs |
 | `doors` | id, name, `kind` (`archway`, `door`, `secret`), cell, optional `lock.keyItemId` |
@@ -18,9 +18,9 @@ What the engine actually reads today. The source of truth is `src/schema/world.t
 | `encounters` | room, enemy placements, `boss` flag, optional `intro` line |
 | `objects` | `torch`, `prop`, `pickup` (an item on the floor) or `chest` (blocking, with contents) |
 | `items` | `weapon`, `armour` (with a slot and a defence value), `key`, `consumable` (heals, or casts a spell as a scroll) or `treasure` |
-| `characters` | name, class, level, optional attributes, equipment (seven optional slots), portrait |
+| `characters` | name, class, level, optional attributes, optional `row` (`front` or `back`; the class decides if left out), `spells` (IDs of spells the character can cast with mana), equipment (seven optional slots), portrait |
 | `quests` | title, description, objectives, completion text |
-| `spells` | name, element, shape, range, damage, impact, cast time, recovery, mana cost |
+| `spells` | name, cast time, recovery, mana cost, and a `shape`: `bolt` (element fire, ice or lightning; range, damage, impact) or `heal` (element `life`; amount) |
 | `npcs`, `factions` | reserved for later phases |
 
 ## Geometry

@@ -1,5 +1,101 @@
 # Development log — World Forge
 
+## Milestone 7 — Phase 3, part 4: the party (2026-11-16)
+
+Phase 3 is complete with this milestone.
+
+### Decision taken
+
+John chose party model 3 from the options set out under milestone 6: **one body with a
+front and a back row**. The party moves as a single unit, as in the reference games.
+The player drives one character and can switch; the others are played by the party AI.
+In co-op, each player will drive one character's actions while one of them steers.
+
+### What was implemented
+
+- **World schema 0.7.0.** A character can have a `row` (front or back; a class default
+  applies if it is left out) and a list of `spells` it knows. A spell's `shape` can now
+  be `heal` as well as `bolt`. `0.6.0` worlds are migrated with nothing changed.
+- **Rows.** Front-row characters strike with weapons and take the blows that come from
+  ahead. The back row is out of reach of both. Blows from behind fall on the back row,
+  blows from the side can find anyone, and a sweep catches a whole row. When nobody in
+  front is left standing, the back row becomes the front line. A character can be moved
+  between rows at any time.
+- **Control.** Every character has a controller: the local player, the party AI, or
+  (later) a remote player. A `control` command hands a character to the player and the
+  one they were driving to the AI. Only the driven character takes orders. If the
+  driven character falls, the next one standing is taken over. The party is lost only
+  when everyone has fallen.
+- **Mana and spells.** Casters have mana, which returns slowly and grows with level. A
+  `cast` command casts a known spell, and is refused without the mana or a target. The
+  new healing shape mends whoever is hurt worst and never heals past full health.
+- **Party AI.** A companion, in order: heals a companion at 60% health or less if it
+  knows a healing spell; casts a bolt at an enemy straight ahead that has noticed the
+  party; otherwise fights with its weapon from the front line. The rogue waits for an
+  opening and then hits harder. Each class acts at its own pace. Companions never move
+  the party, open doors, use items, block or dodge.
+- **A second adventure to choose.** The title screen offers "Brannoc alone" (the
+  adventure as first built, unchanged) and "A party of four": Brannoc the fighter and
+  Sela the rogue in front, Ilvane the mage and Maren the cleric behind, against a
+  stronger mine (tougher goblins, a second goblin in the hall, a much tougher chief).
+  The party world is derived from the solo world in code, so the two cannot drift
+  apart. The choice is kept in the address (`#party`).
+- **Interface.** With more than one character the party card becomes four cells, two
+  across: a portrait, name, and health, stamina and mana bars, with the driven
+  character picked out in gold and a letter for the row. Click a cell or press Tab to
+  take a character over. A caster's spells appear in a bar above the map, on the
+  number keys. The character sheet follows the driven character, shows mana and known
+  spells, and has a button to change row. A lone adventurer keeps the original card.
+- **Presentation.** Portraits for the rogue, mage and cleric. The held weapon is the
+  driven character's: sword, dagger, staff or mace, raised while casting. The log says
+  "you" for the driven character and names companions; a companion's misses and
+  fumbles are left out. Companions' blows are quieter, shake the view less and show
+  smaller numbers. New sounds for healing, changing character, changing row and a
+  companion falling.
+
+### Tests executed
+
+- `npm run typecheck` and `npm run build` — pass.
+- `npm test` — 180 unit tests pass in 10 files. New since milestone 6: 38 in
+  `tests/party.test.ts` (rows and who gets hit, control and hand-over, falling and
+  defeat, mana and healing, each class's AI behaviour, a full win of the party world by
+  a scripted player, determinism from a seed, save and reload) and 6 in
+  `tests/messages.test.ts` (both title-screen worlds validate; log wording for the
+  driven character, companions and healing; the solo wording is unchanged).
+- `tests/adventure.test.ts`, the standing regression for the solo adventure — passes
+  unchanged. Solo play uses the same random numbers in the same order as before.
+- `npm run test:browser` — 97 checks pass in headless Chrome. The 71 solo checks
+  pass unchanged. The 26 new ones choose the party from the title screen, switch
+  characters with Tab and by clicking, check the held weapon and spell bar, change row
+  on the character sheet, walk into the hall as the mage, cast with the 1 key, win the
+  fight against both goblins alongside the three companions, and heal as the cleric.
+
+### Known limitations
+
+- **Nobody has played the party world.** Its balance (goblin and chief health, mana
+  costs, how fast companions act) is a first guess. In the browser only its first
+  fight has been played, by a script; the whole of it has been won only by the scripted
+  player in the unit tests.
+- Companions are simple. They do not block, dodge, step out of a sweep or use items,
+  so the player still has to move the party out of danger.
+- A fallen character stays down until the adventure is restarted. There is no revival.
+- The weapon swing is the sword's for every weapon.
+- The party cells show bars, not numbers; the numbers are in the tooltip and on the
+  character sheet.
+- The number keys do two jobs: 1 and 2 choose the adventure on the title screen, and
+  1 to 4 cast spells in play.
+- The journal and character sheet still pause the game. That has to change for co-op.
+- The portraits, held weapons and party panel have been checked by eye in screenshots
+  only, and the new sounds have not been heard by a person.
+
+### Next milestone
+
+The roadmap's next phase is Phase 3b (co-op play), which the roadmap says should start
+only once single-player combat and the party are solid. They are built and tested but
+not yet judged in play, so the next step should be a play session and a tuning pass,
+then a choice between Phase 3b and Phase 4 (world schema and loader, already largely
+brought forward).
+
 ## Milestone 6 — Phase 3, part 3: spells and scrolls (2026-11-15)
 
 ### What was implemented

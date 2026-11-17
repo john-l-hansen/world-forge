@@ -4,7 +4,7 @@
  * in fixed 60 Hz ticks no matter how fast the screen refreshes.
  */
 import { AudioEngine } from '../audio/audio';
-import { createSession, defenceOf, enemyAt, hasLineOfSight, isGuarding, partyIsBusy, step } from '../engine/sim';
+import { activeMember, createSession, defenceOf, enemyAt, hasLineOfSight, isGuarding, partyIsBusy, step } from '../engine/sim';
 import { EQUIP_SLOTS, type EquipSlot } from '../schema/world';
 import { TICKS_PER_SECOND, type Command, type GameEvent, type SessionState } from '../engine/types';
 import { DungeonRenderer } from '../renderer/renderer';
@@ -13,7 +13,7 @@ import { InputState, commandFor, type Action } from './input';
 import { describeEvent } from './messages';
 import { CLASSES, ATTRIBUTES } from '../engine/classes';
 import { criticalChance, damageBonus, experienceForLevel, modifier } from '../engine/stats';
-import { pushFloater, pushLog, useHud, type BeltItem, type QuestView, type SheetView } from './store';
+import { pushFloater, pushLog, useHud, type BeltItem, type PartyView, type QuestView, type SheetView, type SpellView } from './store';
 
 const TICK_MS = 1000 / TICKS_PER_SECOND;
 
@@ -33,6 +33,15 @@ export class Game {
   private tipShown = false;
   private lastBumpText = '';
   private lastBumpTick = -1000;
+  /** Blows taken and healing received per character, for the party panel's flashes. */
+  private hurt: Record<string, number> = {};
+  private mended: Record<string, number> = {};
+  private partySignature = '';
+
+  /** The character the player is driving. */
+  private get driven() {
+    return activeMember(this.state);
+  }
 
   constructor(canvas: HTMLCanvasElement, readonly world: CompiledWorld, private seed = 1) {
     this.renderer = new DungeonRenderer(canvas, world);
@@ -57,6 +66,8 @@ export class Game {
     this.input.clear();
     this.pending = [];
     this.lastBumpTick = -1000;
+    this.hurt = {};
+    this.mended = {};
     this.acc = 0;
     this.resetHud('playing');
     this.announceStart();
@@ -85,13 +96,13 @@ export class Game {
     const matches = this.world.def.items.filter((i) => i.category === 'consumable' && i.effect.type === effect);
     // With none in the pack, still send the request so the game can say so.
     const item = matches.find((i) => this.state.inventory[i.id]) ?? matches[0];
-    if (item) this.pending.push({ type: 'use', actor: this.state.party.members[0].id, itemId: item.id });
+    if (item) this.pending.push({ type: 'use', actor: this.driven.id, itemId: item.id });
   }
 
   /** Click on something in the pack: drink it, or put it on. */
   useItem(itemId: string) {
     const item = this.world.def.items.find((i) => i.id === itemId);
-    const actor = this.state.party.members[0].id;
+    const actor = this.driven.id;
     if (item?.category === 'consumable') this.pending.push({ type: 'use', actor, itemId });
     else if (item?.category === 'weapon' || item?.category === 'armour') this.pending.push({ type: 'equip', actor, itemId });
     // The sheet pauses the game, so apply the change now for it to show.
@@ -100,7 +111,7 @@ export class Game {
 
   /** Take something off and put it back in the pack. */
   unequip(slot: EquipSlot) {
-    this.pending.push({ type: 'unequip', actor: this.state.party.members[0].id, slot });
+    this.pending.push({ type: 'unequip', actor: this.driven.id, slot });
     if (useHud.getState().screen === 'sheet') this.applyWhilePaused();
   }
 
@@ -113,7 +124,44 @@ export class Game {
   /** Raise or lower the guard. A guard raised just before a blow lands is a parry. */
   setGuard(held: boolean) {
     if (useHud.getState().screen !== 'playing' && held) return;
-    this.pending.push({ type: 'block', actor: this.state.party.members[0].id, held });
+    this.pending.push({ type: 'block', actor: this.driven.id, held });
+  }
+
+  /** Take over another character. Whoever was being driven goes to the party AI. */
+  takeControl(memberId: string) {
+    const screen = useHud.getState().screen;
+    if (screen !== 'playing' && screen !== 'sheet') return;
+    const member = this.state.party.members.find((m) => m.id === memberId);
+    if (!member || member.hp <= 0 || member.id === this.driven.id) return;
+    this.input.clear();
+    this.pending.push({ type: 'control', actor: member.id });
+    if (screen === 'sheet') this.applyWhilePaused();
+  }
+
+  /** Step to the next character still standing, or the one before. */
+  switchCharacter(direction: 1 | -1 = 1) {
+    const members = this.state.party.members;
+    const from = members.indexOf(this.driven);
+    for (let i = 1; i < members.length; i++) {
+      const next = members[(from + i * direction + members.length * 4) % members.length];
+      if (next.hp > 0) {
+        this.takeControl(next.id);
+        return;
+      }
+    }
+  }
+
+  /** Cast the driven character's nth known spell. */
+  castSpell(index: number) {
+    const spellId = this.driven.spells[index];
+    if (spellId) this.pending.push({ type: 'cast', actor: this.driven.id, spellId });
+  }
+
+  /** Send the driven character to the other row. */
+  toggleRow() {
+    const member = this.driven;
+    this.pending.push({ type: 'row', actor: member.id, row: member.row === 'front' ? 'back' : 'front' });
+    if (useHud.getState().screen === 'sheet') this.applyWhilePaused();
   }
 
   /** Open or close the quest journal. The game waits while it is open. */
@@ -121,7 +169,7 @@ export class Game {
     const screen = useHud.getState().screen;
     if (screen === 'playing') {
       this.input.clear();
-      this.pending.push({ type: 'block', actor: this.state.party.members[0].id, held: false });
+      this.pending.push({ type: 'block', actor: this.driven.id, held: false });
       useHud.setState({ screen: 'journal' });
     } else if (screen === 'journal') useHud.setState({ screen: 'playing' });
   }
@@ -131,7 +179,7 @@ export class Game {
     const screen = useHud.getState().screen;
     if (screen === 'playing') {
       this.input.clear();
-      this.pending.push({ type: 'block', actor: this.state.party.members[0].id, held: false });
+      this.pending.push({ type: 'block', actor: this.driven.id, held: false });
       this.syncPack();
       useHud.setState({ screen: 'sheet' });
     } else if (screen === 'sheet') useHud.setState({ screen: 'playing' });
@@ -160,13 +208,9 @@ export class Game {
   }
 
   private resetHud(screen: 'title' | 'playing') {
-    const hero = this.world.def.characters.find((c) => c.id === this.state.party.members[0].id)!;
-    const weapon = this.world.def.items.find((i) => i.id === hero.equipment.mainHand);
+    this.partySignature = '';
     useHud.setState({
       screen,
-      heroName: hero.name,
-      heroClass: hero.classId,
-      weaponName: weapon?.name ?? 'Unarmed',
       log: [],
       floaters: [],
       target: null,
@@ -198,12 +242,12 @@ export class Game {
 
   /** Advance the simulation by exactly one tick. */
   tick() {
-    const actor = this.state.party.members[0].id;
+    const actor = this.driven.id;
     const free = !partyIsBusy(this.state) && !this.state.buffered && this.state.hitStop === 0;
     // Guard changes and item use go straight in; at most one action joins them.
     const commands: Command[] = this.pending;
     this.pending = [];
-    if (this.state.status === 'playing' && !commands.some((c) => c.type !== 'block')) {
+    if (this.state.status === 'playing' && !commands.some((c) => c.type !== 'block' && c.type !== 'row')) {
       const action = this.input.next(free);
       if (action) {
         const command = commandFor(action, actor);
@@ -217,8 +261,9 @@ export class Game {
   }
 
   private handle(event: GameEvent) {
-    this.renderer.onEvent(event);
-    this.audio.onEvent(event);
+    const driven = this.driven.id;
+    this.renderer.onEvent(event, driven);
+    this.audio.onEvent(event, driven);
     const line = describeEvent(event, this.state, this.world);
     // Walking into something repeatedly should not flood the log.
     const nagging = event.type === 'party.bumped' || event.type === 'stamina.low';
@@ -231,7 +276,21 @@ export class Game {
 
     switch (event.type) {
       case 'attack.hit':
-        pushFloater(`${event.damage}${event.critical ? '!' : ''}`, event.kind === 'heavy' || event.critical ? 'heavy' : 'dealt');
+        if (event.actor === driven) pushFloater(`${event.damage}${event.critical ? '!' : ''}`, event.kind === 'heavy' || event.critical ? 'heavy' : 'dealt');
+        else pushFloater(String(event.damage), 'ally', 800, this.state.party.members.findIndex((m) => m.id === event.actor));
+        break;
+      case 'spell.healed': {
+        this.mended[event.target] = (this.mended[event.target] ?? 0) + 1;
+        const name = this.world.def.characters.find((c) => c.id === event.target)?.name ?? '';
+        pushFloater(event.target === driven ? `+${event.healed}` : `+${event.healed} ${name}`, 'healed');
+        break;
+      }
+      case 'party.control':
+      case 'member.row':
+        this.syncPack();
+        break;
+      case 'member.fell':
+        pushFloater(`${this.world.def.characters.find((c) => c.id === event.actor)?.name ?? 'A companion'} falls!`, 'taken', 1400);
         break;
       case 'spell.hit':
         pushFloater(String(event.damage), 'spell');
@@ -251,11 +310,11 @@ export class Game {
         break;
       case 'attack.blocked':
         pushFloater(`-${event.damage}`, 'block');
-        useHud.setState((s) => ({ hurtPulse: s.hurtPulse + 1 }));
+        this.tookBlow(event.target);
         break;
       case 'guard.broken':
         pushFloater(`-${event.damage}`, 'taken');
-        useHud.setState((s) => ({ hurtPulse: s.hurtPulse + 1 }));
+        this.tookBlow(event.target);
         break;
       case 'enemy.telegraph':
         if (!this.tipShown) {
@@ -264,10 +323,12 @@ export class Game {
         }
         break;
       case 'enemy.attack.hit':
-        pushFloater(`-${event.damage}`, 'taken');
-        useHud.setState((s) => ({ hurtPulse: s.hurtPulse + 1 }));
+        // A companion's wound shows on their portrait; only your own fills the view.
+        if (event.target === driven) pushFloater(`-${event.damage}`, 'taken');
+        this.tookBlow(event.target);
         break;
       case 'item.used':
+        this.mended[event.actor] = (this.mended[event.actor] ?? 0) + 1;
         pushFloater(`+${event.healed}`, 'healed');
         this.syncPack();
         break;
@@ -311,11 +372,55 @@ export class Game {
     }
   }
 
+  private tookBlow(memberId: string) {
+    this.hurt[memberId] = (this.hurt[memberId] ?? 0) + 1;
+    if (memberId === this.driven.id) useHud.setState((s) => ({ hurtPulse: s.hurtPulse + 1 }));
+  }
+
+  /** The party panel and the driven character's spells, only when something changed. */
+  private syncParty() {
+    const def = this.world.def;
+    const driven = this.driven;
+    const party: PartyView[] = this.state.party.members.map((m) => {
+      const character = def.characters.find((c) => c.id === m.id)!;
+      const acting = m.action.kind !== 'idle' && this.state.tick < m.action.end;
+      return {
+        id: m.id,
+        name: character.name,
+        className: CLASSES[m.classId].name,
+        portrait: character.portraitAssetId,
+        level: m.level,
+        hp: m.hp,
+        maxHp: m.maxHp,
+        stamina: m.stamina,
+        maxStamina: m.maxStamina,
+        mana: m.mana,
+        maxMana: m.maxMana,
+        row: m.row,
+        active: m === driven,
+        guarding: isGuarding(m),
+        busy: acting ? (m.action.kind === 'cast' ? 'cast' : 'attack') : null,
+        hurt: this.hurt[m.id] ?? 0,
+        mended: this.mended[m.id] ?? 0,
+      };
+    });
+    const spells: SpellView[] = driven.spells.flatMap((id) => {
+      const spell = def.spells.find((sp) => sp.id === id);
+      return spell ? [{ id, name: spell.name, description: spell.description, cost: spell.manaCost, ready: driven.mana >= spell.manaCost }] : [];
+    });
+    const signature = JSON.stringify([party, spells]);
+    if (signature !== this.partySignature) {
+      this.partySignature = signature;
+      useHud.setState({ party, spells });
+    }
+  }
+
   /** Copy the few values the interface shows, only when they have changed. */
   private syncHud() {
     const s = this.state;
     const hud = useHud.getState();
-    const member = s.party.members[0];
+    const member = this.driven;
+    this.syncParty();
     const room = roomAtCell(this.world, s.party.x, s.party.y);
     const roomName = room ? room.name : hud.roomName;
 
@@ -376,8 +481,8 @@ export class Game {
         objectives: questDef.objectives.map((o) => ({ id: o.id, text: o.description, done: progress.done[o.id] === true, optional: o.optional })),
       };
     }
-    // The character sheet and the level readout.
-    const member = this.state.party.members[0];
+    // The character sheet and the level readout, for whoever is being driven.
+    const member = this.driven;
     const character = def.characters.find((c) => c.id === member.id)!;
     const cls = CLASSES[member.classId];
     const weapon = def.items.find((i) => i.id === member.equipment.mainHand);
@@ -405,6 +510,10 @@ export class Game {
       attributes: ATTRIBUTES.map((a) => ({ label: label[a], value: member.attributes[a], modifier: modifier(member.attributes[a]), primary: a === cls.primary })),
       health: `${member.hp}/${member.maxHp}`,
       stamina: `${member.stamina}/${member.maxStamina}`,
+      mana: member.maxMana > 0 ? `${member.mana}/${member.maxMana}` : '',
+      row: member.row,
+      canChangeRow: this.state.party.members.length > 1,
+      spells: member.spells.flatMap((id) => def.spells.find((sp) => sp.id === id)?.name ?? []),
       light: range(weapon?.category === 'weapon' ? weapon.weapon.light.damage : { min: 1, max: 2 }),
       heavy: range(weapon?.category === 'weapon' ? weapon.weapon.heavy.damage : { min: 2, max: 4 }),
       critical: `${criticalChance(member.attributes)}%`,
@@ -413,6 +522,6 @@ export class Game {
       equipment,
     };
     const xpProgress = Math.max(0, Math.min(1, (member.xp - levelStart) / Math.max(1, nextLevel - levelStart)));
-    useHud.setState({ belt, quest, sheet, level: member.level, xpProgress, weaponName: weapon?.name ?? 'Unarmed' });
+    useHud.setState({ belt, quest, sheet, level: member.level, xpProgress, heroName: character.name, heroClass: member.classId, weaponName: weapon?.name ?? 'Unarmed' });
   }
 }

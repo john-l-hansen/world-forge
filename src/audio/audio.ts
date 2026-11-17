@@ -13,6 +13,8 @@ export class AudioEngine {
   private noise: AudioBuffer | null = null;
   private dripTimer: ReturnType<typeof setTimeout> | null = null;
   private stepToggle = false;
+  /** Loudness of the sound being built: a companion's blows sit behind your own. */
+  private level = 1;
   muted = false;
 
   /** Must be called from a user gesture (browsers block audio until then). */
@@ -58,8 +60,45 @@ export class AudioEngine {
     this.master = null;
   }
 
-  onEvent(event: GameEvent) {
+  /**
+   * `driven` is the character the player is playing. Their sounds are in the
+   * foreground; a companion's swings and blows are quieter.
+   */
+  onEvent(event: GameEvent, driven?: string) {
+    const actor = 'actor' in event ? event.actor : undefined;
+    const companion = driven !== undefined && actor !== undefined && actor !== driven;
+    this.level = 1;
+    if (companion) {
+      // Only what a companion does to the fight is heard; their fumbles are not.
+      if (event.type === 'stamina.low' || event.type === 'attack.clang' || event.type === 'spell.refused' || event.type === 'level.up') return;
+      if (event.type === 'attack.swing' || event.type === 'attack.hit' || event.type === 'spell.cast') this.level = 0.45;
+    }
     switch (event.type) {
+      case 'spell.healed':
+        // A warm rising chord.
+        [392, 494, 587, 784].forEach((f, i) => this.tone({ wave: 'sine', from: f, to: f * 1.01, dur: 0.5, gain: 0.1, delay: i * 0.07, attack: 0.08 }));
+        this.noiseHit({ dur: 0.5, freq: 3000, to: 7000, q: 5, gain: 0.05, type: 'bandpass', attack: 0.3 });
+        break;
+      case 'spell.refused':
+        this.tone({ wave: 'square', from: 160, to: 150, dur: 0.07, gain: 0.08, filter: 800 });
+        break;
+      case 'party.control':
+        // Two soft knocks: someone else steps up.
+        this.tone({ wave: 'triangle', from: 330, to: 330, dur: 0.06, gain: 0.12 });
+        this.tone({ wave: 'triangle', from: 440, to: 440, dur: 0.08, gain: 0.12, delay: 0.07 });
+        break;
+      case 'member.row':
+        this.noiseHit({ dur: 0.12, freq: 500, q: 0.8, gain: 0.2, type: 'lowpass', attack: 0.02 });
+        break;
+      case 'member.fell':
+        // A cry cut short, and a body on stone.
+        this.tone({ wave: 'sawtooth', from: 420, to: 110, dur: 0.45, gain: 0.22, vibrato: 30, filter: 1300 });
+        this.noiseHit({ dur: 0.22, freq: 200, q: 0.7, gain: 0.55, type: 'lowpass', delay: 0.4 });
+        this.tone({ wave: 'sine', from: 80, to: 40, dur: 0.4, gain: 0.4, delay: 0.4 });
+        break;
+      case 'attack.out_of_reach':
+        this.tone({ wave: 'square', from: 180, to: 170, dur: 0.05, gain: 0.08, filter: 900 });
+        break;
       case 'party.moved':
         this.stepToggle = !this.stepToggle;
         this.noiseHit({ dur: 0.07, freq: this.stepToggle ? 420 : 340, q: 0.8, gain: 0.3, type: 'lowpass' });
@@ -237,7 +276,7 @@ export class AudioEngine {
     const gain = ctx.createGain();
     const attack = o.attack ?? 0.005;
     gain.gain.setValueAtTime(0.0001, t0);
-    gain.gain.linearRampToValueAtTime(o.gain, t0 + attack);
+    gain.gain.linearRampToValueAtTime(o.gain * this.level, t0 + attack);
     gain.gain.exponentialRampToValueAtTime(0.0001, t0 + o.dur);
     let node: AudioNode = osc;
     if (o.filter) {
@@ -264,7 +303,7 @@ export class AudioEngine {
     if (o.to) filter.frequency.exponentialRampToValueAtTime(o.to, t0 + o.dur);
     const gain = ctx.createGain();
     gain.gain.setValueAtTime(0.0001, t0);
-    gain.gain.linearRampToValueAtTime(o.gain, t0 + (o.attack ?? 0.004));
+    gain.gain.linearRampToValueAtTime(o.gain * this.level, t0 + (o.attack ?? 0.004));
     gain.gain.exponentialRampToValueAtTime(0.0001, t0 + o.dur);
     src.connect(filter).connect(gain).connect(this.master);
     src.start(t0, (t0 * 0.37) % 1.5);

@@ -4,7 +4,7 @@
  */
 import { GOLD, INK, IRON, STONE } from '../art/palette';
 import { Pix, tileNoise } from '../art/pixel';
-import { drawFighterPortrait } from '../art/portraits';
+import { drawPortrait, type PortraitKind } from '../art/portraits';
 
 export function pixToDataUrl(pix: Pix): string {
   const canvas = document.createElement('canvas');
@@ -165,6 +165,30 @@ function staffIcon(): Pix {
   return p;
 }
 
+function daggerIcon(): Pix {
+  const p = new Pix(12, 12);
+  p.line(5, 6, 9, 2, IRON[5], 1);
+  p.line(6, 7, 10, 3, IRON[3], 1);
+  p.line(3, 5, 6, 8, GOLD[2], 1);
+  p.line(1, 10, 3, 8, GOLD[0], 1);
+  p.outline(INK);
+  return p;
+}
+
+function maceIcon(): Pix {
+  const p = new Pix(12, 12);
+  p.line(1, 10, 7, 4, 0x7b5629, 1);
+  p.line(2, 10, 8, 4, 0x473016, 1);
+  p.ellipse(8.5, 3.5, 2.6, 2.6, IRON[3]);
+  p.set(8, 3, IRON[5]);
+  p.set(8, 0, IRON[4]);
+  p.set(11, 3, IRON[2]);
+  p.set(6, 1, IRON[4]);
+  p.set(11, 6, IRON[2]);
+  p.outline(INK);
+  return p;
+}
+
 function scrollIcon(): Pix {
   const p = new Pix(12, 12);
   p.rect(2, 2, 8, 8, 0xd8cfb4);
@@ -181,7 +205,9 @@ export type ItemIcon = 'key' | 'flask' | 'coins' | 'short_sword' | 'dagger' | 's
 
 export interface UiArt {
   panel: string;
+  /** The solo card's portrait (the fighter), kept for the single-character layout. */
   portrait: string;
+  portraits: Record<PortraitKind, string>;
   sword: string;
   icons: Record<IconKind, string>;
   items: Record<ItemIcon, string>;
@@ -192,18 +218,20 @@ let cache: UiArt | null = null;
 export function uiArt(): UiArt {
   if (cache) return cache;
   const kinds: IconKind[] = ['forward', 'back', 'strafeLeft', 'strafeRight', 'turnLeft', 'turnRight'];
+  const portraits = Object.fromEntries((['fighter', 'rogue', 'mage', 'cleric'] as const).map((k) => [k, pixToDataUrl(drawPortrait(k))])) as Record<PortraitKind, string>;
   cache = {
     panel: pixToDataUrl(panelStone()),
-    portrait: pixToDataUrl(drawFighterPortrait()),
+    portrait: portraits.fighter,
+    portraits,
     sword: pixToDataUrl(swordIcon()),
     items: {
       key: pixToDataUrl(keyIcon()),
       flask: pixToDataUrl(flaskIcon()),
       coins: pixToDataUrl(coinsIcon()),
       short_sword: pixToDataUrl(swordIcon()),
-      dagger: pixToDataUrl(swordIcon()),
+      dagger: pixToDataUrl(daggerIcon()),
       staff: pixToDataUrl(staffIcon()),
-      mace: pixToDataUrl(staffIcon()),
+      mace: pixToDataUrl(maceIcon()),
       shield: pixToDataUrl(shieldIcon()),
       jerkin: pixToDataUrl(jerkinIcon()),
       helm: pixToDataUrl(helmIcon()),

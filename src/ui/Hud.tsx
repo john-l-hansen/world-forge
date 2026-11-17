@@ -6,7 +6,7 @@
 import { Fragment, useEffect, useRef } from 'react';
 import type { Game } from '../game/game';
 import type { Action } from '../game/input';
-import { useHud } from '../game/store';
+import { useHud, type PartyView } from '../game/store';
 import { TILE_DOORWAY, TILE_WALL } from '../world/compile';
 import { uiArt, type IconKind } from './art';
 
@@ -30,11 +30,84 @@ export function Floaters() {
   return (
     <>
       {floaters.map((f) => (
-        <div key={f.id} className={`floater ${f.kind}`}>
+        <div key={f.id} className={`floater ${f.kind}${f.slot !== undefined ? ` s${f.slot}` : ''}`}>
           {f.text}
         </div>
       ))}
     </>
+  );
+}
+
+/** The party. One character gets the full card; a company gets a cell each. */
+export function PartyPanel({ game }: { game: Game }) {
+  const party = useHud((s) => s.party);
+  if (party.length <= 1) return <PartyCard />;
+  return (
+    <div className="party" role="group" aria-label="Party">
+      {party.map((member) => (
+        <PartyCell key={member.id} game={game} member={member} />
+      ))}
+    </div>
+  );
+}
+
+function PartyCell({ game, member }: { game: Game; member: PartyView }) {
+  const art = uiArt();
+  const dead = member.hp <= 0;
+  const ratio = member.hp / member.maxHp;
+  const colour = ratio > 0.5 ? '#4f9a3a' : ratio > 0.25 ? '#c9952a' : '#b02a22';
+  return (
+    <button
+      className={`cell raised${member.active ? ' active' : ''}${dead ? ' fallen' : ''}${member.row === 'back' ? ' back' : ''}${member.busy === 'cast' ? ' casting' : ''}`}
+      data-member={member.id}
+      aria-pressed={member.active}
+      title={`${member.name}, ${member.className.toLowerCase()} level ${member.level}, ${member.row} row. Health ${member.hp}/${member.maxHp}, stamina ${member.stamina}/${member.maxStamina}${
+        member.maxMana > 0 ? `, mana ${member.mana}/${member.maxMana}` : ''
+      }.${member.active ? ' You are playing this character.' : dead ? '' : ' Click to play this character.'}`}
+      onPointerDown={() => game.takeControl(member.id)}
+    >
+      {/* The keys restart the flashes each time a blow or a healing lands. */}
+      <span key={`${member.hurt}:${member.mended}`} className={`face${member.hurt ? ' hurt' : ''}${member.mended ? ' mended' : ''}${member.guarding ? ' guarding' : ''}`}>
+        <i style={{ backgroundImage: `url(${art.portraits[member.portrait]})` }} />
+        <b>{member.row === 'front' ? 'F' : 'B'}</b>
+      </span>
+      <span className="cell-body">
+        <span className="name">{member.name}</span>
+        <span className="bar" title="Health">
+          <i style={{ width: `${Math.max(0, ratio) * 100}%`, background: colour }} />
+        </span>
+        <span className="bar stamina" title="Stamina">
+          <i style={{ width: `${Math.max(0, member.stamina / member.maxStamina) * 100}%` }} />
+        </span>
+        {member.maxMana > 0 ? (
+          <span className="bar mana" title="Mana">
+            <i style={{ width: `${Math.max(0, member.mana / member.maxMana) * 100}%` }} />
+          </span>
+        ) : (
+          <span className="bar none" />
+        )}
+      </span>
+    </button>
+  );
+}
+
+/** The driven character's spells, each on a number key. */
+export function SpellBar({ game }: { game: Game }) {
+  const spells = useHud((s) => s.spells);
+  if (spells.length === 0) return null;
+  return (
+    <div className="spells">
+      {spells.slice(0, 4).map((spell, i) => (
+        <button
+          key={spell.id}
+          className={`btn${spell.ready ? '' : ' spent'}`}
+          title={`${spell.name}. ${spell.description} Costs ${spell.cost} mana.${spell.ready ? '' : ' Not enough mana yet.'}`}
+          onPointerDown={() => game.castSpell(i)}
+        >
+          <kbd>{i + 1}</kbd> {spell.name} <em>{spell.cost}</em>
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -276,6 +349,12 @@ export function SheetOverlay({ game }: { game: Game }) {
           <dd>{sheet.health}</dd>
           <dt>Stamina</dt>
           <dd>{sheet.stamina}</dd>
+          {sheet.mana && (
+            <>
+              <dt>Mana</dt>
+              <dd>{sheet.mana}</dd>
+            </>
+          )}
           <dt>{sheet.weapon}</dt>
           <dd>{sheet.light}</dd>
           <dt>Heavy blow</dt>
@@ -286,7 +365,24 @@ export function SheetOverlay({ game }: { game: Game }) {
           <dd>{sheet.defence}</dd>
         </dl>
       </div>
+      {sheet.spells.length > 0 && <h2>Knows {sheet.spells.join(', ')}.</h2>}
       <div className="worn">
+        {sheet.canChangeRow && (
+          <button
+            className="btn row"
+            title={
+              sheet.row === 'front'
+                ? 'Front row: strikes with weapons and takes the blows from ahead. Click to fall back.'
+                : 'Back row: out of reach of blows from ahead, and of its own weapons. Click to step forward.'
+            }
+            onPointerDown={(ev) => {
+              ev.stopPropagation();
+              game.toggleRow();
+            }}
+          >
+            {sheet.row === 'front' ? 'Front row' : 'Back row'}
+          </button>
+        )}
         {sheet.equipment.length === 0 && <span>Nothing worn or held.</span>}
         {sheet.equipment.map((e) => (
           <button
@@ -305,7 +401,7 @@ export function SheetOverlay({ game }: { game: Game }) {
       <h2>
         Experience {sheet.xp}. Level {sheet.level + 1} at {sheet.nextLevel}.
       </h2>
-      <div className="blink">Click an item to take it off - C to close</div>
+      <div className="blink">{sheet.canChangeRow ? 'Tab for the next character - C to close' : 'Click an item to take it off - C to close'}</div>
     </div>
   );
 }
@@ -315,6 +411,8 @@ export function VictoryOverlay({ world }: { world: string }) {
   const hp = useHud((s) => s.hp);
   const maxHp = useHud((s) => s.maxHp);
   const belt = useHud((s) => s.belt);
+  const party = useHud((s) => s.party);
+  const standing = party.filter((m) => m.hp > 0).length;
   const bonus = quest?.objectives.filter((o) => o.optional) ?? [];
   const gold = belt.filter((b) => b.icon === 'coins').length > 0;
   return (
@@ -322,10 +420,21 @@ export function VictoryOverlay({ world }: { world: string }) {
       <h2>Quest complete</h2>
       <h1>{quest?.title ?? world}</h1>
       <dl className="keys">
-        <dt>Health left</dt>
-        <dd>
-          {hp} of {maxHp}
-        </dd>
+        {party.length > 1 ? (
+          <>
+            <dt>Still standing</dt>
+            <dd>
+              {standing} of {party.length}
+            </dd>
+          </>
+        ) : (
+          <>
+            <dt>Health left</dt>
+            <dd>
+              {hp} of {maxHp}
+            </dd>
+          </>
+        )}
         {bonus.map((o) => (
           <Fragment key={o.id}>
             <dt>{o.text}</dt>
@@ -425,42 +534,71 @@ export function MessageLog() {
   );
 }
 
-export function TitleOverlay({ title }: { title: string }) {
+export interface TitleChoice {
+  key: string;
+  label: string;
+  blurb: string;
+}
+
+export function TitleOverlay({ title, choices, current, onChoose }: { title: string; choices: TitleChoice[]; current: string; onChoose: (key: string) => void }) {
   return (
-    <div className="overlay">
+    <div className="overlay title">
       <h2>World Forge presents</h2>
       <h1>{title}</h1>
+      {choices.length > 1 && (
+        <div className="choices">
+          {choices.map((choice, i) => (
+            <button
+              key={choice.key}
+              className={`btn${choice.key === current ? ' chosen' : ''}`}
+              title={choice.blurb}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                onChoose(choice.key);
+              }}
+            >
+              <kbd>{i + 1}</kbd> {choice.label}
+            </button>
+          ))}
+        </div>
+      )}
       <dl className="keys wide">
         <dt>W A S D</dt>
         <dd>Step</dd>
         <dt>Q E</dt>
         <dd>Turn</dd>
-        <dt>J / Click</dt>
+        <dt>J</dt>
         <dd>Attack</dd>
-        <dt>K / Shift-click</dt>
+        <dt>K</dt>
         <dd>Heavy attack</dd>
-        <dt>L / Right-click</dt>
+        <dt>L</dt>
         <dd>Block, parry</dd>
         <dt>Space</dt>
         <dd>Dodge</dd>
         <dt>F / Enter</dt>
         <dd>Open, search</dd>
         <dt>H / R</dt>
-        <dd>Drink, read scroll</dd>
+        <dd>Drink, read</dd>
         <dt>B / C</dt>
-        <dd>Journal, character</dd>
+        <dd>Journal, sheet</dd>
         <dt>M</dt>
         <dd>Sound</dd>
+        <dt>Tab</dt>
+        <dd>Next character</dd>
+        <dt>1 - 4</dt>
+        <dd>Cast a spell</dd>
       </dl>
-      <div className="blink">Press any key or click to enter</div>
+      <h2>Mouse: click to attack, Shift-click for a heavy blow, right-click to block</h2>
+      <div className="blink">{choices.length > 1 ? 'Press 1 or 2 to choose - any other key to enter' : 'Press any key or click to enter'}</div>
     </div>
   );
 }
 
 export function DeathOverlay({ name }: { name: string }) {
+  const company = useHud((s) => s.party.length > 1);
   return (
     <div className="overlay dead">
-      <h1>{name} has fallen</h1>
+      <h1>{company ? 'The party has fallen' : `${name} has fallen`}</h1>
       <div className="blink">Press R to try again</div>
     </div>
   );

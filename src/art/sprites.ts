@@ -308,13 +308,18 @@ export function drawProp(kind: PropKind): Pix {
 /** The player's sword arm, seen from the eyes. Drawn pointing up and left. */
 export const SWORD_W = 96;
 export const SWORD_H = 112;
-export function drawSword(): Pix {
+export type HeldKind = 'short_sword' | 'dagger' | 'staff' | 'mace';
+
+/** What the character being driven holds, seen from the eyes. */
+export function drawHeld(kind: HeldKind): Pix {
   const p = new Pix(SWORD_W, SWORD_H);
-  // Blade from the guard near the bottom right to the tip at the upper left.
+  // Everything runs along one line: from the guard near the bottom right to
+  // the tip at the upper left.
   const gx = 62;
   const gy = 74;
-  const tx = 14;
-  const ty = 4;
+  const reach = kind === 'dagger' ? 0.6 : 1;
+  const tx = gx + (14 - gx) * reach;
+  const ty = gy + (4 - gy) * reach;
   const dx = tx - gx;
   const dy = ty - gy;
   const len = Math.hypot(dx, dy);
@@ -322,34 +327,61 @@ export function drawSword(): Pix {
   const uy = dy / len;
   const nx = -uy;
   const ny = ux;
-  const half = 4.2;
-  const shoulder: [number, number] = [gx + ux * (len - 12), gy + uy * (len - 12)];
-  p.poly(
-    [
-      [gx - nx * half, gy - ny * half],
-      [shoulder[0] - nx * half * 0.8, shoulder[1] - ny * half * 0.8],
-      [tx, ty],
-      [shoulder[0], shoulder[1]],
-      [gx, gy],
-    ],
-    IRON[5],
-  );
-  p.poly(
-    [
-      [gx + nx * half, gy + ny * half],
-      [shoulder[0] + nx * half * 0.8, shoulder[1] + ny * half * 0.8],
-      [tx, ty],
-      [shoulder[0], shoulder[1]],
-      [gx, gy],
-    ],
-    IRON[3],
-  );
-  p.line(gx, gy, shoulder[0], shoulder[1], IRON[2], 1); // fuller
-  // Nicks along the edge.
-  for (const t of [0.3, 0.55, 0.72]) p.set(gx + ux * len * t - nx * half, gy + uy * len * t - ny * half, IRON[1]);
-  // Crossguard.
-  p.line(gx - nx * 12, gy - ny * 12, gx + nx * 12, gy + ny * 12, GOLD[1], 4);
-  p.line(gx - nx * 12 - ux, gy - ny * 12 - uy, gx + nx * 12 - ux, gy + ny * 12 - uy, GOLD[3], 1);
+
+  if (kind === 'short_sword' || kind === 'dagger') {
+    const half = kind === 'dagger' ? 3.4 : 4.2;
+    const shoulder: [number, number] = [gx + ux * (len - 12), gy + uy * (len - 12)];
+    p.poly(
+      [
+        [gx - nx * half, gy - ny * half],
+        [shoulder[0] - nx * half * 0.8, shoulder[1] - ny * half * 0.8],
+        [tx, ty],
+        [shoulder[0], shoulder[1]],
+        [gx, gy],
+      ],
+      IRON[5],
+    );
+    p.poly(
+      [
+        [gx + nx * half, gy + ny * half],
+        [shoulder[0] + nx * half * 0.8, shoulder[1] + ny * half * 0.8],
+        [tx, ty],
+        [shoulder[0], shoulder[1]],
+        [gx, gy],
+      ],
+      IRON[3],
+    );
+    p.line(gx, gy, shoulder[0], shoulder[1], IRON[2], 1); // fuller
+    // Nicks along the edge.
+    for (const t of [0.3, 0.55, 0.72]) p.set(gx + ux * len * t - nx * half, gy + uy * len * t - ny * half, IRON[1]);
+    // Crossguard.
+    const guard = kind === 'dagger' ? 8 : 12;
+    p.line(gx - nx * guard, gy - ny * guard, gx + nx * guard, gy + ny * guard, GOLD[1], 4);
+    p.line(gx - nx * guard - ux, gy - ny * guard - uy, gx + nx * guard - ux, gy + ny * guard - uy, GOLD[3], 1);
+  } else {
+    // A shaft, with a crystal for the staff or a flanged iron head for the mace.
+    p.line(gx, gy, tx, ty, WOOD[1], 5);
+    p.line(gx - nx, gy - ny, tx - nx, ty - ny, WOOD[4], 2);
+    if (kind === 'staff') {
+      p.line(tx + ux * 2 - nx * 5, ty + uy * 2 - ny * 5, tx - ux * 6, ty - uy * 6, WOOD[3], 2);
+      p.line(tx + ux * 2 + nx * 5, ty + uy * 2 + ny * 5, tx - ux * 6, ty - uy * 6, WOOD[2], 2);
+      p.shaded(tx + ux * 2, ty + uy * 2, 5, 5, [0x2c3a7a, 0x4a66c0, 0x86a8f0, 0xdcecff]);
+    } else {
+      for (const side of [-1, 1]) {
+        p.poly(
+          [
+            [tx - ux * 4 + nx * side * 3, ty - uy * 4 + ny * side * 3],
+            [tx + ux * 4 + nx * side * 11, ty + uy * 4 + ny * side * 11],
+            [tx + ux * 9 + nx * side * 3, ty + uy * 9 + ny * side * 3],
+          ],
+          side < 0 ? IRON[4] : IRON[2],
+        );
+      }
+      p.shaded(tx + ux * 3, ty + uy * 3, 7.5, 7.5, [IRON[1], IRON[2], IRON[3], IRON[5]]);
+      p.line(tx - ux * 5 - nx * 4, ty - uy * 5 - ny * 4, tx - ux * 5 + nx * 4, ty - uy * 5 + ny * 4, IRON[1], 2);
+    }
+  }
+
   // Grip, held in a leather-gloved fist, with the forearm running off-screen.
   p.line(gx - ux * 4, gy - uy * 4, gx - ux * 22, gy - uy * 22, WOOD[1], 5);
   p.limb(gx - ux * 16 + 4, gy - uy * 16 + 4, SWORD_W + 8, SWORD_H + 10, [HIDE[0], HIDE[1], HIDE[2]], 20);
@@ -361,11 +393,14 @@ export function drawSword(): Pix {
     p.shaded(kx, ky, 3.2, 3.2, [HIDE[1], HIDE[2], HIDE[3]]);
   }
   p.shaded(gx - ux * 8 + nx * 7, gy - uy * 8 + ny * 7, 4, 3, [SKIN[1], SKIN[2], SKIN[3]]);
-  // Pommel peeking past the fist.
-  p.shaded(gx - ux * 25, gy - uy * 25, 3.5, 3.5, [GOLD[0], GOLD[1], GOLD[2], GOLD[3]]);
+  // Pommel, or the butt of the shaft, peeking past the fist.
+  if (kind === 'short_sword' || kind === 'dagger') p.shaded(gx - ux * 25, gy - uy * 25, 3.5, 3.5, [GOLD[0], GOLD[1], GOLD[2], GOLD[3]]);
+  else p.line(gx - ux * 22, gy - uy * 22, gx - ux * 30, gy - uy * 30, WOOD[2], 4);
   p.outline(INK);
   return p;
 }
+
+export const drawSword = () => drawHeld('short_sword');
 
 /** A banded chest: frame 0 closed, frame 1 open. */
 export const CHEST_W = 44;

@@ -1,6 +1,7 @@
 /**
  * Turns simulation events into lines for the message log.
  */
+import { activeMember } from '../engine/sim';
 import type { GameEvent, SessionState } from '../engine/types';
 import type { CompiledWorld } from '../world/compile';
 
@@ -17,6 +18,12 @@ export function describeEvent(event: GameEvent, state: SessionState, world: Comp
     return def.enemies.find((d) => d.id === enemy?.defId)?.name ?? 'creature';
   };
   const heroName = (charId: string) => def.characters.find((c) => c.id === charId)?.name ?? 'You';
+  // The log speaks to the player as the character they are driving, and names everyone else.
+  const you = activeMember(state).id;
+  const alone = state.party.members.length === 1;
+  /** "You hit" for the driven character, "Sela hits" for a companion. */
+  const does = (charId: string, verb: string, theirs = `${verb}s`) => (charId === you ? `You ${verb}` : `${heroName(charId)} ${theirs}`);
+  const spellName = (spellId: string) => (def.spells.find((sp) => sp.id === spellId)?.name ?? 'spell').toLowerCase();
 
   switch (event.type) {
     case 'room.entered': {
@@ -51,11 +58,11 @@ export function describeEvent(event: GameEvent, state: SessionState, world: Comp
     case 'item.equipped': {
       const item = def.items.find((i) => i.id === event.itemId);
       const verb = event.slot === 'mainHand' ? 'draw' : event.slot === 'offHand' ? 'take up' : 'put on';
-      return { text: `You ${verb} the ${(item?.name ?? 'item').toLowerCase()}.`, tone: 'good' };
+      return { text: `${does(event.actor, verb)} the ${(item?.name ?? 'item').toLowerCase()}.`, tone: 'good' };
     }
     case 'item.unequipped': {
       const item = def.items.find((i) => i.id === event.itemId);
-      return { text: `You put the ${(item?.name ?? 'item').toLowerCase()} away.`, tone: 'plain' };
+      return { text: `${does(event.actor, 'put')} the ${(item?.name ?? 'item').toLowerCase()} away.`, tone: 'plain' };
     }
     case 'item.used': {
       const item = def.items.find((i) => i.id === event.itemId);
@@ -72,8 +79,30 @@ export function describeEvent(event: GameEvent, state: SessionState, world: Comp
       return null;
     case 'spell.cast': {
       const spell = def.spells.find((sp) => sp.id === event.spellId);
-      return { text: `${heroName(event.actor)} reads the scroll. ${spell?.name ?? 'Power'} gathers!`, tone: 'speech' };
+      if (event.itemId) return { text: `${heroName(event.actor)} reads the scroll. ${spell?.name ?? 'Power'} gathers!`, tone: 'speech' };
+      // A companion's spell is reported when it lands, not when it starts.
+      return event.actor === you ? { text: `You speak the words of ${spellName(event.spellId)}.`, tone: 'speech' } : null;
     }
+    case 'spell.healed': {
+      const whom = event.target === event.actor ? (event.actor === you ? 'yourself' : 'their own wounds') : event.target === you ? 'you' : heroName(event.target);
+      return { text: `${does(event.actor, 'mend')} ${whom}. +${event.healed} health.`, tone: 'good' };
+    }
+    case 'spell.refused':
+      if (event.actor !== you) return null;
+      if (event.reason === 'no_mana') return { text: `You have not the mana for ${spellName(event.spellId)}.`, tone: 'plain' };
+      if (event.reason === 'no_target') {
+        const heals = def.spells.find((sp) => sp.id === event.spellId)?.shape === 'heal';
+        return { text: heals ? 'No one is hurt.' : 'There is nothing ahead to strike.', tone: 'plain' };
+      }
+      return null;
+    case 'party.control':
+      return { text: `${heroName(event.actor)} takes the lead.`, tone: 'lore' };
+    case 'member.row':
+      return { text: `${does(event.actor, 'move')} to the ${event.row} row.`, tone: 'plain' };
+    case 'member.fell':
+      return { text: `${heroName(event.actor)} falls!`, tone: 'bad' };
+    case 'attack.out_of_reach':
+      return event.actor === you ? { text: 'You cannot reach from the back row.', tone: 'plain' } : null;
     case 'spell.hit': {
       const spell = def.spells.find((sp) => sp.id === event.spellId);
       return event.killed
@@ -98,17 +127,18 @@ export function describeEvent(event: GameEvent, state: SessionState, world: Comp
       return { text: 'Nothing to use here.', tone: 'plain' };
     case 'attack.hit':
       return event.killed
-        ? { text: `You strike the ${enemyName(event.enemyId)} down!`, tone: 'good' }
+        ? { text: `${does(event.actor, 'strike')} the ${enemyName(event.enemyId)} down!`, tone: 'good' }
         : {
-            text: `${event.critical ? 'Critical! ' : ''}You ${event.kind === 'heavy' ? 'cleave' : 'hit'} the ${enemyName(event.enemyId)} for ${event.damage}.`,
-            tone: event.critical ? 'quest' : 'good',
+            text: `${event.critical ? 'Critical! ' : ''}${event.kind === 'heavy' ? does(event.actor, 'cleave') : does(event.actor, 'hit')} the ${enemyName(event.enemyId)} for ${event.damage}.`,
+            // A companion's ordinary blows are reported quietly.
+            tone: event.critical ? 'quest' : event.actor === you ? 'good' : 'plain',
           };
     case 'xp.gained':
-      return { text: `You gain ${event.amount} experience.`, tone: 'plain' };
+      return { text: alone ? `You gain ${event.amount} experience.` : `Each of you gains ${event.amount} experience.`, tone: 'plain' };
     case 'level.up':
       return { text: `${heroName(event.actor)} reaches level ${event.level}! +${event.healthGained} health, +${event.staminaGained} stamina.`, tone: 'quest' };
     case 'attack.clang':
-      return { text: 'Your blade rings off the stone.', tone: 'plain' };
+      return event.actor === you ? { text: 'Your blade rings off the stone.', tone: 'plain' } : null;
     case 'enemy.alerted':
       return { text: `A ${enemyName(event.enemyId).toLowerCase()} snarls in the dark!`, tone: 'warn' };
     case 'enemy.telegraph': {
@@ -119,7 +149,7 @@ export function describeEvent(event: GameEvent, state: SessionState, world: Comp
       return { text: `The ${enemyName(event.enemyId)} rears back to ${attack?.name ?? 'strike'}!`, tone: 'warn' };
     }
     case 'stamina.low':
-      return { text: 'You are too winded.', tone: 'plain' };
+      return event.actor === you ? { text: 'You are too winded.', tone: 'plain' } : null;
     case 'attack.blocked':
       return { text: `You block. The blow still costs you ${event.damage}.`, tone: 'plain' };
     case 'attack.parried':
@@ -137,7 +167,7 @@ export function describeEvent(event: GameEvent, state: SessionState, world: Comp
     case 'encounter.cleared':
       return null;
     case 'party.died':
-      return { text: 'The dark closes in.', tone: 'bad' };
+      return { text: alone ? 'The dark closes in.' : 'The last of you falls. The dark closes in.', tone: 'bad' };
     default:
       return null;
   }

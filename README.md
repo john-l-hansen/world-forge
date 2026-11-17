@@ -29,9 +29,15 @@ npm run art            # write the generated art to .art/ for review
 | H | Drink a healing draught |
 | R | Read a spell scroll at the enemy straight ahead |
 | B | Quest journal |
-| C | Character sheet (click a worn item to take it off; click an item on the belt to equip it) |
+| C | Character sheet (click a worn item to take it off; click an item on the belt to equip it; the row button moves the character forward or back) |
+| Tab, or click a party cell | Take over the next character. The one you leave is played by the party AI |
+| 1 to 4 | Cast one of the driven character's spells, for mana |
 | M | Sound on or off |
 | R | Try again after a defeat or a victory |
+
+The title screen offers two adventures: 1 for Brannoc alone, 2 for a party of four
+(or open the page with `#party` in the address). In a party, the front row fights
+with weapons and takes the blows from ahead; the back row casts and heals.
 
 Watch the enemy: when it rears back, step away, dodge, block or parry. A red glow means
 the blow cannot be blocked.

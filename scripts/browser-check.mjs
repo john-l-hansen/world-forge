@@ -63,6 +63,8 @@ const state = () =>
       chests: s.chestsOpened,
       inventory: s.inventory,
       equipment: s.party.members[0].equipment,
+      members: s.party.members.map((m) => ({ id: m.id, hp: m.hp, maxHp: m.maxHp, mana: m.mana, controller: m.controller, row: m.row, xp: m.xp, level: m.level })),
+      held: g.renderer.heldKind,
       quest: s.quests.quest_clear_mines,
       enemies: s.enemies.map((e) => ({ ...e })),
       visited: s.visitedRoomIds.length,
@@ -72,6 +74,8 @@ const state = () =>
   });
 const hud = () =>
   page.evaluate(() => ({
+    cells: [...document.querySelectorAll('.party .cell')].map((c) => ({ id: c.dataset.member, name: c.querySelector('.name').innerText, active: c.classList.contains('active'), fallen: c.classList.contains('fallen') })),
+    spells: [...document.querySelectorAll('.spells .btn')].map((b) => b.innerText.replace(/\s+/g, ' ').trim()),
     text: document.querySelector('.screen').innerText,
     overlay: document.querySelector('.overlay')?.innerText ?? null,
     objective: document.querySelector('.plate.objective')?.innerText ?? '',
@@ -477,6 +481,151 @@ await shot('14-defeat');
 await key('KeyR', 400);
 s = await state();
 check(s.status === 'playing' && s.hp === 40 && s.x === 5 && s.y === 14, 'R restarts the adventure');
+
+// --- A party of four -------------------------------------------------------------
+// Back to the title of the solo adventure, then pick the party from there.
+await page.goto(URL);
+await page.waitForFunction(() => window.__worldForge);
+await page.evaluate(() => {
+  window.__partyLog = [];
+  new MutationObserver(() => {
+    for (const p of document.querySelectorAll('.log p')) if (!window.__partyLog.includes(p.innerText)) window.__partyLog.push(p.innerText);
+  }).observe(document.body, { childList: true, subtree: true });
+});
+await page.waitForTimeout(400);
+h = await hud();
+check(/BRANNOC ALONE/i.test(h.overlay ?? '') && /A PARTY OF FOUR/i.test(h.overlay ?? ''), 'the title screen offers both adventures');
+const titleFits = await page.evaluate(() => {
+  const box = document.querySelector('.viewport').getBoundingClientRect();
+  return [...document.querySelectorAll('.overlay.title > *')].every((el) => {
+    const r = el.getBoundingClientRect();
+    return r.top >= box.top && r.bottom <= box.bottom && r.left >= box.left && r.right <= box.right;
+  });
+});
+check(titleFits, 'everything on the title screen fits inside the view');
+await key('Digit2', 900);
+await page.waitForFunction(() => window.__worldForge.state.party.members.length === 4, null, { timeout: 5000 }).catch(() => {});
+s = await state();
+h = await hud();
+check(s.members.length === 4 && (await page.evaluate(() => location.hash)) === '#party', 'pressing 2 on the title loads the party of four');
+check(h.overlay === null && s.tick > 0, 'choosing an adventure starts it at once');
+check(h.cells.map((c) => c.name).join(',').toUpperCase() === 'BRANNOC,SELA,ILVANE,MAREN', `the party panel shows all four (${h.cells.map((c) => c.name).join(', ')})`);
+check(h.cells[0].active && h.cells.filter((c) => c.active).length === 1 && s.held === 'short_sword', 'the party starts with the fighter being driven');
+check(h.spells.length === 0, 'a character with no spells shows no spell bar');
+await shot('18-party');
+
+// Switching the driven character.
+await key('Tab', 350);
+s = await state();
+h = await hud();
+check(s.members[1].controller === 'local' && s.members[0].controller === 'ai' && h.cells[1].active, 'Tab hands control to the next character');
+check(s.held === 'dagger', `the held weapon is the driven character's (${s.held})`);
+check(/Sela takes the lead/i.test(h.text), 'the log says who is being driven');
+await page.locator('.party .cell[data-member="char_mage"]').dispatchEvent('pointerdown');
+await page.waitForTimeout(350);
+s = await state();
+h = await hud();
+check(s.members[2].controller === 'local' && s.members.filter((m) => m.controller !== 'ai').length === 1, 'clicking a party cell takes that character over');
+check(s.held === 'staff' && /Storm bolt/i.test(h.spells[0] ?? ''), `the mage shows a staff and a spell bar (${h.spells.join(', ')})`);
+await key('Digit1', 400);
+s = await state();
+check(s.members[2].mana === 30 && /nothing ahead to strike/i.test((await hud()).text), 'a spell with no target costs nothing');
+await key('KeyJ', 500);
+check(/cannot reach from the back row/i.test((await hud()).text), 'a back-row character cannot swing a weapon');
+
+// The character sheet follows the driven character, and changes rows.
+await key('KeyC', 300);
+h = await hud();
+check(/ILVANE/i.test(h.overlay ?? '') && /MANA/i.test(h.overlay ?? '') && /BACK ROW/i.test(h.overlay ?? ''), 'the sheet shows the driven character, with mana and row');
+await page.locator('.overlay.sheet .btn.row').dispatchEvent('pointerdown');
+await page.waitForTimeout(250);
+s = await state();
+check(s.members[2].row === 'front' && /FRONT ROW/i.test((await hud()).overlay ?? ''), 'the row button moves the character forward');
+await page.locator('.overlay.sheet .btn.row').dispatchEvent('pointerdown');
+await page.waitForTimeout(250);
+check((await state()).members[2].row === 'back', 'and back again');
+await key('Tab', 300);
+h = await hud();
+check(/MAREN/i.test(h.overlay ?? ''), 'Tab on the sheet moves to the next character');
+await shot('19-party-sheet');
+await key('Tab', 200);
+await key('Tab', 200);
+await key('Tab', 200);
+await key('KeyC', 300);
+s = await state();
+check(s.members[2].controller === 'local' && (await hud()).overlay === null, 'the sheet closes with the mage being driven again');
+
+// Into the hall as the mage: two goblins, three companions fighting on their own.
+await walkTo(5, 7);
+await use(N);
+await walkTo(5, 5);
+await turnTo(N);
+await page.waitForFunction(() => window.__worldForge.state.enemies.some((e) => e.alerted), null, { timeout: 8000 }).catch(() => {});
+let cast = false;
+let manaSpent = false;
+let spellDamage = false;
+let sawCasting = false;
+for (let i = 0; i < 900; i++) {
+  s = await state();
+  const alive = s.enemies.filter((e) => e.ai !== 'dead' && e.id.startsWith('encounter_goblin_patrol'));
+  if (s.status !== 'playing' || alive.length === 0) break;
+  const me = s.members.find((m) => m.controller !== 'ai');
+  const ahead = alive.find((e) => {
+    const dx = e.x - s.x;
+    const dy = e.y - s.y;
+    const along = dx * DX[s.facing] + dy * DY[s.facing];
+    return along > 0 && along <= 5 && dx * DY[s.facing] === dy * DX[s.facing];
+  });
+  if (me.id === 'char_mage' && ahead && me.mana >= 8 && !cast) {
+    const before = ahead.hp;
+    await key('Digit1', 120);
+    sawCasting = sawCasting || (await page.evaluate(() => window.__worldForge.state.party.members[2].action.kind === 'cast'));
+    await page.waitForTimeout(700);
+    const after = await state();
+    manaSpent = after.members[2].mana < me.mana;
+    spellDamage = (after.enemies.find((e) => e.id === ahead.id)?.hp ?? 0) < before;
+    cast = manaSpent;
+    if (i === 0 || cast) await shot('20-party-fight');
+  } else if (me.id === 'char_mage' && !ahead && alive.length) {
+    // Face the nearest goblin if it stands in a straight line.
+    const lined = alive.find((e) => e.x === s.x || e.y === s.y);
+    if (lined) await turnTo(lined.x === s.x ? (lined.y < s.y ? N : S) : lined.x > s.x ? E : W);
+    else await page.waitForTimeout(120);
+  } else {
+    await page.waitForTimeout(120);
+  }
+}
+s = await state();
+h = await hud();
+check(sawCasting && manaSpent, 'pressing 1 casts the mage\'s spell and spends mana');
+check(spellDamage, 'the spell wounds the goblin ahead');
+const patrolDead = s.enemies.filter((e) => e.id.startsWith('encounter_goblin_patrol')).every((e) => e.ai === 'dead');
+check(s.status === 'playing' && patrolDead, 'the party beats both goblins');
+const logText = await page.evaluate(() => window.__worldForge && [...document.querySelectorAll('.log p')].map((p) => p.innerText).join(' | '));
+const allLog = await page.evaluate(() => JSON.stringify(window.__partyLog ?? []));
+check(s.members.filter((m) => m.hp > 0).every((m) => m.xp >= 80), `every survivor earns the experience (${s.members.map((m) => m.xp).join(', ')})`);
+check(/(Brannoc|Sela|Maren) (hits|cleaves|strikes)/i.test(allLog + logText), 'companions fight on their own and the log says so');
+await shot('21-party-after');
+
+// The cleric mends whoever is hurt worst.
+await page.locator('.party .cell[data-member="char_cleric"]').dispatchEvent('pointerdown');
+await page.waitForTimeout(300);
+await page.waitForFunction(() => window.__worldForge.state.party.members[3].mana >= 7 && window.__worldForge.state.party.members[3].action.kind === 'idle', null, { timeout: 30000 }).catch(() => {});
+s = await state();
+const cleric = s.members[3];
+if (cleric.hp > 0) {
+  const hurt = s.members.filter((m) => m.hp > 0 && m.hp < m.maxHp);
+  const total = (st) => st.members.reduce((n, m) => n + m.hp, 0);
+  await key('Digit1', 1200);
+  const after = await state();
+  h = await hud();
+  if (hurt.length) check(total(after) > total(s) && after.members[3].mana < cleric.mana && /mend/i.test(h.text), `the cleric's spell heals a wounded companion (${total(s)} to ${total(after)} health)`);
+  else check(after.members[3].mana === cleric.mana && /No one is hurt/i.test(h.text), 'a healing spell is not wasted when nobody is hurt');
+  check(/Mend/i.test(h.spells[0] ?? '') && after.held === 'mace', 'the cleric shows a mace and the mend spell');
+} else {
+  check(h.cells[3].fallen, 'a fallen character is shown as fallen');
+}
+await shot('22-party-cleric');
 
 check(problems.length === 0, `no console errors or failed requests${problems.length ? `: ${problems.join(' | ')}` : ''}`);
 await browser.close();

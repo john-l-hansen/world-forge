@@ -14,7 +14,9 @@ export interface LogEntry {
 export interface Floater {
   id: number;
   text: string;
-  kind: 'dealt' | 'heavy' | 'spell' | 'taken' | 'healed' | 'parry' | 'block' | 'level';
+  kind: 'dealt' | 'heavy' | 'spell' | 'taken' | 'healed' | 'parry' | 'block' | 'level' | 'ally';
+  /** For a companion's blow: their place in the party, so numbers do not pile up. */
+  slot?: number;
 }
 
 export interface BeltItem {
@@ -34,6 +36,40 @@ export interface QuestView {
   objectives: { id: string; text: string; done: boolean; optional: boolean }[];
 }
 
+/** One character in the party panel. */
+export interface PartyView {
+  id: string;
+  name: string;
+  className: string;
+  portrait: 'fighter' | 'rogue' | 'mage' | 'cleric';
+  level: number;
+  hp: number;
+  maxHp: number;
+  stamina: number;
+  maxStamina: number;
+  mana: number;
+  maxMana: number;
+  row: 'front' | 'back';
+  /** The character the player is driving. */
+  active: boolean;
+  guarding: boolean;
+  /** What they are in the middle of, for the panel to show. */
+  busy: 'attack' | 'cast' | null;
+  /** Counts blows taken and healing received; a change replays the flash. */
+  hurt: number;
+  mended: number;
+}
+
+/** A spell the driven character can cast, with its number key. */
+export interface SpellView {
+  id: string;
+  name: string;
+  description: string;
+  cost: number;
+  /** Enough mana to cast it right now. */
+  ready: boolean;
+}
+
 /** Everything the character sheet shows, worked out by the game layer. */
 export interface SheetView {
   name: string;
@@ -47,6 +83,12 @@ export interface SheetView {
   attributes: { label: string; value: number; modifier: number; primary: boolean }[];
   health: string;
   stamina: string;
+  /** Empty for a character with no mana. */
+  mana: string;
+  row: 'front' | 'back';
+  /** False when the character adventures alone and rows mean nothing. */
+  canChangeRow: boolean;
+  spells: string[];
   light: string;
   heavy: string;
   critical: string;
@@ -70,6 +112,9 @@ export interface HudState {
   /** Progress through the current level, 0 to 1. */
   xpProgress: number;
   sheet: SheetView | null;
+  /** Every character, in party order. One entry for a lone adventurer. */
+  party: PartyView[];
+  spells: SpellView[];
   facing: number;
   roomName: string;
   log: LogEntry[];
@@ -98,6 +143,8 @@ export const useHud = create<HudState>(() => ({
   level: 1,
   xpProgress: 0,
   sheet: null,
+  party: [],
+  spells: [],
   facing: 0,
   roomName: '',
   log: [],
@@ -115,8 +162,8 @@ export function pushLog(text: string, tone: Tone) {
   useHud.setState((s) => ({ log: [...s.log.slice(-39), { id: nextId++, text, tone }] }));
 }
 
-export function pushFloater(text: string, kind: Floater['kind'], lifeMs = 800) {
+export function pushFloater(text: string, kind: Floater['kind'], lifeMs = 800, slot?: number) {
   const id = nextId++;
-  useHud.setState((s) => ({ floaters: [...s.floaters, { id, text, kind }] }));
+  useHud.setState((s) => ({ floaters: [...s.floaters, { id, text, kind, slot }] }));
   setTimeout(() => useHud.setState((s) => ({ floaters: s.floaters.filter((f) => f.id !== id) })), lifeMs);
 }

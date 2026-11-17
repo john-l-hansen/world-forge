@@ -4,8 +4,9 @@
  * unfiltered, so every pixel on screen is a real pixel of the frame.
  */
 import * as THREE from 'three';
-import { CHEST_H, CHEST_W, GOBLIN_H, GOBLIN_POSES, GOBLIN_W, PROP_SIZE, SWORD_H, SWORD_W, TORCH_H, TORCH_W, drawChest, drawGoblin, drawPickup, drawProp, drawSword, drawTorch, type GoblinPose, type GoblinVariant } from '../art/sprites';
+import { CHEST_H, CHEST_W, GOBLIN_H, GOBLIN_POSES, GOBLIN_W, PROP_SIZE, SWORD_H, SWORD_W, TORCH_H, TORCH_W, drawChest, drawGoblin, drawHeld, drawPickup, drawProp, drawTorch, type GoblinPose, type GoblinVariant, type HeldKind } from '../art/sprites';
 import { Pix } from '../art/pixel';
+import { activeMember, isGuarding } from '../engine/sim';
 import { BUMP_TICKS, ENEMY_ATTACK_POSE_TICKS, MOVE_TICKS, TURN_TICKS, type EnemyState, type GameEvent, type SessionState } from '../engine/types';
 import { DIR_X, DIR_Y, type CompiledWorld } from '../world/compile';
 import { DOOR_HEIGHT, buildAtlas, buildDoorGeometry, buildDungeonGeometry, buildSecretGeometry } from './dungeon';
@@ -91,6 +92,10 @@ export class DungeonRenderer {
   private torchMaterials: THREE.ShaderMaterial[] = [];
   private facers: THREE.Object3D[] = [];
   private sword: THREE.Mesh;
+  private swordMaterial: THREE.ShaderMaterial;
+  /** One texture per kind of weapon a character can hold up. */
+  private heldTextures = new Map<HeldKind, THREE.Texture>();
+  private heldKind: HeldKind = 'short_sword';
   private disposables: { dispose(): void }[] = [];
 
   // Short-lived presentation effects, timed in seconds of wall-clock time.
@@ -238,14 +243,19 @@ export class DungeonRenderer {
 
     // --- Held weapon, in screen pixels ---------------------------------------
     this.overlayCamera = new THREE.OrthographicCamera(0, this.width, this.height, 0, -1, 1);
-    const swordTexture = pixTexture(drawSword());
-    const swordMaterial = makeOverlayMaterial(swordTexture);
+    for (const kind of ['short_sword', 'dagger', 'staff', 'mace'] as const) {
+      const texture = pixTexture(drawHeld(kind));
+      this.heldTextures.set(kind, texture);
+      this.disposables.push(texture);
+    }
+    const swordMaterial = makeOverlayMaterial(this.heldTextures.get('short_sword')!);
+    this.swordMaterial = swordMaterial;
     const swordGeometry = new THREE.PlaneGeometry(SWORD_W, SWORD_H);
     // Pivot around the fist, which sits low and right in the sprite.
     swordGeometry.translate(SWORD_W / 2 - 66, SWORD_H / 2 - (SWORD_H - 84), 0);
     this.sword = new THREE.Mesh(swordGeometry, swordMaterial);
     this.overlayScene.add(this.sword);
-    this.disposables.push(swordTexture, swordMaterial, swordGeometry);
+    this.disposables.push(swordMaterial, swordGeometry);
 
     // --- Spell bolt: jagged lines redrawn every frame while it lasts -----------
     const boltGeometry = new THREE.BufferGeometry();
@@ -266,13 +276,19 @@ export class DungeonRenderer {
   }
 
   /** React to simulation events with short camera and screen effects. */
-  onEvent(event: GameEvent) {
+  /** `driven` is the character whose eyes the view looks through. */
+  onEvent(event: GameEvent, driven?: string) {
+    const mine = !('actor' in event) || driven === undefined || event.actor === driven;
     switch (event.type) {
       case 'attack.hit':
-        this.hitKick = 1;
+        // A companion's blow nudges the view; your own jolts it.
+        this.hitKick = Math.max(this.hitKick, mine ? 1 : 0.3);
         break;
       case 'attack.clang':
-        this.hitKick = 0.6;
+        if (mine) this.hitKick = 0.6;
+        break;
+      case 'spell.healed':
+        this.healFlash = Math.max(this.healFlash, 0.8);
         break;
       case 'attack.parried':
         this.spark = 1;
@@ -287,8 +303,14 @@ export class DungeonRenderer {
         break;
       case 'guard.broken':
       case 'enemy.attack.hit':
-        this.hurtKick = 1;
-        this.damageFlash = 1;
+        // The whole party shares one view: a blow on a companion is felt, but less.
+        if (driven === undefined || event.target === driven) {
+          this.hurtKick = 1;
+          this.damageFlash = 1;
+        } else {
+          this.hurtKick = Math.max(this.hurtKick, 0.35);
+          this.damageFlash = Math.max(this.damageFlash, 0.3);
+        }
         break;
       case 'party.died':
         this.damageFlash = 1;
@@ -321,7 +343,8 @@ export class DungeonRenderer {
     this.damageFlash = Math.max(0, this.damageFlash - dt * 3.2);
     this.healFlash = Math.max(0, this.healFlash - dt * 2.2);
     this.spark = Math.max(0, this.spark - dt * 6);
-    const guardGoal = state.status === 'playing' && state.party.members[0]?.blocking && state.party.members[0].action.kind === 'idle' ? 1 : 0;
+    const driven = activeMember(state);
+    const guardGoal = state.status === 'playing' && isGuarding(driven) ? 1 : 0;
     this.guard += Math.sign(guardGoal - this.guard) * Math.min(Math.abs(guardGoal - this.guard), dt * 9);
     this.deathFade = state.status === 'dead' ? Math.min(1, this.deathFade + dt * 0.7) : 0;
 
@@ -361,8 +384,13 @@ export class DungeonRenderer {
     this.gl.clear();
     this.gl.render(this.scene, this.camera);
     this.gl.clearDepth();
-    // The sword is only drawn while one is held.
-    this.sword.visible = Boolean(state.party.members[0]?.equipment.mainHand);
+    // The weapon is only drawn while one is held, and is whatever the driven character holds.
+    const held = this.world.def.items.find((i) => i.id === driven.equipment.mainHand);
+    this.sword.visible = held?.category === 'weapon';
+    if (held?.category === 'weapon' && held.visualAssetId !== this.heldKind) {
+      this.heldKind = held.visualAssetId;
+      this.swordMaterial.uniforms.uMap.value = this.heldTextures.get(this.heldKind);
+    }
     if (state.status === 'playing') this.gl.render(this.overlayScene, this.overlayCamera);
     this.gl.setRenderTarget(null);
     this.gl.render(this.presentScene, this.presentCamera);
@@ -512,7 +540,7 @@ export class DungeonRenderer {
 
   private placeSword(state: SessionState, now: number, timeSeconds: number) {
     const p = state.party;
-    const member = p.members[0];
+    const member = activeMember(state);
     const moving = now - p.moveStart < p.moveTicks;
     const stride = (now - p.moveStart) / p.moveTicks;
     const bobX = moving ? Math.sin(stride * Math.PI * 2) * 3 : Math.sin(timeSeconds * 1.6) * 1.2;
@@ -550,6 +578,16 @@ export class DungeonRenderer {
         y += (26 * reach - 44 * reach * k) * (1 - back);
         angle = (-0.55 * reach + 1.75 * reach * k) * (1 - back);
       }
+    }
+    if (action && action.kind === 'cast') {
+      // Casting: the weapon is thrust up and forward, held there, then lowered.
+      const t = now - action.start;
+      const rise = smooth(clamp01(t / Math.max(1, action.hitTick - action.start)));
+      const fall = smooth(clamp01((t - (action.hitTick - action.start) - 6) / Math.max(1, action.end - action.hitTick - 6)));
+      const k = rise * (1 - fall);
+      x -= this.width * 0.12 * k;
+      y += this.height * 0.2 * k;
+      angle = 0.28 * k + Math.sin(timeSeconds * 40) * 0.02 * k;
     }
     this.sword.position.set(Math.round(x), Math.round(y), 0);
     this.sword.rotation.z = angle;

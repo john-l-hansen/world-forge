@@ -90,6 +90,12 @@ html, body, #root {
 .floater.parry { top: 96px; color: var(--gold-hi); }
 .floater.block { top: 150px; color: var(--bone); }
 .floater.level { top: 40px; color: var(--quest); animation-duration: 1.6s; }
+/* A companion's blow: smaller, and off to their side of the view. */
+.floater.ally { top: 96px; color: var(--bone); font-size: 8px; line-height: 10px; right: auto; width: 60px; }
+.floater.ally.s0 { left: 70px; }
+.floater.ally.s1 { left: 190px; }
+.floater.ally.s2 { left: 40px; top: 112px; }
+.floater.ally.s3 { left: 220px; top: 112px; }
 @keyframes rise { from { transform: translateY(0); opacity: 1; } 70% { opacity: 1; } to { transform: translateY(-24px); opacity: 0; } }
 
 .side { position: absolute; left: 332px; top: 4px; width: 144px; height: 262px; display: flex; flex-direction: column; gap: 4px; }
@@ -114,6 +120,41 @@ html, body, #root {
 .hp-row .bar.xp > i { background: #6f8fd0; box-shadow: none; }
 .weapon { display: flex; align-items: center; gap: 3px; color: var(--bone); white-space: nowrap; overflow: hidden; }
 .weapon img { width: 12px; height: 12px; }
+
+/* A company of up to four: two across, front row above back row when the party is two and two. */
+.party { height: 58px; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 2px; }
+.cell { display: flex; gap: 2px; padding: 1px; font: inherit; color: var(--bone); background: #17120e; text-align: left; cursor: pointer; min-width: 0; }
+.cell.back { background: #120f10; }
+.cell.active { border-color: var(--gold-hi) var(--gold-lo) var(--gold-lo) var(--gold-hi); background: #2a2118; }
+.cell.fallen { cursor: default; }
+.cell.fallen .face i { filter: grayscale(1) brightness(0.45); }
+.cell.fallen .name { color: var(--dim); }
+.face { position: relative; flex: none; width: 20px; height: 24px; background: var(--ink); outline: 1px solid var(--ink); }
+.face i { display: block; width: 20px; height: 24px; background-position: -10px -9px; background-repeat: no-repeat; image-rendering: pixelated; }
+.face b { position: absolute; right: 0; bottom: -1px; font-weight: 400; color: var(--gold-hi); text-shadow: 1px 1px 0 var(--ink), -1px 0 0 var(--ink), 0 -1px 0 var(--ink); }
+.cell.back .face b { color: var(--lore); }
+.face.hurt i { animation: hurt 0.3s steps(3); }
+.face.mended i { animation: mended 0.5s steps(4); }
+.face.hurt.mended i { animation: hurt 0.3s steps(3); }
+.face.guarding { outline-color: #e8f2f6; }
+@keyframes mended { 0%, 60% { filter: brightness(1.5) sepia(1) saturate(5) hue-rotate(60deg); } 100% { filter: none; } }
+.cell-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; overflow: hidden; }
+.cell-body .name { line-height: 8px; white-space: nowrap; font-weight: 400; color: var(--bone); }
+.cell.active .name { color: var(--gold-hi); }
+.cell-body .bar { display: block; height: 5px; }
+.cell-body .bar > i { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3); }
+.cell-body .bar.stamina { height: 4px; background: #2a210d; }
+.cell-body .bar.stamina > i { background: #d8b23a; box-shadow: none; }
+.cell-body .bar.mana { height: 4px; background: #14182a; }
+.cell-body .bar.mana > i { background: #6f8fd0; box-shadow: none; }
+.cell-body .bar.none { height: 4px; background: none; border-color: transparent; }
+.cell.casting .name { color: #cdb8ff; }
+
+.spells { height: 14px; display: flex; gap: 2px; }
+.spells .btn { gap: 3px; white-space: nowrap; overflow: hidden; color: #cdb8ff; }
+.spells .btn em { font-style: normal; color: #6f8fd0; }
+.spells .btn.spent { color: var(--dim); }
+.spells .btn.spent em { color: var(--bad); }
 
 .plate { height: 14px; display: flex; align-items: center; justify-content: center; color: var(--gold); background: #17120e; white-space: nowrap; overflow: hidden; }
 
@@ -176,6 +217,13 @@ html, body, #root {
 .overlay .keys dt { color: var(--gold); }
 .overlay .keys dd { margin: 0; }
 .overlay h3 { margin: 0; font-size: 16px; line-height: 18px; font-weight: 400; color: var(--gold-hi); }
+.overlay.title { gap: 4px; }
+.overlay.title .keys { margin: 0; white-space: nowrap; }
+.overlay.title h2 { max-width: 250px; }
+.choices { display: flex; gap: 4px; }
+.choices .btn { flex: none; padding: 2px 6px; }
+.choices .btn.chosen { color: var(--gold-hi); border-color: var(--gold-hi) var(--gold-lo) var(--gold-lo) var(--gold-hi); background: #4e4237; }
+.overlay.sheet .worn .btn.row { color: var(--gold-hi); }
 .overlay.journal { padding: 0 24px; background: rgba(5, 4, 6, 0.9); }
 .overlay.journal p { margin: 0; color: var(--lore); max-width: 240px; }
 .overlay.journal ul { list-style: none; margin: 4px 0; padding: 0; text-align: left; }

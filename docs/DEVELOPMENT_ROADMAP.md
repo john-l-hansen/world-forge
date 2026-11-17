@@ -1,12 +1,12 @@
 DEVELOPMENT ROADMAP — WORLD FORGE
-Status (2026-11-15)
+Status (2026-11-16)
 Phases 0, 1 and 2 are built and tested, and The Forgotten Mines is complete as the golden reference adventure. See DEVELOPMENT_LOG.md for the milestone reports.
 Phase 2 still needs one thing no test can give: a person playing it and judging whether the combat feels good. Its numbers are first guesses.
 The code lives at https://github.com/john-l-hansen/world-forge.
-Phase 3 is partly built: attributes, classes, levels and experience, equipment and armour, a healing draught, and spells cast from scrolls are done and tested. Party switching and party AI are not started, because they wait on a decision about how the party works (see the development log, milestone 6).
-Next: tune combat from play, decide the party model, then finish Phase 3.
+Phase 3 is built and tested: attributes, classes, levels and experience, equipment and armour, consumables, spells and mana, and a party of up to four with rows, character switching and party AI. The party model is one body with a front and a back row (decided 2026-11-16; see the development log, milestone 7). A second adventure, the same mine for a party of four, can be chosen from the title screen.
+Next: a person plays both adventures, combat and the party are tuned from that, then a choice between Phase 3b (co-op) and Phase 4.
 Two phases were added on 2026-11-15: Phase 3b (co-op play) and Phase 6b (dynamic world simulation).
-The world schema and world validation were brought forward from Phase 4, so that The Forgotten Mines loads from world data and is not hard-coded. The schema is at version 0.6.0 (rooms, doors, locks, secret doors, enemies with attack lists, poise and experience, encounters, bosses, objects, chests, pickups, weapons with light and heavy attacks, armour, keys, consumables, scrolls, treasure, spells, characters with class, level, attributes and equipment, quests).
+The world schema and world validation were brought forward from Phase 4, so that The Forgotten Mines loads from world data and is not hard-coded. The schema is at version 0.7.0 (rooms, doors, locks, secret doors, enemies with attack lists, poise and experience, encounters, bosses, objects, chests, pickups, weapons with light and heavy attacks, armour, keys, consumables, scrolls, treasure, spells, characters with class, level, attributes, equipment, row and known spells, bolt and healing spells, quests).
 1. Development philosophy
 Build incrementally.
 Every milestone must produce functioning software.
@@ -108,7 +108,7 @@ Sound integration: done, but not yet listened to.
 Not done: directional attacks (horizontal, vertical, thrust), which GAMEPLAY_DESIGN lists as "eventually".
 Controls
 J or left click: light attack. K or Shift + left click: heavy attack. Hold L or right click: block and parry. Space: dodge. B: journal.
-5. Phase 3: RPG systems (partly built)
+5. Phase 3: RPG systems (complete)
 Objectives
 Establish the basic RPG framework.
 Tasks
@@ -132,16 +132,19 @@ Progression works.
 Party members can be managed.
 Status of each task
 Character attributes: done. Five attributes; all derived stats come from one file of formulas.
-Character classes: done as data (fighter, rogue, mage, cleric). Only the fighter is playable so far.
+Character classes: done as data (fighter, rogue, mage, cleric). All four are playable in the party adventure.
 Inventory: done. Shared by the party.
 Equipment: done. Seven slots, equip and unequip, auto-equip into empty slots.
 Weapons: done. Light and heavy attacks; bare hands when unarmed.
 Armour: done. Flat defence taken off every blow.
 Consumables: done. A healing draught and spell scrolls.
 Experience and progression: done. Levels raise health, stamina and the class's primary attribute.
-Spells: done as world data, cast from scrolls. No character spends mana yet.
-Party switching: not started. Waits on the party model decision.
-Basic party AI: not started. Waits on the party model decision.
+Spells: done as world data. Cast from scrolls, or by a character who knows them, for mana. Two shapes: a bolt and a heal.
+Party switching: done. Tab or a click takes a character over; the one left goes to the party AI. Characters stand in a front or back row.
+Basic party AI: done. Companions heal the badly hurt, cast at what is ahead, and fight from the front row. They do not block, dodge, use items or move the party.
+Not done: judging any of this in play. The party adventure's numbers are first guesses.
+Controls
+Tab: next character. Click a party cell: take that character over. 1 to 4: cast the driven character's spells. C: character sheet, with a button to change row.
 5b. Phase 3b: Co-op play (added 2026-11-15)
 Objectives
 Let two to four people each control one party member in the same dungeon.

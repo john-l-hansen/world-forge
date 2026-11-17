@@ -4,7 +4,7 @@ import { DEFAULT_KEYMAP } from '../game/input';
 import { useHud } from '../game/store';
 import type { CompiledWorld } from '../world/compile';
 import { uiArt } from './art';
-import { ActionButtons, AutoMap, Belt, DeathOverlay, Floaters, JournalOverlay, MessageLog, MovePad, ObjectivePlate, PartyCard, SheetOverlay, TargetBar, TitleOverlay, VictoryOverlay } from './Hud';
+import { ActionButtons, AutoMap, Belt, DeathOverlay, Floaters, JournalOverlay, MessageLog, MovePad, ObjectivePlate, PartyPanel, SheetOverlay, SpellBar, TargetBar, TitleOverlay, VictoryOverlay, type TitleChoice } from './Hud';
 
 const LOGICAL_W = 480;
 const LOGICAL_H = 270;
@@ -20,7 +20,17 @@ function useWholeNumberScale() {
   return scale;
 }
 
-export function GameScreen({ world }: { world: CompiledWorld }) {
+export interface GameScreenProps {
+  world: CompiledWorld;
+  /** The adventures on offer from the title screen, and which one this is. */
+  choices: TitleChoice[];
+  current: string;
+  /** Go straight into the game: the player has just picked this adventure. */
+  autoBegin: boolean;
+  onChoose: (key: string) => void;
+}
+
+export function GameScreen({ world, choices, current, autoBegin, onChoose }: GameScreenProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [game, setGame] = useState<Game | null>(null);
   const scale = useWholeNumberScale();
@@ -36,8 +46,20 @@ export function GameScreen({ world }: { world: CompiledWorld }) {
     setGame(instance);
     // A handle for browser tests and debugging. Not used by the game itself.
     (window as unknown as { __worldForge?: Game }).__worldForge = instance;
+    if (autoBegin) instance.begin();
     return () => instance.dispose();
+    // autoBegin is read once, at the moment the game is created.
   }, [world]);
+
+  /** Picking the adventure already on screen starts it; picking another loads that one. */
+  const choose = (key: string) => {
+    if (key === current) game?.begin();
+    else onChoose(key);
+  };
+
+  // The key handler is set up once per game; it reaches the latest choice through this.
+  const chooseRef = useRef(choose);
+  chooseRef.current = choose;
 
   useEffect(() => {
     if (!game) return;
@@ -46,7 +68,9 @@ export function GameScreen({ world }: { world: CompiledWorld }) {
       const current = useHud.getState().screen;
       if (current === 'title') {
         e.preventDefault();
-        game.begin();
+        const picked = /^(Digit|Numpad)[1-9]$/.test(e.code) ? choices[Number(e.code.slice(-1)) - 1] : undefined;
+        if (picked) chooseRef.current(picked.key);
+        else game.begin();
         return;
       }
       if (e.code === 'KeyM') {
@@ -74,7 +98,17 @@ export function GameScreen({ world }: { world: CompiledWorld }) {
         game.toggleSheet();
         return;
       }
+      // Tab moves to the next character, on the sheet as well as in play.
+      if (e.code === 'Tab') {
+        e.preventDefault();
+        if (!e.repeat) game.switchCharacter(e.shiftKey ? -1 : 1);
+        return;
+      }
       if (current === 'sheet') return;
+      if (/^(Digit|Numpad)[1-4]$/.test(e.code)) {
+        if (!e.repeat) game.castSpell(Number(e.code.slice(-1)) - 1);
+        return;
+      }
       if (e.code === 'KeyH') {
         game.drink();
         return;
@@ -110,7 +144,7 @@ export function GameScreen({ world }: { world: CompiledWorld }) {
       window.removeEventListener('keyup', up);
       window.removeEventListener('blur', blur);
     };
-  }, [game]);
+  }, [game, choices]);
 
   return (
     <div className="stage">
@@ -134,7 +168,7 @@ export function GameScreen({ world }: { world: CompiledWorld }) {
           <canvas ref={canvasRef} width={320} height={200} />
           {screen === 'playing' && <TargetBar />}
           {screen === 'playing' && <Floaters />}
-          {screen === 'title' && <TitleOverlay title={world.def.world.name} />}
+          {screen === 'title' && <TitleOverlay title={world.def.world.name} choices={choices} current={current} onChoose={choose} />}
           {screen === 'dead' && <DeathOverlay name={heroName} />}
           {screen === 'journal' && <JournalOverlay />}
           {screen === 'sheet' && game && <SheetOverlay game={game} />}
@@ -142,9 +176,10 @@ export function GameScreen({ world }: { world: CompiledWorld }) {
         </div>
 
         <div className="side">
-          <PartyCard />
+          {game && <PartyPanel game={game} />}
           <div className="plate raised">{roomName}</div>
           <ObjectivePlate />
+          {game && <SpellBar game={game} />}
           {game && <AutoMap game={game} />}
           {game && <Belt game={game} />}
           <div className="actions">{game && <ActionButtons game={game} />}</div>

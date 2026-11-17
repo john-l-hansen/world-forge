@@ -308,7 +308,7 @@ Large-scale asset generation.
 These belong to future development.
 Multiplayer was on this list until 2026-11-15. Co-op play is now Phase 3b. Other forms of multiplayer (competitive play, large shared worlds) remain out of scope.
 15. Immediate priority
-The immediate goal is to play The Forgotten Mines and tune the combat numbers, decide how the party works, then finish Phase 3 with party switching and party AI.
+The immediate goal is for a person to play both adventures (Brannoc alone, and the party of four), tune combat and the party from that, and then choose between Phase 3b (co-op) and Phase 4.
 Do not spend the initial development effort building the entire creator platform.
 Build a playable retro dungeon first.
 Then make it extensible.

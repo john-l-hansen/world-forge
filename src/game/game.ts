@@ -216,6 +216,7 @@ export class Game {
       target: null,
       belt: [],
       quest: null,
+      quests: [],
       cleared: false,
       hurtPulse: 0,
       mapVersion: 0,
@@ -340,6 +341,10 @@ export class Game {
         break;
       case 'quest.completed': {
         this.syncPack();
+        // The adventure is won when every main quest the party holds is done.
+        const held = Object.keys(this.state.quests).map((id) => this.world.def.quests.find((q) => q.id === id)!);
+        const mains = held.filter((q) => q.kind === 'main');
+        if (mains.length === 0 || !mains.every((q) => this.state.quests[q.id].completed)) break;
         // Let the last blow, the death and the fanfare play out first.
         const session = this.sessionNumber;
         setTimeout(() => {
@@ -469,18 +474,23 @@ export class Game {
         item.category === 'consumable' ? (item.effect.type === 'cast' ? 'read' : 'drink') : item.category === 'weapon' || item.category === 'armour' ? 'equip' : null;
       belt.push({ itemId: item.id, name: item.name, description: item.description, icon: item.visualAssetId, count, action });
     }
-    let quest: QuestView | null = null;
-    const questId = Object.keys(this.state.quests)[0];
-    const questDef = def.quests.find((q) => q.id === questId);
-    if (questDef) {
+    const quests: QuestView[] = [];
+    for (const questId of Object.keys(this.state.quests)) {
+      const questDef = def.quests.find((q) => q.id === questId);
+      if (!questDef) continue;
       const progress = this.state.quests[questId];
-      quest = {
+      quests.push({
+        id: questId,
+        main: questDef.kind === 'main',
         title: questDef.title,
         description: questDef.description,
         completed: progress.completed,
         objectives: questDef.objectives.map((o) => ({ id: o.id, text: o.description, done: progress.done[o.id] === true, optional: o.optional })),
-      };
+      });
     }
+    // Main quests first, otherwise in the order they were taken up.
+    quests.sort((a, b) => Number(b.main) - Number(a.main));
+    const quest = quests[0] ?? null;
     // The character sheet and the level readout, for whoever is being driven.
     const member = this.driven;
     const character = def.characters.find((c) => c.id === member.id)!;
@@ -522,6 +532,6 @@ export class Game {
       equipment,
     };
     const xpProgress = Math.max(0, Math.min(1, (member.xp - levelStart) / Math.max(1, nextLevel - levelStart)));
-    useHud.setState({ belt, quest, sheet, level: member.level, xpProgress, heroName: character.name, heroClass: member.classId, weaponName: weapon?.name ?? 'Unarmed' });
+    useHud.setState({ belt, quest, quests, sheet, level: member.level, xpProgress, heroName: character.name, heroClass: member.classId, weaponName: weapon?.name ?? 'Unarmed' });
   }
 }

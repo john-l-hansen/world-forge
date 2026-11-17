@@ -68,3 +68,13 @@ writeFileSync('.art/props.png', encodePng(sheet([drawTorch(0), drawTorch(1), dra
 writeFileSync('.art/held.png', encodePng(sheet([drawHeld('short_sword'), drawHeld('dagger'), drawHeld('staff'), drawHeld('mace')], 3, 0x3a312a)));
 writeFileSync('.art/portraits.png', encodePng(sheet([drawPortrait('fighter'), drawPortrait('rogue'), drawPortrait('mage'), drawPortrait('cleric')], 6, 0x3a312a)));
 console.log('wrote .art/*.png');
+
+// The crypt: its tileset, its dead and its furniture.
+{
+  const { TILESETS } = await import('../src/art/tilesets');
+  const { drawUndead } = await import('../src/art/undead');
+  writeFileSync('.art/crypt-tiles.png', encodePng(sheet(TILESETS.crypt(), 2, 0x3a312a)));
+  writeFileSync('.art/skeleton.png', encodePng(sheet(GOBLIN_POSES.map((pose) => drawUndead(pose, 'skeleton')), 3, 0x3a3f48)));
+  writeFileSync('.art/warden.png', encodePng(sheet(GOBLIN_POSES.map((pose) => drawUndead(pose, 'warden')), 3, 0x3a3f48)));
+  writeFileSync('.art/crypt-props.png', encodePng(sheet([drawProp('sarcophagus'), drawProp('urn'), drawProp('bones')], 5, 0x3a3f48)));
+}

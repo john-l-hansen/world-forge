@@ -105,6 +105,10 @@ export function migrateWorld(input: unknown): unknown {
     // 0.7.0 added party rows, known spells and healing spells. Nothing existing changes.
     data = { ...data, schemaVersion: '0.7.0' };
   }
+  if (data.schemaVersion === '0.7.0') {
+    // 0.8.0 added the crypt environment, its enemies and props, side quests and alert lines. Nothing existing changes.
+    data = { ...data, schemaVersion: '0.8.0' };
+  }
   return data;
 }
 

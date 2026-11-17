@@ -30,6 +30,9 @@ export interface BeltItem {
 }
 
 export interface QuestView {
+  id: string;
+  /** Main quests win the adventure; side quests are extra. */
+  main: boolean;
   title: string;
   description: string;
   completed: boolean;
@@ -120,7 +123,10 @@ export interface HudState {
   log: LogEntry[];
   target: { name: string; hp: number; maxHp: number; winding: boolean; danger: boolean; boss: boolean } | null;
   belt: BeltItem[];
+  /** The quest the adventure is about: the first main quest held. */
   quest: QuestView | null;
+  /** Every quest held, main quests first. */
+  quests: QuestView[];
   floaters: Floater[];
   mapVersion: number;
   hurtPulse: number;
@@ -151,6 +157,7 @@ export const useHud = create<HudState>(() => ({
   target: null,
   belt: [],
   quest: null,
+  quests: [],
   floaters: [],
   mapVersion: 0,
   hurtPulse: 0,

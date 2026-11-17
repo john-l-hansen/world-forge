@@ -18,7 +18,7 @@
  */
 import { z } from 'zod';
 
-export const SCHEMA_VERSION = '0.7.0';
+export const SCHEMA_VERSION = '0.8.0';
 
 const id = z.string().regex(/^[a-z][a-z0-9_]*$/, 'ids are lower_snake_case');
 const cell = z.object({ x: z.number().int().min(1), y: z.number().int().min(1) });
@@ -64,13 +64,16 @@ export const SettingsSchema = z.object({
   startingQuestIds: z.array(id).default([]),
 });
 
+/** The places the engine has a tileset, palette and ambience for. */
+export const EnvironmentSchema = z.enum(['mine', 'crypt']);
+
 export const RegionSchema = z.object({
   id,
   name: z.string().min(1),
   description: z.string().default(''),
   roomIds: z.array(id).min(1),
   /** Selects the tileset, palette and ambience the renderer and audio use. */
-  environment: z.enum(['mine']),
+  environment: EnvironmentSchema,
 });
 
 export const RoomSchema = z.object({
@@ -128,7 +131,7 @@ export const EnemySchema = z.object({
   id,
   name: z.string().min(1),
   description: z.string().default(''),
-  archetype: z.enum(['goblin', 'goblin_chief']),
+  archetype: z.enum(['goblin', 'goblin_chief', 'skeleton', 'warden']),
   health: z.number().int().min(1),
   defence: z.number().int().min(0).default(0),
   /**
@@ -148,7 +151,9 @@ export const EnemySchema = z.object({
   xp: z.number().int().min(0).default(0),
   /** Names an engine-supported behaviour. Never code. */
   behaviour: z.enum(['melee_aggressive']),
-  visualAssetId: z.enum(['goblin', 'goblin_chief']),
+  visualAssetId: z.enum(['goblin', 'goblin_chief', 'skeleton', 'warden']),
+  /** The line shown when this enemy first notices the party. A plain one is used if left out. */
+  alertText: z.string().min(1).optional(),
 });
 
 export const EncounterSchema = z.object({
@@ -181,7 +186,7 @@ export const ObjectSchema = z.discriminatedUnion('type', [
     name: z.string().min(1),
     roomId: id,
     cell,
-    visualAssetId: z.enum(['barrel', 'crate', 'rubble']),
+    visualAssetId: z.enum(['barrel', 'crate', 'rubble', 'sarcophagus', 'urn', 'bones']),
     blocking: z.boolean().default(true),
   }),
   /** An item lying on the floor. Walking onto its cell picks it up. */
@@ -345,6 +350,8 @@ export const QuestSchema = z.object({
   id,
   title: z.string().min(1),
   description: z.string().default(''),
+  /** Finishing every main quest the party holds wins the adventure. Side quests are extra. */
+  kind: z.enum(['main', 'side']).default('main'),
   objectives: z.array(QuestObjectiveSchema).min(1),
   /** Shown when the last required objective is done. */
   completionText: z.string().default(''),
@@ -379,6 +386,7 @@ export type WeaponAttackDef = z.infer<typeof WeaponAttackSchema>;
 export type EncounterDef = z.infer<typeof EncounterSchema>;
 export type ObjectDef = z.infer<typeof ObjectSchema>;
 export type ItemDef = z.infer<typeof ItemSchema>;
+export type Environment = z.infer<typeof EnvironmentSchema>;
 export type WeaponDef = Extract<ItemDef, { category: 'weapon' }>;
 export type ArmourDef = Extract<ItemDef, { category: 'armour' }>;
 export const EQUIP_SLOTS = ['mainHand', 'offHand', 'head', 'body', 'hands', 'feet', 'accessory'] as const;

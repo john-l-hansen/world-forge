@@ -4,23 +4,33 @@
  */
 import * as THREE from 'three';
 import { Pix, hash2 } from '../art/pixel';
-import { TEX, dirtFloor, lockedDoor, plankDoor, rockCeiling, secretWall, stoneWall, timberFrame, timberWall } from '../art/textures';
+import { TEX } from '../art/textures';
+import { FEATURE_SHARE, TILESETS } from '../art/tilesets';
+import type { Environment } from '../schema/world';
 import { DIR_X, DIR_Y, TILE_DOORWAY, TILE_WALL, type CompiledWorld } from '../world/compile';
 
-export const TILE = { stoneA: 0, stoneB: 1, timber: 2, floor: 3, ceiling: 4, door: 5, frame: 6, floorB: 7, secret: 8, doorLocked: 9 } as const;
+export const TILE = { stoneA: 0, stoneB: 1, feature: 2, floor: 3, ceiling: 4, door: 5, frame: 6, floorB: 7, secret: 8, doorLocked: 9 } as const;
 const TILE_COUNT = 10;
 export const DOOR_HEIGHT = 0.86;
 
-export function buildAtlas(): Pix {
-  const atlas = new Pix(TEX * TILE_COUNT, TEX);
-  const tiles = [stoneWall(1), stoneWall(2), timberWall(3), dirtFloor(4), rockCeiling(5), plankDoor(6), timberFrame(7), dirtFloor(8), secretWall(1), lockedDoor(6)];
-  tiles.forEach((t, i) => atlas.blit(t, i * TEX, 0));
+/** One row of ten tiles for each environment the world uses, in the world's order. */
+export function buildAtlas(environments: readonly Environment[]): Pix {
+  const atlas = new Pix(TEX * TILE_COUNT, TEX * environments.length);
+  environments.forEach((environment, row) => {
+    TILESETS[environment]().forEach((t, i) => atlas.blit(t, i * TEX, row * TEX));
+  });
   return atlas;
 }
 
 type V3 = [number, number, number];
 
 class QuadBuilder {
+  /** Which row of the atlas (which environment) the next quads are dressed from. */
+  row = 0;
+
+  /** `rows` is how many environments the atlas holds. */
+  constructor(private rows = 1) {}
+
   positions: number[] = [];
   uvs: number[] = [];
   lights: number[] = [];
@@ -36,11 +46,13 @@ class QuadBuilder {
     const eps = 0.01 / TEX;
     const u0 = tile / TILE_COUNT + eps;
     const u1 = (tile + 1) / TILE_COUNT - eps;
+    // Rows run down the atlas image, and v runs up it.
+    const v = (local: number) => (this.rows - this.row - 1 + eps + local * (1 - 2 * eps)) / this.rows;
     const uv: [number, number][] = [
-      [u0, v0],
-      [u1, v0],
-      [u1, v1],
-      [u0, v1],
+      [u0, v(v0)],
+      [u1, v(v0)],
+      [u1, v(v1)],
+      [u0, v(v1)],
     ];
     for (let i = 0; i < 4; i++) {
       this.positions.push(...corners[i]);
@@ -83,7 +95,7 @@ function cornerLight(world: CompiledWorld, ix: number, iz: number): number {
 const WALL_SHADE = [1.0, 0.8, 1.0, 0.8];
 
 export function buildDungeonGeometry(world: CompiledWorld): THREE.BufferGeometry {
-  const b = new QuadBuilder();
+  const b = new QuadBuilder(world.environments.length);
   const isWall = (x: number, z: number) =>
     x < 0 || z < 0 || x >= world.width || z >= world.height || world.tiles[z * world.width + x] === TILE_WALL;
 
@@ -93,6 +105,8 @@ export function buildDungeonGeometry(world: CompiledWorld): THREE.BufferGeometry
       if (tile === TILE_WALL) continue;
       const doorway = tile === TILE_DOORWAY;
       const top = doorway ? DOOR_HEIGHT : 1;
+      b.row = world.envAt[z * world.width + x];
+      const featureShare = FEATURE_SHARE[world.environments[b.row]];
       // Corner lights: nw, ne, se, sw.
       const lnw = cornerLight(world, x, z);
       const lne = cornerLight(world, x + 1, z);
@@ -127,7 +141,7 @@ export function buildDungeonGeometry(world: CompiledWorld): THREE.BufferGeometry
           if (doorway) wallTile = TILE.frame;
           else {
             const h = hash2(x * 4 + dir, z, 5);
-            wallTile = h < 0.34 ? TILE.timber : h < 0.67 ? TILE.stoneA : TILE.stoneB;
+            wallTile = h < featureShare ? TILE.feature : h < (1 + featureShare) / 2 ? TILE.stoneA : TILE.stoneB;
           }
           b.quad([[lx, 0, lz], [rx, 0, rz], [rx, top, rz], [lx, top, lz]], wallTile, [ll, lr, lr, ll], WALL_SHADE[dir], 0, top);
         } else if (doorway) {
@@ -142,8 +156,9 @@ export function buildDungeonGeometry(world: CompiledWorld): THREE.BufferGeometry
 }
 
 /** A door leaf: a single quad across the middle of its cell. */
-export function buildDoorGeometry(axis: 'ns' | 'ew', light: number, locked: boolean): THREE.BufferGeometry {
-  const b = new QuadBuilder();
+export function buildDoorGeometry(axis: 'ns' | 'ew', light: number, locked: boolean, row = 0, rows = 1): THREE.BufferGeometry {
+  const b = new QuadBuilder(rows);
+  b.row = row;
   const corners: [V3, V3, V3, V3] =
     axis === 'ns'
       ? [[-0.5, 0, 0], [0.5, 0, 0], [0.5, DOOR_HEIGHT, 0], [-0.5, DOOR_HEIGHT, 0]]
@@ -157,8 +172,9 @@ export function buildDoorGeometry(axis: 'ns' | 'ew', light: number, locked: bool
  * of each room it joins, so from either side it reads as more wall.
  * `lightA` is the room on the north or west side, `lightB` the south or east.
  */
-export function buildSecretGeometry(axis: 'ns' | 'ew', lightA: number, lightB: number): THREE.BufferGeometry {
-  const b = new QuadBuilder();
+export function buildSecretGeometry(axis: 'ns' | 'ew', lightA: number, lightB: number, row = 0, rows = 1): THREE.BufferGeometry {
+  const b = new QuadBuilder(rows);
+  b.row = row;
   // Sit a hair proud of the cell edge so the slab covers the door's lintel.
   const edge = 0.505;
   if (axis === 'ew') {

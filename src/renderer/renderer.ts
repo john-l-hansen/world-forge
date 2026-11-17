@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { CHEST_H, CHEST_W, GOBLIN_H, GOBLIN_POSES, GOBLIN_W, PROP_SIZE, SWORD_H, SWORD_W, TORCH_H, TORCH_W, drawChest, drawGoblin, drawHeld, drawPickup, drawProp, drawTorch, type GoblinPose, type GoblinVariant, type HeldKind } from '../art/sprites';
 import { Pix } from '../art/pixel';
+import { drawUndead } from '../art/undead';
 import { activeMember, isGuarding } from '../engine/sim';
 import { BUMP_TICKS, ENEMY_ATTACK_POSE_TICKS, MOVE_TICKS, TURN_TICKS, type EnemyState, type GameEvent, type SessionState } from '../engine/types';
 import { DIR_X, DIR_Y, type CompiledWorld } from '../world/compile';
@@ -23,7 +24,10 @@ const EYE_HEIGHT = 0.52;
 /** The eye sits a little behind the cell centre, so near things fit in view. */
 const EYE_SETBACK = 0.28;
 /** How tall each kind of enemy stands, in cells. The ceiling is at 1. */
-const ENEMY_HEIGHT: Record<GoblinVariant, number> = { goblin: 0.8, goblin_chief: 0.97 };
+type EnemyVisual = GoblinVariant | 'skeleton' | 'warden';
+const ENEMY_HEIGHT: Record<EnemyVisual, number> = { goblin: 0.8, goblin_chief: 0.97, skeleton: 0.88, warden: 0.99 };
+/** Every enemy is drawn in the same poses on the same canvas, whoever painted it. */
+const drawEnemy = (visual: EnemyVisual, pose: GoblinPose): Pix => (visual === 'skeleton' || visual === 'warden' ? drawUndead(pose, visual) : drawGoblin(pose, visual));
 const PROP_TEXEL = 1 / 64;
 const BOLT_SEGMENTS = 40;
 const BOLT_COLOUR = { lightning: 0xe8dcff, fire: 0xffc24a, ice: 0xbfe8ff } as const;
@@ -131,7 +135,9 @@ export class DungeonRenderer {
     this.shared = makeSharedUniforms();
 
     // --- Dungeon -------------------------------------------------------------
-    const atlas = pixTexture(buildAtlas());
+    const atlas = pixTexture(buildAtlas(world.environments));
+    const rows = world.environments.length;
+    const rowAt = (x: number, y: number) => world.envAt[y * world.width + x];
     const dungeonMaterial = makeDungeonMaterial(atlas, this.shared);
     const dungeonGeometry = buildDungeonGeometry(world);
     this.scene.add(new THREE.Mesh(dungeonGeometry, dungeonMaterial));
@@ -143,9 +149,9 @@ export class DungeonRenderer {
       const secret = door.def.kind === 'secret';
       const geo = secret
         ? door.axis === 'ew'
-          ? buildSecretGeometry('ew', lightAt(door.x - 1, door.y), lightAt(door.x + 1, door.y))
-          : buildSecretGeometry('ns', lightAt(door.x, door.y - 1), lightAt(door.x, door.y + 1))
-        : buildDoorGeometry(door.axis, lightAt(door.x, door.y), Boolean(door.def.lock));
+          ? buildSecretGeometry('ew', lightAt(door.x - 1, door.y), lightAt(door.x + 1, door.y), rowAt(door.x, door.y), rows)
+          : buildSecretGeometry('ns', lightAt(door.x, door.y - 1), lightAt(door.x, door.y + 1), rowAt(door.x, door.y), rows)
+        : buildDoorGeometry(door.axis, lightAt(door.x, door.y), Boolean(door.def.lock), rowAt(door.x, door.y), rows);
       const mesh = new THREE.Mesh(geo, dungeonMaterial);
       mesh.position.set(door.x, 0, door.y);
       this.scene.add(mesh);
@@ -223,12 +229,12 @@ export class DungeonRenderer {
     }
 
     // --- Enemies -------------------------------------------------------------
-    const enemySheets = new Map<GoblinVariant, THREE.Texture>();
+    const enemySheets = new Map<EnemyVisual, THREE.Texture>();
     for (const spawn of world.spawns) {
       const variant = world.def.enemies.find((e) => e.id === spawn.enemyId)!.visualAssetId;
       let sheet = enemySheets.get(variant);
       if (!sheet) {
-        sheet = pixTexture(sheetOf(GOBLIN_POSES.map((pose) => drawGoblin(pose, variant))));
+        sheet = pixTexture(sheetOf(GOBLIN_POSES.map((pose) => drawEnemy(variant, pose))));
         enemySheets.set(variant, sheet);
         this.disposables.push(sheet);
       }

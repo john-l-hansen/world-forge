@@ -226,6 +226,11 @@ html, body, #root {
 .overlay.sheet .worn .btn.row { color: var(--gold-hi); }
 .overlay.journal { padding: 0 24px; background: rgba(5, 4, 6, 0.9); }
 .overlay.journal p { margin: 0; color: var(--lore); max-width: 240px; }
+.overlay.journal.many { gap: 3px; }
+.overlay.journal.many h3 { font-size: 8px; line-height: 10px; margin-top: 3px; }
+.overlay.journal h3.done { color: var(--good); }
+.overlay.journal h3 em { font-style: normal; color: var(--dim); }
+.overlay.journal.many ul { margin: 0; }
 .overlay.journal ul { list-style: none; margin: 4px 0; padding: 0; text-align: left; }
 .overlay.journal li { color: var(--bone); }
 .overlay.journal li.done { color: var(--good); }

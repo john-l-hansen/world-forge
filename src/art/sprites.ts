@@ -243,16 +243,82 @@ export function drawTorch(frame: number): Pix {
   return p;
 }
 
-export type PropKind = 'barrel' | 'crate' | 'rubble';
+export type PropKind = 'barrel' | 'crate' | 'rubble' | 'sarcophagus' | 'urn' | 'bones';
 export const PROP_SIZE: Record<PropKind, { w: number; h: number }> = {
   barrel: { w: 32, h: 40 },
   crate: { w: 36, h: 34 },
   rubble: { w: 48, h: 24 },
+  sarcophagus: { w: 56, h: 34 },
+  urn: { w: 24, h: 34 },
+  bones: { w: 44, h: 16 },
 };
+
+const TOMB: Ramp = [0x1e2228, 0x2d323a, 0x40464f, 0x565d67, 0x6f7781, 0x8b929b];
+const OLD_BONE: Ramp = [0x6e654f, 0x9c9074, 0xc8bc9a, 0xece4c6];
 
 export function drawProp(kind: PropKind): Pix {
   const { w, h } = PROP_SIZE[kind];
   const p = new Pix(w, h);
+  if (kind === 'sarcophagus') {
+    // A stone coffin end-on: plinth, chest and a heavier lid with a carved figure.
+    p.rect(2, 29, 52, 5, TOMB[1]);
+    p.rect(2, 29, 52, 1, TOMB[3]);
+    for (let y = 12; y < 29; y++) {
+      for (let x = 5; x < 51; x++) {
+        const shade = 3.2 - (x - 5) / 26 + (hash2(x >> 1, y >> 1, 9) - 0.5) * 0.9 - (y > 26 ? 1 : 0);
+        p.set(x, y, TOMB[Math.max(0, Math.min(5, Math.round(shade)))]);
+      }
+    }
+    // Sunk panels on the side.
+    for (const px of [9, 23, 37]) {
+      p.rect(px, 15, 10, 10, TOMB[1]);
+      p.rect(px, 15, 10, 1, TOMB[0]);
+      p.rect(px, 24, 10, 1, TOMB[4]);
+      p.rect(px + 9, 15, 1, 10, TOMB[4]);
+    }
+    p.rect(1, 6, 54, 6, TOMB[3]);
+    p.rect(1, 6, 54, 1, TOMB[5]);
+    p.rect(1, 11, 54, 1, TOMB[1]);
+    p.rect(30, 7, 25, 4, TOMB[2]);
+    // The effigy: a head and folded hands in low relief.
+    p.shaded(12, 4, 5, 3.4, [TOMB[2], TOMB[3], TOMB[4], TOMB[5]]);
+    p.shaded(30, 4, 14, 3, [TOMB[2], TOMB[3], TOMB[4]]);
+    p.shaded(26, 3, 3, 2, [TOMB[3], TOMB[4], TOMB[5]]);
+    p.outline(INK);
+    return p;
+  }
+  if (kind === 'urn') {
+    for (let y = 4; y < 31; y++) {
+      const t = (y - 4) / 27;
+      // Narrow neck, full shoulder, tapering to the foot.
+      const half = t < 0.14 ? 4.5 : t < 0.24 ? 3.2 : 3.2 + Math.sin(Math.min(1, (t - 0.24) / 0.76) * Math.PI * 0.86) * 7.2;
+      for (let x = Math.round(12 - half); x <= Math.round(12 + half); x++) {
+        const u = (x - 12) / Math.max(1, half);
+        const shade = 2.6 - u * 1.9 - Math.abs(u) * 0.7 + (hash2(x, y >> 1, 4) - 0.5) * 0.6;
+        p.set(x, y, [0x24160e, 0x3d2616, 0x5a3a22, 0x7a5232, 0x9c6f48][Math.max(0, Math.min(4, Math.round(shade)))]);
+      }
+    }
+    p.rect(6, 3, 12, 2, 0x7a5232);
+    p.rect(6, 3, 12, 1, 0x9c6f48);
+    for (let x = 4; x < 21; x++) if (p.get(x, 14) !== -1) p.set(x, 14, x < 12 ? GOLD[2] : GOLD[0]);
+    for (let x = 4; x < 21; x++) if (p.get(x, 16) !== -1) p.set(x, 16, x < 12 ? GOLD[1] : GOLD[0]);
+    p.rect(8, 31, 8, 2, 0x3d2616);
+    p.outline(INK);
+    return p;
+  }
+  if (kind === 'bones') {
+    p.limb(4, 12, 20, 9, OLD_BONE, 3);
+    p.limb(14, 13, 30, 12, OLD_BONE, 3);
+    p.limb(24, 8, 40, 11, OLD_BONE, 2);
+    for (const [kx, ky] of [[4, 12], [20, 9], [30, 12], [40, 11]]) p.shaded(kx, ky, 2.2, 2.2, OLD_BONE);
+    p.shaded(33, 6, 5.5, 5, OLD_BONE);
+    p.ellipse(31, 6, 1.6, 1.8, INK);
+    p.ellipse(35.5, 6, 1.6, 1.8, INK);
+    p.rect(31, 10, 5, 1, INK);
+    for (let i = 0; i < 4; i++) p.line(8 + i * 3, 4, 10 + i * 3, 9, OLD_BONE[2], 1);
+    p.outline(INK);
+    return p;
+  }
   if (kind === 'barrel') {
     for (let y = 3; y < h - 2; y++) {
       const t = (y - 3) / (h - 6);

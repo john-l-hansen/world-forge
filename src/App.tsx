@@ -1,6 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { validateWorld } from './schema/validate';
-import { compileWorld } from './world/compile';
+import { loadWorld } from './world/load';
 import { GameScreen } from './ui/GameScreen';
 import { WORLDS } from './worlds';
 
@@ -19,8 +18,7 @@ export function App() {
   const entry = WORLDS.find((w) => w.key === selection.key) ?? WORLDS[0];
 
   const loaded = useMemo(() => {
-    const result = validateWorld(entry.data);
-    return result.ok ? { ok: true as const, world: compileWorld(result.world) } : result;
+    return loadWorld(entry.data);
   }, [entry]);
 
   const choose = useCallback((key: string) => {

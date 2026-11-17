@@ -3,7 +3,7 @@
  * simulation and renderer both read. Pure data in, pure data out. No React,
  * no Three.js, no randomness.
  */
-import type { DoorDef, Facing, ObjectDef, RoomDef, WorldDefinition } from '../schema/world';
+import type { DoorDef, Environment, Facing, ObjectDef, RoomDef, WorldDefinition } from '../schema/world';
 
 export const TILE_WALL = 0;
 export const TILE_FLOOR = 1;
@@ -72,6 +72,10 @@ export interface CompiledWorld {
   tiles: Uint8Array;
   /** Index into def.rooms for each cell, or -1. Doorways are -1. */
   roomAt: Int16Array;
+  /** The environments this world uses, in the order its regions name them. */
+  environments: Environment[];
+  /** Index into `environments` for each open cell. A doorway takes after a room it joins. */
+  envAt: Uint8Array;
   doors: CompiledDoor[];
   doorAt: Map<number, CompiledDoor>;
   torches: CompiledTorch[];
@@ -130,11 +134,31 @@ export function compileWorld(def: WorldDefinition): CompiledWorld {
     }
   });
 
+  // Which environment each cell belongs to: its room's region decides.
+  const environments: Environment[] = [];
+  for (const region of def.regions) if (!environments.includes(region.environment)) environments.push(region.environment);
+  const envOfRoom = def.rooms.map((room) => {
+    const region = def.regions.find((r) => r.id === room.regionId);
+    return Math.max(0, environments.indexOf(region?.environment ?? environments[0]));
+  });
+  const envAt = new Uint8Array(width * height);
+  roomAt.forEach((room, i) => {
+    if (room >= 0) envAt[i] = envOfRoom[room];
+  });
+
   const doors: CompiledDoor[] = [];
   const doorAt = new Map<number, CompiledDoor>();
   for (const door of def.doors) {
     const { x, y } = door.cell;
     tiles[y * width + x] = TILE_DOORWAY;
+    // A doorway is dressed like one of the rooms it joins.
+    for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
+      const room = roomAt[(y + dy) * width + (x + dx)];
+      if (room !== undefined && room >= 0) {
+        envAt[y * width + x] = envOfRoom[room];
+        break;
+      }
+    }
   }
   for (const door of def.doors) {
     const { x, y } = door.cell;
@@ -222,6 +246,8 @@ export function compileWorld(def: WorldDefinition): CompiledWorld {
     height,
     tiles,
     roomAt,
+    environments,
+    envAt,
     doors,
     doorAt,
     torches,

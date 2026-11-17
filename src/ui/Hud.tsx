@@ -255,8 +255,10 @@ export function AutoMap({ game }: { game: Game }) {
 }
 
 export function ObjectivePlate() {
-  const quest = useHud((s) => s.quest);
-  if (!quest) return <div className="plate objective raised" />;
+  const quests = useHud((s) => s.quests);
+  if (quests.length === 0) return <div className="plate objective raised" />;
+  // The next thing to do: the first open quest, main quests first.
+  const quest = quests.find((q) => !q.completed) ?? quests[0];
   const next = quest.objectives.find((o) => !o.done && !o.optional);
   return (
     <div className={`plate objective raised${quest.completed ? ' done' : ''}`} title={quest.title}>
@@ -297,14 +299,20 @@ export function Belt({ game }: { game: Game }) {
 }
 
 export function JournalOverlay() {
-  const quest = useHud((s) => s.quest);
+  const quests = useHud((s) => s.quests);
+  // One quest gets the whole page; several are set out more tightly.
+  const many = quests.length > 1;
   return (
-    <div className="overlay journal">
+    <div className={`overlay journal${many ? ' many' : ''}`}>
       <h2>Journal</h2>
-      {quest ? (
-        <>
-          <h3>{quest.title}</h3>
-          <p>{quest.description}</p>
+      {quests.length === 0 && <p>No quests yet.</p>}
+      {quests.map((quest) => (
+        <Fragment key={quest.id}>
+          <h3 className={quest.completed ? 'done' : ''}>
+            {quest.title}
+            {!quest.main && <em> (side quest)</em>}
+          </h3>
+          {!many && <p>{quest.description}</p>}
           <ul>
             {quest.objectives.map((o) => (
               <li key={o.id} className={o.done ? 'done' : ''}>
@@ -314,10 +322,8 @@ export function JournalOverlay() {
               </li>
             ))}
           </ul>
-        </>
-      ) : (
-        <p>No quests yet.</p>
-      )}
+        </Fragment>
+      ))}
       <div className="blink">Press B to close</div>
     </div>
   );
@@ -413,7 +419,9 @@ export function VictoryOverlay({ world }: { world: string }) {
   const belt = useHud((s) => s.belt);
   const party = useHud((s) => s.party);
   const standing = party.filter((m) => m.hp > 0).length;
+  const quests = useHud((s) => s.quests);
   const bonus = quest?.objectives.filter((o) => o.optional) ?? [];
+  const side = quests.filter((q) => !q.main);
   const gold = belt.filter((b) => b.icon === 'coins').length > 0;
   return (
     <div className="overlay victory">
@@ -439,6 +447,12 @@ export function VictoryOverlay({ world }: { world: string }) {
           <Fragment key={o.id}>
             <dt>{o.text}</dt>
             <dd>{o.done ? 'Found' : 'Not found'}</dd>
+          </Fragment>
+        ))}
+        {side.map((q) => (
+          <Fragment key={q.id}>
+            <dt>{q.title}</dt>
+            <dd>{q.completed ? 'Done' : 'Not done'}</dd>
           </Fragment>
         ))}
         <dt>Gold</dt>

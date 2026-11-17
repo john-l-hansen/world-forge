@@ -121,7 +121,7 @@ export function describeEvent(event: GameEvent, state: SessionState, world: Comp
     }
     case 'quest.completed': {
       const quest = def.quests.find((q) => q.id === event.questId);
-      return quest ? { text: `Quest complete: ${quest.title}. ${quest.completionText}`.trim(), tone: 'quest' } : null;
+      return quest ? { text: `${quest.kind === 'side' ? 'Side quest' : 'Quest'} complete: ${quest.title}. ${quest.completionText}`.trim(), tone: 'quest' } : null;
     }
     case 'interact.nothing':
       return { text: 'Nothing to use here.', tone: 'plain' };
@@ -139,8 +139,11 @@ export function describeEvent(event: GameEvent, state: SessionState, world: Comp
       return { text: `${heroName(event.actor)} reaches level ${event.level}! +${event.healthGained} health, +${event.staminaGained} stamina.`, tone: 'quest' };
     case 'attack.clang':
       return event.actor === you ? { text: 'Your blade rings off the stone.', tone: 'plain' } : null;
-    case 'enemy.alerted':
-      return { text: `A ${enemyName(event.enemyId).toLowerCase()} snarls in the dark!`, tone: 'warn' };
+    case 'enemy.alerted': {
+      const enemy = state.enemies.find((e) => e.id === event.enemyId);
+      const line = def.enemies.find((d) => d.id === enemy?.defId)?.alertText;
+      return { text: line ?? `A ${enemyName(event.enemyId).toLowerCase()} snarls in the dark!`, tone: 'warn' };
+    }
     case 'enemy.telegraph': {
       const enemy = state.enemies.find((e) => e.id === event.enemyId);
       const attack = def.enemies.find((d) => d.id === enemy?.defId)?.attacks.find((a) => a.id === event.attackId);

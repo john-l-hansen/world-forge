@@ -25,7 +25,12 @@ export function App() {
 
   const choose = useCallback((key: string) => {
     // Keep the choice in the address so a reload, or a shared link, opens the same adventure.
-    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${key}`);
+    // Some embedded pages may not rewrite their address; the choice still takes effect.
+    try {
+      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${key}`);
+    } catch {
+      /* the address stays as it was */
+    }
     setSelection({ key, chosen: true });
   }, []);
 

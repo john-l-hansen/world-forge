@@ -191,3 +191,88 @@ function adjacentPath(state: SessionState, world: CompiledWorld, enemy: EnemySta
   }
   return best;
 }
+
+/**
+ * A bot that plays any world it is given, knowing nothing of its layout in
+ * advance: nearest thing first, it fights what it meets, picks things up,
+ * opens chests and doors (unlocking those it has the key for), smashes cracked
+ * walls and searches secret ones, until every main quest is done or there is
+ * nothing left it can reach. Returns why it stopped.
+ */
+export function explore(state: SessionState, world: CompiledWorld, maxSteps = 600): 'won' | 'dead' | 'stuck' {
+  const def = world.def;
+  const mainDone = () => {
+    const mains = def.quests.filter((q) => q.kind === 'main' && state.quests[q.id]);
+    return mains.length > 0 && mains.every((q) => state.quests[q.id].completed);
+  };
+  const w = world.width;
+  let misses = 0;
+  for (let step = 0; step < maxSteps; step++) {
+    if (state.status !== 'playing') return 'dead';
+    if (mainDone()) return 'won';
+    // How far every open cell is, walking.
+    const dist = new Int32Array(w * world.height).fill(-1);
+    const start = state.party.y * w + state.party.x;
+    dist[start] = 0;
+    const queue = [start];
+    while (queue.length) {
+      const i = queue.shift()!;
+      for (let d = 0; d < 4; d++) {
+        const nx = (i % w) + DIR_X[d];
+        const ny = Math.floor(i / w) + DIR_Y[d];
+        const ni = ny * w + nx;
+        if (nx < 0 || ny < 0 || nx >= w || ny >= world.height || dist[ni] !== -1 || !isOpenCell(state, world, nx, ny) || enemyAt(state, nx, ny)) continue;
+        dist[ni] = dist[i] + 1;
+        queue.push(ni);
+      }
+    }
+    const at = (x: number, y: number) => (x < 0 || y < 0 || x >= w || y >= world.height ? -1 : dist[y * w + x]);
+    /** The nearest reachable cell beside (x, y), and the way to face from it. */
+    const besides = (x: number, y: number) => {
+      let best: { x: number; y: number; d: number; face: number } | null = null;
+      for (let k = 0; k < 4; k++) {
+        const sx = x - DIR_X[k];
+        const sy = y - DIR_Y[k];
+        const d = at(sx, sy);
+        if (d >= 0 && (!best || d < best.d)) best = { x: sx, y: sy, d, face: k };
+      }
+      return best;
+    };
+    type Task = { d: number; run: () => void };
+    const tasks: Task[] = [];
+    for (const enemy of state.enemies) {
+      if (enemy.ai === 'dead') continue;
+      const spot = besides(enemy.x, enemy.y);
+      const near = Math.abs(enemy.x - state.party.x) + Math.abs(enemy.y - state.party.y);
+      if (spot || near === 1) tasks.push({ d: enemy.alerted ? -1 : (spot?.d ?? 0), run: () => fight(state, world, enemy, 12000) });
+    }
+    for (const p of world.pickups) {
+      if (state.pickupsTaken[p.id]) continue;
+      const d = at(p.x, p.y);
+      if (d >= 0) tasks.push({ d, run: () => walkTo(state, world, p.x, p.y) });
+    }
+    for (const c of world.chests) {
+      if (state.chestsOpened[c.id]) continue;
+      const spot = besides(c.x, c.y);
+      if (spot) tasks.push({ d: spot.d, run: () => (walkTo(state, world, spot.x, spot.y), face(state, world, spot.face), act(state, world, interact(), 4)) });
+    }
+    for (const door of world.doors) {
+      if (door.def.kind === 'archway' || state.doorsOpen[door.def.id]) continue;
+      const lock = door.def.lock;
+      if (lock && !state.doorsUnlocked[door.def.id] && !state.inventory[lock.keyItemId]) continue;
+      const spot = besides(door.x, door.y);
+      if (!spot) continue;
+      const open = door.def.kind === 'breakable' ? () => smash(state, world) : () => act(state, world, interact(), 4);
+      tasks.push({ d: spot.d + 0.5, run: () => (walkTo(state, world, spot.x, spot.y), face(state, world, spot.face), open()) });
+    }
+    if (tasks.length === 0) return 'stuck';
+    try {
+      tasks.sort((a, b) => a.d - b.d)[0].run();
+      misses = 0;
+    } catch {
+      // Something moved into the way mid-walk. Look again; give up only if it keeps happening.
+      if (++misses > 25) return 'stuck';
+    }
+  }
+  return 'stuck';
+}

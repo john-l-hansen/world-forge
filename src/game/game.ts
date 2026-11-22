@@ -36,6 +36,8 @@ export class Game {
   /** Blows taken and healing received per character, for the party panel's flashes. */
   private hurt: Record<string, number> = {};
   private mended: Record<string, number> = {};
+  /** Blows each character has landed, for the flash on their hand in the party panel. */
+  private struck: Record<string, number> = {};
   private partySignature = '';
   /** Items gained this step, announced together once the step's events are handled. */
   private gained: string[] = [];
@@ -82,6 +84,7 @@ export class Game {
     this.lastBumpTick = -1000;
     this.hurt = {};
     this.mended = {};
+    this.struck = {};
     this.gained = [];
     this.drafted = new Set();
     this.acc = 0;
@@ -296,8 +299,13 @@ export class Game {
 
     switch (event.type) {
       case 'attack.hit':
+        this.struck[event.actor] = (this.struck[event.actor] ?? 0) + 1;
         if (event.actor === driven) pushFloater(`${event.damage}${event.critical ? '!' : ''}`, event.kind === 'heavy' || event.critical ? 'heavy' : 'dealt');
-        else pushFloater(String(event.damage), 'ally', 800, this.state.party.members.findIndex((m) => m.id === event.actor));
+        else {
+          // A companion's blow carries their name, so it is clear who struck.
+          const name = this.world.def.characters.find((c) => c.id === event.actor)?.name ?? '';
+          pushFloater(`${name} ${event.damage}${event.critical ? '!' : ''}`, 'ally', 900, this.state.party.members.findIndex((m) => m.id === event.actor));
+        }
         break;
       case 'spell.healed': {
         this.mended[event.target] = (this.mended[event.target] ?? 0) + 1;
@@ -428,6 +436,11 @@ export class Game {
         active: m === driven,
         guarding: isGuarding(m),
         busy: acting ? (m.action.kind === 'cast' ? 'cast' : 'attack') : null,
+        hand: (() => {
+          const held = def.items.find((i) => i.id === m.equipment.mainHand);
+          return held ? held.visualAssetId : null;
+        })(),
+        struck: this.struck[m.id] ?? 0,
         hurt: this.hurt[m.id] ?? 0,
         mended: this.mended[m.id] ?? 0,
       };

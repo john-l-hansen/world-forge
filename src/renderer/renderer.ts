@@ -118,7 +118,9 @@ export class DungeonRenderer {
   private spark = 0;
   private guard = 0;
   /** A spell bolt in flight: which enemy it strikes and how long it has left. */
-  private bolt: { enemyId: string; life: number } | null = null;
+  private bolt: { enemyId: string; life: number; side: number } | null = null;
+  /** The party's order, for placing a companion's spell at their side of the view. */
+  private partyOrder: string[] = [];
   private boltLines: THREE.LineSegments;
   private boltMaterial: THREE.LineBasicMaterial;
   private torchMaterials: THREE.ShaderMaterial[] = [];
@@ -416,9 +418,13 @@ export class DungeonRenderer {
       case 'spell.hit': {
         const spell = this.world.def.spells.find((sp) => sp.id === event.spellId);
         this.boltMaterial.color.setHex(BOLT_COLOUR[spell?.shape === 'bolt' ? spell.element : 'lightning']);
-        this.bolt = { enemyId: event.enemyId, life: 0.3 };
-        this.spark = 0.9;
-        this.hitKick = 0.7;
+        // Your own spell leaves your right hand; a companion's comes from their side of the party,
+        // left for the first and third in the panel, right for the second and fourth.
+        const slot = this.partyOrder.indexOf(event.actor);
+        const side = mine ? 1 : slot % 2 === 0 ? -2.2 : 2.2;
+        this.bolt = { enemyId: event.enemyId, life: 0.3, side };
+        this.spark = mine ? 0.9 : 0.45;
+        this.hitKick = mine ? 0.7 : 0.3;
         break;
       }
     }
@@ -468,6 +474,7 @@ export class DungeonRenderer {
     for (const chest of this.chests) chest.material.uniforms.uFrame.value = state.chestsOpened[chest.id] ? 1 : 0;
     for (const pickup of this.pickups) this.glint(pickup, state, timeSeconds);
     this.partyAt = { x: state.party.x, y: state.party.y };
+    if (this.partyOrder.length !== state.party.members.length) this.partyOrder = state.party.members.map((m) => m.id);
     this.breathe(state, dt);
     this.dust.update(dt);
 
@@ -605,7 +612,8 @@ export class DungeonRenderer {
     }
     const fx = -Math.sin(this.yaw);
     const fz = -Math.cos(this.yaw);
-    const from = new THREE.Vector3(this.camera.position.x + fx * 0.3 - fz * 0.12, this.camera.position.y - 0.14, this.camera.position.z + fz * 0.3 + fx * 0.12);
+    const side = 0.12 * this.bolt.side;
+    const from = new THREE.Vector3(this.camera.position.x + fx * 0.3 - fz * side, this.camera.position.y - 0.14, this.camera.position.z + fz * 0.3 + fx * side);
     const to = new THREE.Vector3(target.mesh.position.x, 0.42, target.mesh.position.z);
     const positions = this.boltLines.geometry.getAttribute('position') as THREE.BufferAttribute;
     let i = 0;

@@ -538,8 +538,10 @@ await page.goto(URL);
 await page.waitForFunction(() => window.__worldForge);
 await page.evaluate(() => {
   window.__partyLog = [];
+  window.__allyFloaters = [];
   new MutationObserver(() => {
     for (const p of document.querySelectorAll('.log p')) if (!window.__partyLog.includes(p.innerText)) window.__partyLog.push(p.innerText);
+    for (const f of document.querySelectorAll('.floater.ally')) if (!window.__allyFloaters.includes(f.innerText)) window.__allyFloaters.push(f.innerText);
   }).observe(document.body, { childList: true, subtree: true });
 });
 await page.waitForTimeout(400);
@@ -657,6 +659,13 @@ const logText = await page.evaluate(() => window.__worldForge && [...document.qu
 const allLog = await page.evaluate(() => JSON.stringify(window.__partyLog ?? []));
 check(s.members.filter((m) => m.hp > 0).every((m) => m.xp >= 80), `every survivor earns the experience (${s.members.map((m) => m.xp).join(', ')})`);
 check(/(Brannoc|Sela|Maren) (hits|cleaves|strikes)/i.test(allLog + logText), 'companions fight on their own and the log says so');
+check((await page.locator('.party .cell .hand').count()) === 4, 'every party cell shows its character\'s hand');
+const companionStruck = await page.evaluate(() =>
+  [...document.querySelectorAll('.party .cell:not(.active) .hand')].some((h) => h.classList.contains('struck')),
+);
+check(companionStruck, 'a companion\'s hand flashes when their blow lands');
+const allyNumbers = await page.evaluate(() => window.__allyFloaters);
+check(allyNumbers.some((t) => /^(BRANNOC|SELA|MAREN) \d+/i.test(t)), `a companion's damage number carries their name (${allyNumbers.slice(0, 3).join(', ')})`);
 await shot('21-party-after');
 
 // The cleric mends whoever is hurt worst.

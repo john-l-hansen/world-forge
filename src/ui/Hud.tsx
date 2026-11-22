@@ -80,7 +80,7 @@ function PartyCell({ game, member }: { game: Game; member: PartyView }) {
   const colour = ratio > 0.5 ? '#4f9a3a' : ratio > 0.25 ? '#c9952a' : '#b02a22';
   return (
     <button
-      className={`cell raised${member.active ? ' active' : ''}${dead ? ' fallen' : ''}${member.row === 'back' ? ' back' : ''}${member.busy === 'cast' ? ' casting' : ''}`}
+      className={`cell raised${member.hand ? ' armed' : ''}${member.active ? ' active' : ''}${dead ? ' fallen' : ''}${member.row === 'back' ? ' back' : ''}${member.busy === 'cast' ? ' casting' : ''}`}
       data-member={member.id}
       aria-pressed={member.active}
       title={`${member.name}, ${member.className.toLowerCase()} level ${member.level}, ${member.row} row. Health ${member.hp}/${member.maxHp}, stamina ${member.stamina}/${member.maxStamina}${
@@ -110,6 +110,16 @@ function PartyCell({ game, member }: { game: Game; member: PartyView }) {
           <span className="bar none" />
         )}
       </span>
+      {/* Their hand: flashes when a blow lands, greys while they recover, glows blue while they cast. */}
+      {member.hand && (
+        <span
+          key={member.struck}
+          className={`hand sunk${member.struck ? ' struck' : ''}${member.busy === 'attack' ? ' recovering' : ''}${member.busy === 'cast' ? ' casting' : ''}`}
+          title={member.busy === 'cast' ? 'Casting' : member.busy === 'attack' ? 'Striking' : 'Ready'}
+        >
+          <img src={art.items[member.hand]} alt="" />
+        </span>
+      )}
     </button>
   );
 }

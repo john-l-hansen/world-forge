@@ -67,6 +67,10 @@ export interface PartyView {
   guarding: boolean;
   /** What they are in the middle of, for the panel to show. */
   busy: 'attack' | 'cast' | null;
+  /** The icon of what they hold in the main hand, or null when unarmed. */
+  hand: BeltItem['icon'] | null;
+  /** Counts their blows that landed; a change replays the flash on their hand. */
+  struck: number;
   /** Counts blows taken and healing received; a change replays the flash. */
   hurt: number;
   mended: number;

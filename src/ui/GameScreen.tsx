@@ -30,9 +30,13 @@ export interface GameScreenProps {
   onChoose: (key: string) => void;
   /** Ask the player for a world file to load. */
   onOpenFile: () => void;
+  /** Go to the world creator. */
+  onCreate: () => void;
+  /** This world was made in the creator, so the way back leads there. */
+  created: boolean;
 }
 
-export function GameScreen({ world, choices, current, autoBegin, onChoose, onOpenFile }: GameScreenProps) {
+export function GameScreen({ world, choices, current, autoBegin, onChoose, onOpenFile, onCreate, created }: GameScreenProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [game, setGame] = useState<Game | null>(null);
   const scale = useWholeNumberScale();
@@ -73,6 +77,7 @@ export function GameScreen({ world, choices, current, autoBegin, onChoose, onOpe
         const picked = /^(Digit|Numpad)[1-9]$/.test(e.code) ? choices[Number(e.code.slice(-1)) - 1] : undefined;
         if (picked) chooseRef.current(picked.key);
         else if (e.code === 'KeyO') onOpenFile();
+        else if (e.code === 'KeyN') onCreate();
         else game.begin();
         return;
       }
@@ -82,10 +87,12 @@ export function GameScreen({ world, choices, current, autoBegin, onChoose, onOpe
       }
       if (current === 'dead') {
         if (e.code === 'KeyR') game.restart();
+        else if (e.code === 'KeyN' && created) onCreate();
         return;
       }
       if (current === 'victory') {
         if (e.code === 'KeyR') game.restart();
+        else if (e.code === 'KeyN' && created) onCreate();
         else if (e.code === 'Enter' || e.code === 'Space' || e.code === 'Escape') {
           e.preventDefault();
           game.keepExploring();
@@ -147,7 +154,7 @@ export function GameScreen({ world, choices, current, autoBegin, onChoose, onOpe
       window.removeEventListener('keyup', up);
       window.removeEventListener('blur', blur);
     };
-  }, [game, choices, onOpenFile]);
+  }, [game, choices, onOpenFile, onCreate, created]);
 
   return (
     <div className="stage">
@@ -172,11 +179,11 @@ export function GameScreen({ world, choices, current, autoBegin, onChoose, onOpe
           {screen === 'playing' && <TargetBar />}
           {screen === 'playing' && <Floaters />}
           {screen === 'playing' && <PickupBanner />}
-          {screen === 'title' && <TitleOverlay title={world.def.world.name} choices={choices} current={current} onChoose={choose} onOpenFile={onOpenFile} />}
-          {screen === 'dead' && <DeathOverlay name={heroName} />}
+          {screen === 'title' && <TitleOverlay title={world.def.world.name} choices={choices} current={current} onChoose={choose} onOpenFile={onOpenFile} onCreate={onCreate} created={created} />}
+          {screen === 'dead' && <DeathOverlay name={heroName} created={created} />}
           {screen === 'journal' && <JournalOverlay />}
           {screen === 'sheet' && game && <SheetOverlay game={game} />}
-          {screen === 'victory' && <VictoryOverlay world={world.def.world.name} />}
+          {screen === 'victory' && <VictoryOverlay world={world.def.world.name} created={created} />}
         </div>
 
         <div className="side">

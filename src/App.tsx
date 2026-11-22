@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { CreatorScreen, freshCreator, type CreatorMemory } from './creator-ui/CreatorScreen';
 import { GameScreen } from './ui/GameScreen';
 import { loadWorld, loadWorldText, type LoadResult } from './world/load';
 import { WORLDS } from './worlds';
@@ -9,12 +10,14 @@ function keyFromAddress(): string {
   return WORLDS.some((w) => w.key === wanted) ? wanted : WORLDS[0].key;
 }
 
-/** A world opened from a file on the player's computer. */
+/** A world opened from a file on the player's computer, or made in the creator. */
 interface OpenedFile {
   name: string;
   /** Counts files opened, so opening the same file twice starts it afresh. */
   serial: number;
   result: LoadResult;
+  /** Made in the creator: going back from it returns there. */
+  created?: boolean;
 }
 
 /**
@@ -24,6 +27,15 @@ interface OpenedFile {
 export function App() {
   const [selection, setSelection] = useState(() => ({ key: keyFromAddress(), chosen: false }));
   const [opened, setOpened] = useState<OpenedFile | null>(null);
+  // The creator, and what it remembers while the person goes off to play.
+  const [creating, setCreating] = useState(() => window.location.hash === '#create');
+  const [creator, setCreator] = useState<CreatorMemory>(freshCreator);
+  // A link to #create opens the creator, even on a page already open.
+  useEffect(() => {
+    const onHash = () => window.location.hash === '#create' && setCreating(true);
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
   const picker = useRef<HTMLInputElement>(null);
   const entry = WORLDS.find((w) => w.key === selection.key) ?? WORLDS[0];
 
@@ -43,6 +55,7 @@ export function App() {
   }, []);
 
   const openFile = useCallback(() => picker.current?.click(), []);
+  const openCreator = useCallback(() => setCreating(true), []);
 
   /** Read a world file as text and load it. The text is data: it is parsed and checked, never run. */
   const readFile = useCallback(async (file: File | undefined) => {
@@ -64,6 +77,21 @@ export function App() {
       }}
     />
   );
+
+  if (creating) {
+    return (
+      <CreatorScreen
+        memory={creator}
+        onChange={setCreator}
+        onPlay={(world) => {
+          // The generated world goes through the same loader as any other.
+          setOpened((previous) => ({ name: world.world.name, serial: (previous?.serial ?? 0) + 1, result: loadWorld(world), created: true }));
+          setCreating(false);
+        }}
+        onLeave={() => setCreating(false)}
+      />
+    );
+  }
 
   if (!loaded.ok) {
     return (
@@ -95,9 +123,12 @@ export function App() {
         world={loaded.world}
         choices={WORLDS}
         current={opened ? '' : entry.key}
-        autoBegin={opened ? true : selection.chosen}
+        // A made world opens on its own title, as a reveal; a file goes straight in.
+        autoBegin={opened ? !opened.created : selection.chosen}
+        created={Boolean(opened?.created)}
         onChoose={choose}
         onOpenFile={openFile}
+        onCreate={openCreator}
       />
     </>
   );

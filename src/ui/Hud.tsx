@@ -454,7 +454,7 @@ export function SheetOverlay({ game }: { game: Game }) {
   );
 }
 
-export function VictoryOverlay({ world }: { world: string }) {
+export function VictoryOverlay({ world, created }: { world: string; created: boolean }) {
   const quest = useHud((s) => s.quest);
   const hp = useHud((s) => s.hp);
   const maxHp = useHud((s) => s.maxHp);
@@ -500,7 +500,7 @@ export function VictoryOverlay({ world }: { world: string }) {
         <dt>Gold</dt>
         <dd>{gold ? 'Carried out' : 'Left behind'}</dd>
       </dl>
-      <div className="blink">Enter to keep exploring - R to play again</div>
+      <div className="blink">Enter to keep exploring - R to play again{created ? ' - N for the creator' : ''}</div>
     </div>
   );
 }
@@ -599,7 +599,23 @@ export interface TitleChoice {
   blurb: string;
 }
 
-export function TitleOverlay({ title, choices, current, onChoose, onOpenFile }: { title: string; choices: TitleChoice[]; current: string; onChoose: (key: string) => void; onOpenFile: () => void }) {
+export function TitleOverlay({
+  title,
+  choices,
+  current,
+  onChoose,
+  onOpenFile,
+  onCreate,
+  created,
+}: {
+  title: string;
+  choices: TitleChoice[];
+  current: string;
+  onChoose: (key: string) => void;
+  onOpenFile: () => void;
+  onCreate: () => void;
+  created: boolean;
+}) {
   return (
     <div className="overlay title">
       <h2>World Forge presents</h2>
@@ -629,6 +645,17 @@ export function TitleOverlay({ title, choices, current, onChoose, onOpenFile }: 
             }}
           >
             <kbd>O</kbd> Open file
+          </button>
+          <button
+            className="btn create"
+            title="Make a new adventure by describing it"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onCreate();
+            }}
+          >
+            <kbd>N</kbd> {created ? 'Back to creator' : 'Create'}
           </button>
         </div>
       )}
@@ -663,12 +690,12 @@ export function TitleOverlay({ title, choices, current, onChoose, onOpenFile }: 
   );
 }
 
-export function DeathOverlay({ name }: { name: string }) {
+export function DeathOverlay({ name, created }: { name: string; created: boolean }) {
   const company = useHud((s) => s.party.length > 1);
   return (
     <div className="overlay dead">
       <h1>{company ? 'The party has fallen' : `${name} has fallen`}</h1>
-      <div className="blink">Press R to try again</div>
+      <div className="blink">Press R to try again{created ? ' - N for the creator' : ''}</div>
     </div>
   );
 }

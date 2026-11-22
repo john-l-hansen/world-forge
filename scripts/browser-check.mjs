@@ -16,7 +16,7 @@ const browser = await chromium.launch({
   executablePath: process.env.CHROME_PATH ?? '/usr/bin/google-chrome',
   args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
 });
-const page = await browser.newPage({ viewport: { width: 960, height: 540 } });
+const page = await browser.newPage({ viewport: { width: 960, height: 540 }, acceptDownloads: true });
 const problems = [];
 page.on('console', (m) => m.type() === 'error' && problems.push(`console: ${m.text()}`));
 page.on('pageerror', (e) => problems.push(`page error: ${e}`));
@@ -804,6 +804,69 @@ await page.getByRole('button', { name: 'Back to the adventures' }).click();
 await page.waitForFunction(() => document.querySelector('.overlay.title'), null, { timeout: 5000 }).catch(() => {});
 h = await hud();
 check(/THE FORGOTTEN MINES/i.test(h.overlay ?? ''), 'the way back leads to the title screen');
+
+// --- The world creator -------------------------------------------------------------
+await page.goto(URL);
+await page.waitForFunction(() => window.__worldForge);
+await page.waitForTimeout(300);
+check(/N\s+CREATE/i.test((await hud()).overlay ?? ''), 'the title screen offers to create an adventure');
+await key('KeyN', 400);
+check(await page.locator('.creator textarea').isVisible(), 'N opens the creator, which asks what kind of adventure to make');
+await page.locator('.creator .example').first().click();
+check(/Goblins have taken an old dwarven mine/.test(await page.locator('.creator textarea').inputValue()), 'clicking a suggestion fills in the description');
+await page.locator('.creator textarea').fill('Miners broke into a forgotten tomb beneath their mine, and the dead followed them up. Recover the Bell of Ruin.');
+await page.keyboard.press('Enter');
+await page.waitForTimeout(250);
+let talk = await page.locator('.creator .talk').innerText();
+check(/MINES OVER A TOMB/i.test(talk) && /THE DEAD/i.test(talk) && /BELL OF RUIN/i.test(talk), 'the designer says what it read from the description');
+check(/WHERE DOES IT HAPPEN/i.test(talk) && (await page.locator('.creator .option.current').innerText()).match(/MINES OVER A TOMB/i), 'the first question has the reading marked');
+await shot('30-creator-question');
+// Keep the setting and inhabitants, pick horror, medium, keep the treasure, a party of four, classic.
+for (const k of ['Enter', 'Enter', '2', '2', 'Enter', '3', 'Enter']) {
+  await page.keyboard.press(k);
+  await page.waitForTimeout(150);
+}
+await page.waitForSelector('.creator .outcome', { timeout: 5000 }).catch(() => {});
+talk = await page.locator('.creator .talk').innerText();
+check(/READY TO PLAY/i.test(talk) && /PARTY OF FOUR/i.test(talk) && /BELL OF RUIN/i.test(talk), 'answering the questions draws up a valid world that matches them');
+const preview = await page.evaluate(() => {
+  const c = document.querySelector('.creator canvas.worldmap');
+  return c ? { w: c.width, h: c.height } : null;
+});
+check(preview && preview.w > 60 && preview.h > 40, `the map of the new world is shown (${preview?.w}x${preview?.h})`);
+const madeName = (await page.locator('.creator .side .title').innerText()).trim();
+await shot('31-creator-world');
+const [download] = await Promise.all([page.waitForEvent('download', { timeout: 5000 }).catch(() => null), page.locator('.creator .btn', { hasText: /^Download$/i }).click()]);
+let downloaded = null;
+if (download) downloaded = JSON.parse(readFileSync(await download.path(), 'utf8'));
+check(downloaded && downloaded.world.name.toUpperCase() === madeName.toUpperCase() && downloaded.rooms.length >= 10, 'Download saves the world as a file');
+await page.locator('.creator .btn', { hasText: /Another layout/i }).click();
+await page.waitForTimeout(500);
+const second = (await page.locator('.creator .side .title').innerText()).trim();
+check(/READY TO PLAY/i.test(await page.locator('.creator .talk').innerText()), `Another layout draws a different valid world ("${madeName}", then "${second}")`);
+await page.keyboard.press('KeyP');
+await page.waitForFunction(() => window.__worldForge?.world.def.world.author === 'World Forge creator', null, { timeout: 5000 }).catch(() => {});
+await page.waitForTimeout(400);
+h = await hud();
+check(h.overlay !== null && h.overlay.toUpperCase().includes(second.toUpperCase()) && /BACK\s+TO\s+CREATOR/i.test(h.overlay), 'P plays it, opening on its own title screen');
+await shot('32-created-title');
+await key('KeyX', 500);
+s = await state();
+h = await hud();
+check(h.overlay === null && s.members.length === 4 && s.tick > 0, 'the made world plays, with a party of four');
+await key('KeyW', 300);
+await shot('33-created-play');
+await page.goto(URL + '#create');
+await page.reload();
+await page.waitForSelector('.creator textarea', { timeout: 5000 }).catch(() => {});
+check(await page.locator('.creator textarea').isVisible(), 'the creator can be opened from the address (#create)');
+await page.locator('.creator .btn', { hasText: /Surprise me/i }).click();
+await page.locator('.creator .btn', { hasText: /Decide the rest/i }).click();
+await page.waitForSelector('.creator .outcome', { timeout: 5000 }).catch(() => {});
+check(/READY TO PLAY/i.test(await page.locator('.creator .talk').innerText()), 'with no description at all, the defaults still make a valid world');
+await page.keyboard.press('Escape');
+await page.waitForTimeout(400);
+check(/WORLD FORGE PRESENTS/i.test((await hud()).overlay ?? ''), 'Escape leaves the creator for the title screen');
 
 check(problems.length === 0, `no console errors or failed requests${problems.length ? `: ${problems.join(' | ')}` : ''}`);
 await browser.close();

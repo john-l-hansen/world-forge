@@ -18,7 +18,7 @@
  */
 import { z } from 'zod';
 
-export const SCHEMA_VERSION = '0.8.0';
+export const SCHEMA_VERSION = '0.9.0';
 
 const id = z.string().regex(/^[a-z][a-z0-9_]*$/, 'ids are lower_snake_case');
 const cell = z.object({ x: z.number().int().min(1), y: z.number().int().min(1) });
@@ -236,6 +236,18 @@ export const ItemSchema = z.discriminatedUnion('category', [
     slot: z.enum(['offHand', 'head', 'body', 'hands', 'feet', 'accessory']),
     /** Taken off every blow that lands on the wearer. */
     defence: z.number().int().min(0).max(20),
+    /**
+     * How this piece changes a block, for a shield. Without it a block takes the
+     * engine's usual share of the blow and stamina. Only the off hand's counts.
+     */
+    block: z
+      .object({
+        /** The share of a blocked blow that still lands, 0 to 1. */
+        damageShare: z.number().min(0).max(1),
+        /** Stamina spent on each blocked blow. */
+        staminaCost: z.number().int().min(0).max(100),
+      })
+      .optional(),
     visualAssetId: z.enum(['shield', 'jerkin', 'helm']),
   }),
   z.object({ ...itemBase, category: z.literal('key'), visualAssetId: z.enum(['key']) }),

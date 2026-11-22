@@ -220,9 +220,9 @@ export type GameEvent =
   | { type: 'attack.swing'; actor: string; kind: AttackKind }
   | { type: 'stamina.low'; actor: string }
   | { type: 'party.dodged'; dir: number }
-  | { type: 'attack.blocked'; enemyId: string; target: string; damage: number }
+  | { type: 'attack.blocked'; enemyId: string; target: string; damage: number; shieldId?: string }
   | { type: 'attack.parried'; enemyId: string; actor: string }
-  | { type: 'guard.broken'; enemyId: string; target: string; damage: number }
+  | { type: 'guard.broken'; enemyId: string; target: string; damage: number; shieldId?: string }
   | { type: 'enemy.attack.dodged'; enemyId: string }
   | { type: 'enemy.interrupted'; enemyId: string }
   | { type: 'attack.hit'; actor: string; enemyId: string; damage: number; killed: boolean; kind: AttackKind; critical: boolean }

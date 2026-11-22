@@ -4,7 +4,8 @@
  * timing is exact.
  */
 import { describe, expect, it } from 'vitest';
-import { attackCells, createSession, isGuarding, serializeSession, step } from '../src/engine/sim';
+import { attackCells, createSession, guardOf, isGuarding, serializeSession, step } from '../src/engine/sim';
+import { validateWorld } from '../src/schema/validate';
 import {
   BLOCK_STAMINA_COST,
   DODGE_STAMINA_COST,
@@ -16,7 +17,7 @@ import {
   type SessionState,
 } from '../src/engine/types';
 import type { CompiledWorld } from '../src/world/compile';
-import { HERO, act, attack, block, dodge, heavy, loadMines, move, run, turn } from './helpers';
+import { HERO, act, attack, block, dodge, heavy, loadMines, minesData, move, run, turn } from './helpers';
 
 const types = (events: GameEvent[]) => events.map((e) => e.type);
 
@@ -175,6 +176,63 @@ describe('block and parry', () => {
     expect(hero.hp).toBe(40 - blocked.damage);
     expect(hero.stamina).toBe(40 - BLOCK_STAMINA_COST);
     expect(types(events)).not.toContain('enemy.attack.hit');
+  });
+
+  describe('with a shield', () => {
+    const SHIELD = 'item_wooden_shield';
+
+    it('a shield in the off hand changes what a block lets through and costs', () => {
+      const { world, hero } = duel();
+      expect(guardOf(world, hero)).toEqual({ damageShare: 0.3, staminaCost: BLOCK_STAMINA_COST, shieldId: null });
+      hero.equipment.offHand = SHIELD;
+      expect(guardOf(world, hero)).toEqual({ damageShare: 0.12, staminaCost: 5, shieldId: SHIELD });
+    });
+
+    it('a blow on a raised shield barely lands and costs little stamina', () => {
+      const { world, state, enemy, hero } = duel();
+      hero.equipment.offHand = SHIELD;
+      step(state, world, [block(true)]);
+      untilTelegraph(state, world, enemy);
+      const events = untilImpactIn(state, world, enemy, -2);
+      const blocked = events.find((e) => e.type === 'attack.blocked');
+      if (blocked?.type !== 'attack.blocked') throw new Error(`not blocked: ${types(events).join(', ')}`);
+      expect(blocked.shieldId).toBe(SHIELD);
+      // A chop of 4-7, less the shield's 1 defence, then 12% of that: nothing or 1.
+      expect(blocked.damage).toBeGreaterThanOrEqual(0);
+      expect(blocked.damage).toBeLessThanOrEqual(1);
+      expect(hero.hp).toBe(40 - blocked.damage);
+      expect(hero.stamina).toBe(40 - 5);
+    });
+
+    it('a shield holds where a bare guard would break', () => {
+      const { world, state, enemy, hero } = duel();
+      hero.equipment.offHand = SHIELD;
+      hero.stamina = BLOCK_STAMINA_COST - 1;
+      step(state, world, [block(true)]);
+      untilTelegraph(state, world, enemy);
+      const events = untilImpactIn(state, world, enemy, -2);
+      expect(types(events)).toContain('attack.blocked');
+      expect(types(events)).not.toContain('guard.broken');
+    });
+
+    it('a shield cannot stop a blow that cannot be blocked', () => {
+      const { world, state, hero } = duel(1);
+      hero.equipment.offHand = SHIELD;
+      const chief = state.enemies[1];
+      Object.assign(chief, { x: 5, y: 13, prevX: 5, prevY: 13, facing: 2, alerted: true });
+      step(state, world, [block(true)]);
+      windUp(state, world, chief, 'sweep');
+      const events = untilImpactIn(state, world, chief, -2);
+      expect(types(events)).toContain('enemy.attack.hit');
+      expect(types(events)).not.toContain('attack.blocked');
+    });
+
+    it('a world cannot give a shield a share of more than the whole blow', () => {
+      const data = minesData();
+      const shield = data.items.find((i: { id: string }) => i.id === SHIELD);
+      shield.block.damageShare = 1.5;
+      expect(validateWorld(data).ok).toBe(false);
+    });
   });
 
   it('a guard raised at the last moment parries and leaves the enemy reeling', () => {

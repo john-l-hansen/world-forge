@@ -155,7 +155,11 @@ export function describeEvent(event: GameEvent, state: SessionState, world: Comp
     case 'stamina.low':
       return event.actor === you ? { text: 'You are too winded.', tone: 'plain' } : null;
     case 'attack.blocked':
-      return { text: `You block. The blow still costs you ${event.damage}.`, tone: 'plain' };
+      if (event.shieldId) {
+        const who = event.target === you ? 'Your shield' : `${heroName(event.target)}'s shield`;
+        return { text: event.damage === 0 ? `${who} takes the blow. No harm done.` : `${who} takes the blow. Only ${event.damage} gets through.`, tone: 'good' };
+      }
+      return { text: `${does(event.target, 'block')}. The blow still costs ${event.target === you ? 'you' : 'them'} ${event.damage}.`, tone: 'plain' };
     case 'attack.parried':
       return { text: `Parried! The ${enemyName(event.enemyId)} reels.`, tone: 'quest' };
     case 'guard.broken':

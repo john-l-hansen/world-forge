@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "0.8.0",
+  "schemaVersion": "0.9.0",
   "world": {
     "id": "world_forgotten_mines",
     "name": "The Forgotten Mines",
@@ -648,11 +648,15 @@
     {
       "id": "item_wooden_shield",
       "name": "Wooden shield",
-      "description": "Scarred oak with an iron boss.",
+      "description": "Battered oak with an iron rim. Blocked blows barely land, and cost less breath.",
       "category": "armour",
       "slot": "offHand",
       "defence": 1,
-      "visualAssetId": "shield"
+      "visualAssetId": "shield",
+      "block": {
+        "damageShare": 0.12,
+        "staminaCost": 5
+      }
     },
     {
       "id": "item_storm_scroll",

@@ -97,6 +97,8 @@ export interface SheetView {
   critical: string;
   weapon: string;
   defence: number;
+  /** What a block lets through and costs, with whatever is in the off hand. */
+  block: string;
   /** One row per equipment slot that holds something. */
   equipment: { slot: string; label: string; itemId: string; name: string; detail: string }[];
 }

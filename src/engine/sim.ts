@@ -673,6 +673,13 @@ const UNARMED: { light: WeaponAttackDef; heavy: WeaponAttackDef } = {
 };
 
 /** The total defence of everything a character wears. */
+/** How a member's block works: the engine's usual numbers, or their shield's. */
+export function guardOf(world: CompiledWorld, member: PartyMember): { damageShare: number; staminaCost: number; shieldId: string | null } {
+  const item = world.def.items.find((it) => it.id === member.equipment.offHand);
+  if (item?.category === 'armour' && item.block) return { ...item.block, shieldId: item.id };
+  return { damageShare: BLOCK_DAMAGE_SHARE, staminaCost: BLOCK_STAMINA_COST, shieldId: null };
+}
+
 export function defenceOf(world: CompiledWorld, member: PartyMember): number {
   let total = 0;
   for (const itemId of Object.values(member.equipment)) {
@@ -1068,18 +1075,21 @@ function resolveEnemyAttack(state: SessionState, world: CompiledWorld, enemy: En
         events.push({ type: 'attack.parried', enemyId: enemy.id, actor: target.id });
         return;
       }
-      if (target.stamina >= BLOCK_STAMINA_COST) {
-        damage = Math.max(1, Math.ceil(rolled * BLOCK_DAMAGE_SHARE));
-        spendStamina(state, target, BLOCK_STAMINA_COST);
+      const guard = guardOf(world, target);
+      const shield = guard.shieldId ? { shieldId: guard.shieldId } : {};
+      if (target.stamina >= guard.staminaCost) {
+        // A shield's block can stop a blow outright; a bare guard always lets something through.
+        damage = guard.shieldId ? Math.round(rolled * guard.damageShare) : Math.max(1, Math.ceil(rolled * guard.damageShare));
+        spendStamina(state, target, guard.staminaCost);
         target.hp = Math.max(0, target.hp - damage);
-        events.push({ type: 'attack.blocked', enemyId: enemy.id, target: target.id, damage });
+        events.push({ type: 'attack.blocked', enemyId: enemy.id, target: target.id, damage, ...shield });
       } else {
         // Too tired to hold the guard: it is knocked aside.
         damage = Math.max(1, Math.ceil(rolled * GUARD_BREAK_DAMAGE_SHARE));
         spendStamina(state, target, target.stamina);
         target.blocking = false;
         target.hp = Math.max(0, target.hp - damage);
-        events.push({ type: 'guard.broken', enemyId: enemy.id, target: target.id, damage });
+        events.push({ type: 'guard.broken', enemyId: enemy.id, target: target.id, damage, ...shield });
       }
     } else {
       target.hp = Math.max(0, target.hp - damage);

@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { createSession, serializeSession } from '../src/engine/sim';
 import type { SessionState } from '../src/engine/types';
 import { loadWorld, loadWorldText } from '../src/world/load';
+import { SCHEMA_VERSION } from '../src/schema/world';
 import type { CompiledWorld } from '../src/world/compile';
 import cryptJson from '../src/worlds/sunken-crypt.json';
 import { act, face, fight, interact, loadCrypt, loadMines, walkTo } from './helpers';
@@ -177,7 +178,7 @@ describe('loading worlds', () => {
     old.quests.forEach((q: any) => delete q.kind);
     const result = loadWorld(old);
     if (!result.ok) throw new Error(JSON.stringify(result.issues));
-    expect(result.world.def.schemaVersion).toBe('0.8.0');
+    expect(result.world.def.schemaVersion).toBe(SCHEMA_VERSION);
     expect(result.world.def.quests.map((q) => q.kind)).toEqual(['main', 'main']);
   });
 });

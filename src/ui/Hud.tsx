@@ -375,6 +375,8 @@ export function SheetOverlay({ game }: { game: Game }) {
           <dd>{sheet.critical}</dd>
           <dt>Defence</dt>
           <dd>{sheet.defence}</dd>
+          <dt>Block</dt>
+          <dd>{sheet.block}</dd>
         </dl>
       </div>
       {sheet.spells.length > 0 && <h2>Knows {sheet.spells.join(', ')}.</h2>}

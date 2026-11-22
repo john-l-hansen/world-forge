@@ -149,6 +149,13 @@ export class AudioEngine {
         this.noiseHit({ dur: 0.14, freq: 1400, to: 500, q: 1.6, gain: 0.35, type: 'bandpass', attack: 0.02 });
         break;
       case 'attack.blocked':
+        if (event.shieldId) {
+          // A deep wooden thud with an iron ring at the rim.
+          this.noiseHit({ dur: 0.16, freq: 380, q: 1.4, gain: 0.8, type: 'lowpass' });
+          this.tone({ wave: 'sine', from: 140, to: 70, dur: 0.22, gain: 0.5 });
+          this.tone({ wave: 'triangle', from: 1240, to: 1180, dur: 0.18, gain: 0.06, delay: 0.01 });
+          break;
+        }
         this.tone({ wave: 'triangle', from: 520, to: 360, dur: 0.1, gain: 0.25 });
         this.noiseHit({ dur: 0.09, freq: 1100, q: 0.9, gain: 0.5, type: 'lowpass' });
         this.tone({ wave: 'sine', from: 120, to: 60, dur: 0.14, gain: 0.35 });

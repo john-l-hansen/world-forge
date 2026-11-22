@@ -109,6 +109,10 @@ export function migrateWorld(input: unknown): unknown {
     // 0.8.0 added the crypt environment, its enemies and props, side quests and alert lines. Nothing existing changes.
     data = { ...data, schemaVersion: '0.8.0' };
   }
+  if (data.schemaVersion === '0.8.0') {
+    // 0.9.0 added shields that change a block, and walls that break. Nothing existing changes.
+    data = { ...data, schemaVersion: '0.9.0' };
+  }
   return data;
 }
 

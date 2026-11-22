@@ -6,7 +6,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { deflateSync } from 'node:zlib';
 import { Pix } from '../src/art/pixel';
 import { dirtFloor, lockedDoor, plankDoor, rockCeiling, secretWall, stoneWall, timberFrame, timberWall } from '../src/art/textures';
-import { GOBLIN_POSES, drawChest, drawGoblin, drawKey, drawHeld, drawProp, drawTorch } from '../src/art/sprites';
+import { GOBLIN_POSES, drawChest, drawGoblin, drawKey, drawHeld, drawHeldShield, drawProp, drawTorch } from '../src/art/sprites';
 import { drawPortrait } from '../src/art/portraits';
 
 function crc32(buf: Buffer): number {
@@ -65,7 +65,7 @@ writeFileSync('.art/goblin.png', encodePng(sheet(GOBLIN_POSES.map((pose) => draw
 writeFileSync('.art/chief.png', encodePng(sheet(GOBLIN_POSES.map((pose) => drawGoblin(pose, 'goblin_chief')), 4, 0x3a312a)));
 writeFileSync('.art/loot.png', encodePng(sheet([drawChest(false), drawChest(true), drawKey(0), drawKey(1)], 6, 0x3a312a)));
 writeFileSync('.art/props.png', encodePng(sheet([drawTorch(0), drawTorch(1), drawTorch(2), drawProp('barrel'), drawProp('crate'), drawProp('rubble')], 6, 0x3a312a)));
-writeFileSync('.art/held.png', encodePng(sheet([drawHeld('short_sword'), drawHeld('dagger'), drawHeld('staff'), drawHeld('mace')], 3, 0x3a312a)));
+writeFileSync('.art/held.png', encodePng(sheet([drawHeld('short_sword'), drawHeld('dagger'), drawHeld('staff'), drawHeld('mace'), drawHeldShield()], 3, 0x3a312a)));
 writeFileSync('.art/portraits.png', encodePng(sheet([drawPortrait('fighter'), drawPortrait('rogue'), drawPortrait('mage'), drawPortrait('cleric')], 6, 0x3a312a)));
 console.log('wrote .art/*.png');
 

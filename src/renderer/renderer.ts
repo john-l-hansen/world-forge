@@ -4,7 +4,7 @@
  * unfiltered, so every pixel on screen is a real pixel of the frame.
  */
 import * as THREE from 'three';
-import { CHEST_H, CHEST_W, GOBLIN_H, GOBLIN_POSES, GOBLIN_W, PROP_SIZE, SWORD_H, SWORD_W, TORCH_H, TORCH_W, drawChest, drawGoblin, drawHeld, drawPickup, drawProp, drawTorch, type GoblinPose, type GoblinVariant, type HeldKind } from '../art/sprites';
+import { CHEST_H, CHEST_W, GOBLIN_H, GOBLIN_POSES, GOBLIN_W, PROP_SIZE, SHIELD_H, SHIELD_W, SWORD_H, SWORD_W, TORCH_H, TORCH_W, drawChest, drawGoblin, drawHeld, drawHeldShield, drawPickup, drawProp, drawTorch, type GoblinPose, type GoblinVariant, type HeldKind } from '../art/sprites';
 import { Pix } from '../art/pixel';
 import { drawUndead } from '../art/undead';
 import { activeMember, isGuarding } from '../engine/sim';
@@ -96,6 +96,10 @@ export class DungeonRenderer {
   private torchMaterials: THREE.ShaderMaterial[] = [];
   private facers: THREE.Object3D[] = [];
   private sword: THREE.Mesh;
+  /** The shield in the left hand, when the driven character carries one that blocks. */
+  private shield: THREE.Mesh;
+  /** Kicks the shield back when it takes a blow, then eases off. */
+  private shieldJolt = 0;
   private swordMaterial: THREE.ShaderMaterial;
   /** One texture per kind of weapon a character can hold up. */
   private heldTextures = new Map<HeldKind, THREE.Texture>();
@@ -262,6 +266,14 @@ export class DungeonRenderer {
     this.sword = new THREE.Mesh(swordGeometry, swordMaterial);
     this.overlayScene.add(this.sword);
     this.disposables.push(swordMaterial, swordGeometry);
+    const shieldTexture = pixTexture(drawHeldShield());
+    const shieldMaterial = makeOverlayMaterial(shieldTexture);
+    // Pivot at the fist on the grip, so the shield turns about the hand.
+    const shieldGeometry = new THREE.PlaneGeometry(SHIELD_W, SHIELD_H);
+    this.shield = new THREE.Mesh(shieldGeometry, shieldMaterial);
+    this.shield.visible = false;
+    this.overlayScene.add(this.shield);
+    this.disposables.push(shieldTexture, shieldMaterial, shieldGeometry);
 
     // --- Spell bolt: jagged lines redrawn every frame while it lasts -----------
     const boltGeometry = new THREE.BufferGeometry();
@@ -292,6 +304,9 @@ export class DungeonRenderer {
         break;
       case 'attack.clang':
         if (mine) this.hitKick = 0.6;
+        break;
+      case 'attack.blocked':
+        if (event.shieldId && (driven === undefined || event.target === driven)) this.shieldJolt = 1;
         break;
       case 'spell.healed':
         this.healFlash = Math.max(this.healFlash, 0.8);
@@ -349,6 +364,7 @@ export class DungeonRenderer {
     this.damageFlash = Math.max(0, this.damageFlash - dt * 3.2);
     this.healFlash = Math.max(0, this.healFlash - dt * 2.2);
     this.spark = Math.max(0, this.spark - dt * 6);
+    this.shieldJolt = Math.max(0, this.shieldJolt - dt * 5);
     const driven = activeMember(state);
     const guardGoal = state.status === 'playing' && isGuarding(driven) ? 1 : 0;
     this.guard += Math.sign(guardGoal - this.guard) * Math.min(Math.abs(guardGoal - this.guard), dt * 9);
@@ -393,6 +409,9 @@ export class DungeonRenderer {
     // The weapon is only drawn while one is held, and is whatever the driven character holds.
     const held = this.world.def.items.find((i) => i.id === driven.equipment.mainHand);
     this.sword.visible = held?.category === 'weapon';
+    const offHand = this.world.def.items.find((i) => i.id === driven.equipment.offHand);
+    this.shield.visible = offHand?.category === 'armour' && offHand.visualAssetId === 'shield';
+    if (this.shield.visible) this.placeShield(state, now, timeSeconds);
     if (held?.category === 'weapon' && held.visualAssetId !== this.heldKind) {
       this.heldKind = held.visualAssetId;
       this.swordMaterial.uniforms.uMap.value = this.heldTextures.get(this.heldKind);
@@ -542,6 +561,25 @@ export class DungeonRenderer {
     }
     positions.needsUpdate = true;
     this.boltLines.visible = true;
+  }
+
+  /**
+   * The shield rests low at the left edge, its rim in view. Raising the guard
+   * brings it up across the left of the view; a blow on it knocks it back.
+   */
+  private placeShield(state: SessionState, now: number, timeSeconds: number) {
+    const p = state.party;
+    const moving = now - p.moveStart < p.moveTicks;
+    const stride = (now - p.moveStart) / p.moveTicks;
+    const bobX = moving ? -Math.sin(stride * Math.PI * 2) * 3 : -Math.sin(timeSeconds * 1.6) * 1.2;
+    const bobY = moving ? -Math.abs(Math.sin(stride * Math.PI)) * 4 : Math.sin(timeSeconds * 2.1 + 1) * 1;
+    const g = smooth(this.guard);
+    const jolt = this.shieldJolt;
+    // Rest: mostly below the frame. Guard: up and in, covering the lower left of the view.
+    const x = this.width * 0.07 + this.width * 0.13 * g + bobX - 10 * jolt;
+    const y = -SHIELD_H * 0.32 + (SHIELD_H * 0.62) * g + bobY - 14 * jolt;
+    this.shield.position.set(Math.round(x), Math.round(y), 0);
+    this.shield.rotation.z = -0.35 * (1 - g) + 0.05 * jolt;
   }
 
   private placeSword(state: SessionState, now: number, timeSeconds: number) {

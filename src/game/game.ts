@@ -4,7 +4,7 @@
  * in fixed 60 Hz ticks no matter how fast the screen refreshes.
  */
 import { AudioEngine, type Voice } from '../audio/audio';
-import { activeMember, createSession, defenceOf, enemyAt, hasLineOfSight, isGuarding, partyIsBusy, step } from '../engine/sim';
+import { activeMember, createSession, defenceOf, enemyAt, guardOf, hasLineOfSight, isGuarding, partyIsBusy, step } from '../engine/sim';
 import { EQUIP_SLOTS, type EquipSlot } from '../schema/world';
 import { TICKS_PER_SECOND, type Command, type GameEvent, type SessionState } from '../engine/types';
 import { DungeonRenderer } from '../renderer/renderer';
@@ -319,7 +319,7 @@ export class Game {
         pushFloater('Parry!', 'parry');
         break;
       case 'attack.blocked':
-        pushFloater(`-${event.damage}`, 'block');
+        pushFloater(event.damage === 0 ? 'Blocked' : `-${event.damage}`, 'block');
         this.tookBlow(event.target);
         break;
       case 'guard.broken':
@@ -510,7 +510,8 @@ export class Game {
     for (const slot of EQUIP_SLOTS) {
       const item = def.items.find((i) => i.id === member.equipment[slot]);
       if (!item) continue;
-      const detail = item.category === 'armour' ? `Defence ${item.defence}` : item.category === 'weapon' ? 'Weapon' : '';
+      const detail =
+        item.category === 'armour' ? `Defence ${item.defence}${item.block && slot === 'offHand' ? ', blocks well' : ''}` : item.category === 'weapon' ? 'Weapon' : '';
       equipment.push({ slot, label: slotLabel[slot], itemId: item.id, name: item.name, detail });
     }
     const bonus = damageBonus(member.attributes);
@@ -538,6 +539,10 @@ export class Game {
       critical: `${criticalChance(member.attributes)}%`,
       weapon: weapon?.name ?? 'Unarmed',
       defence: defenceOf(this.world, member),
+      block: (() => {
+        const g = guardOf(this.world, member);
+        return `${Math.round(g.damageShare * 100)}% of a blow, ${g.staminaCost} stamina`;
+      })(),
       equipment,
     };
     const xpProgress = Math.max(0, Math.min(1, (member.xp - levelStart) / Math.max(1, nextLevel - levelStart)));

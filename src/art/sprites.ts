@@ -607,3 +607,74 @@ export function drawPickup(visual: string): [Pix, Pix] {
   if (visual === 'scroll') return [drawScroll(0), drawScroll(1)];
   return [drawSack(), drawSack()];
 }
+
+export const SHIELD_W = 104;
+export const SHIELD_H = 96;
+
+/**
+ * The back of a round wooden shield held up in the left hand, as its bearer
+ * sees it: planks, an iron rim, a cross brace and a gloved fist on the grip.
+ */
+export function drawHeldShield(): Pix {
+  const p = new Pix(SHIELD_W, SHIELD_H);
+  const cx = 52;
+  const cy = 50;
+  const rx = 48;
+  const ry = 44;
+  // The face, in vertical planks, darker toward the edge.
+  for (let y = 0; y < SHIELD_H; y++) {
+    for (let x = 0; x < SHIELD_W; x++) {
+      const d = ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2;
+      if (d > 1) continue;
+      const plank = Math.floor((x - cx + rx) / 13);
+      const inPlank = (x - cx + rx) % 13;
+      let shade = 3 - d * 1.6 + (hash2(plank, y >> 3, 31) - 0.5) * 0.8 + (hash2(x, y, 32) - 0.5) * 0.5 - (x - cx) / rx * 0.6;
+      if (inPlank === 0) shade = 0.3;
+      if (inPlank === 1) shade -= 0.6;
+      p.set(x, y, WOOD[Math.max(0, Math.min(5, Math.round(shade)))]);
+    }
+  }
+  // Grain knots and old cuts.
+  for (let i = 0; i < 9; i++) {
+    const kx = cx - 36 + Math.floor(hash2(i, 1, 33) * 72);
+    const ky = cy - 30 + Math.floor(hash2(i, 2, 33) * 60);
+    p.set(kx, ky, WOOD[0]);
+    p.set(kx + 1, ky, WOOD[1]);
+  }
+  // Iron rim: a dark band with a lit inner edge.
+  for (let a = 0; a < 720; a++) {
+    const t = (a / 720) * Math.PI * 2;
+    for (let r = 0; r < 4; r++) {
+      const x = cx + Math.cos(t) * (rx - r);
+      const y = cy + Math.sin(t) * (ry - r);
+      const lit = Math.sin(t + 2.3) > 0.4;
+      p.set(x, y, r === 3 ? IRON[lit ? 5 : 3] : IRON[lit ? 3 : 1]);
+    }
+  }
+  // Rivets through the rim.
+  for (let i = 0; i < 12; i++) {
+    const t = (i / 12) * Math.PI * 2;
+    const x = Math.round(cx + Math.cos(t) * (rx - 7));
+    const y = Math.round(cy + Math.sin(t) * (ry - 7));
+    p.set(x, y, IRON[5]);
+    p.set(x + 1, y + 1, IRON[0]);
+  }
+  // Cross brace and the grip bar across the middle.
+  p.rect(cx - rx + 6, cy - 4, rx * 2 - 12, 8, WOOD[1]);
+  p.rect(cx - rx + 6, cy - 4, rx * 2 - 12, 1, WOOD[3]);
+  p.rect(cx - rx + 6, cy + 3, rx * 2 - 12, 1, WOOD[0]);
+  p.rect(cx - 16, cy - 3, 32, 6, IRON[2]);
+  p.rect(cx - 16, cy - 3, 32, 1, IRON[4]);
+  // A leather arm strap.
+  p.rect(cx + 14, cy - 22, 7, 44, HIDE[1]);
+  p.rect(cx + 14, cy - 22, 1, 44, HIDE[3]);
+  p.rect(cx + 13, cy - 24, 9, 3, IRON[3]);
+  p.rect(cx + 13, cy + 21, 9, 3, IRON[3]);
+  // The gloved fist on the grip, with the forearm running off to the lower left.
+  p.limb(cx - 2, cy + 2, -10, SHIELD_H + 14, [HIDE[0], HIDE[1], HIDE[2]], 18);
+  p.shaded(cx - 4, cy, 11, 9, [HIDE[0], HIDE[1], HIDE[2], HIDE[3]]);
+  for (let k = 0; k < 4; k++) p.shaded(cx - 11 + k * 5, cy - 6, 3, 3, [HIDE[1], HIDE[2], HIDE[3]]);
+  p.shaded(cx + 6, cy + 2, 3.5, 4, [SKIN[1], SKIN[2], SKIN[3]]);
+  p.outline(INK);
+  return p;
+}

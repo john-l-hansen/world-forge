@@ -46,7 +46,7 @@ export function describeEvent(event: GameEvent, state: SessionState, world: Comp
       return { text: `The ${(key?.name ?? 'key').toLowerCase()} turns. The lock gives.`, tone: 'good' };
     }
     case 'secret.found':
-      return { text: 'The stonework shifts. A hidden way opens!', tone: 'quest' };
+      return { text: 'The stonework shifts. A hidden way opens, breathing cold.', tone: 'quest' };
     case 'wall.inspected':
       return { text: 'The stone is cracked through, and cold air breathes out of it. A heavy blow (K) might bring it down.', tone: 'lore' };
     case 'wall.held':
@@ -79,7 +79,7 @@ export function describeEvent(event: GameEvent, state: SessionState, world: Comp
       return { text: `${heroName(event.actor)} drinks the ${(item?.name ?? 'draught').toLowerCase()}. +${event.healed} health.`, tone: 'good' };
     }
     case 'item.refused':
-      if (event.reason === 'full_health') return { text: 'You are not hurt.', tone: 'plain' };
+      if (event.reason === 'full_health') return { text: 'You are not hurt. Save it; there will be worse.', tone: 'plain' };
       if (event.reason === 'none_left') {
         const item = def.items.find((i) => i.id === event.itemId);
         const scroll = item?.category === 'consumable' && item.effect.type === 'cast';
@@ -110,7 +110,7 @@ export function describeEvent(event: GameEvent, state: SessionState, world: Comp
     case 'member.row':
       return { text: `${does(event.actor, 'move')} to the ${event.row} row.`, tone: 'plain' };
     case 'member.fell':
-      return { text: `${heroName(event.actor)} falls!`, tone: 'bad' };
+      return { text: `${heroName(event.actor)} goes down in their own blood and does not get up.`, tone: 'bad' };
     case 'member.injured': {
       const whose = event.actor === you ? 'Your' : `${heroName(event.actor)}'s`;
       const lines = {
@@ -150,7 +150,16 @@ export function describeEvent(event: GameEvent, state: SessionState, world: Comp
     }
     case 'interact.nothing':
       return { text: 'Nothing to use here.', tone: 'plain' };
-    case 'attack.hit':
+    case 'attack.hit': {
+      const enemy = state.enemies.find((e) => e.id === event.enemyId);
+      const bloodless = def.enemies.find((d) => d.id === enemy?.defId)?.blood === 'none';
+      if (event.killed && enemy?.gore)
+        return {
+          text: bloodless
+            ? `${does(event.actor, 'smash', 'smashes')} the ${enemyName(event.enemyId)} to splinters.`
+            : `${does(event.actor, 'hew')} the ${enemyName(event.enemyId)} apart. It comes down in pieces.`,
+          tone: 'good',
+        };
       return event.killed
         ? { text: `${does(event.actor, 'strike')} the ${enemyName(event.enemyId)} down!`, tone: 'good' }
         : {
@@ -158,10 +167,11 @@ export function describeEvent(event: GameEvent, state: SessionState, world: Comp
             // A companion's ordinary blows are reported quietly.
             tone: event.critical ? 'quest' : event.actor === you ? 'good' : 'plain',
           };
+    }
     case 'xp.gained':
       return { text: alone ? `You gain ${event.amount} experience.` : `Each of you gains ${event.amount} experience.`, tone: 'plain' };
     case 'level.up':
-      return { text: `${heroName(event.actor)} reaches level ${event.level}! +${event.healthGained} health, +${event.staminaGained} stamina.`, tone: 'quest' };
+      return { text: `${heroName(event.actor)} reaches level ${event.level}. Harder now: +${event.healthGained} health, +${event.staminaGained} stamina.`, tone: 'quest' };
     case 'attack.clang':
       return event.actor === you ? { text: 'Your blade rings off the stone.', tone: 'plain' } : null;
     case 'enemy.alerted': {
@@ -193,14 +203,17 @@ export function describeEvent(event: GameEvent, state: SessionState, world: Comp
       return { text: 'You slip past the blow.', tone: 'good' };
     case 'enemy.interrupted':
       return { text: `Your blow breaks the ${enemyName(event.enemyId)}'s wind-up!`, tone: 'good' };
-    case 'enemy.attack.hit':
-      return { text: `The ${enemyName(event.enemyId)} hits ${heroName(event.target)} for ${event.damage}.`, tone: 'bad' };
+    case 'enemy.attack.hit': {
+      const enemy = state.enemies.find((e) => e.id === event.enemyId);
+      const attack = def.enemies.find((d) => d.id === enemy?.defId)?.attacks.find((a) => a.id === event.attackId)?.name ?? 'blow';
+      return { text: `The ${enemyName(event.enemyId)}'s ${attack} opens ${event.target === you ? 'you' : heroName(event.target)} up for ${event.damage}.`, tone: 'bad' };
+    }
     case 'enemy.attack.miss':
       return { text: `The ${enemyName(event.enemyId)} cuts only air.`, tone: 'good' };
     case 'encounter.cleared':
       return null;
     case 'party.died':
-      return { text: alone ? 'The dark closes in.' : 'The last of you falls. The dark closes in.', tone: 'bad' };
+      return { text: alone ? 'The dark closes in. No one will come looking.' : 'The last of you falls. No one will come looking.', tone: 'bad' };
     default:
       return null;
   }

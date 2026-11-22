@@ -248,7 +248,7 @@
       "regionId": "region_crypt",
       "name": "The Reliquary",
       "type": "treasure",
-      "description": "What the Warden was set to keep.",
+      "description": "What the Warden was set to keep. The floor is dark with old stains that were never cleaned.",
       "layout": {
         "x": 5,
         "y": 1,

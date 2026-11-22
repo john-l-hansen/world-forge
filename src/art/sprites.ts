@@ -3,7 +3,7 @@
  * the held sword. Each is posed from simple shapes, then outlined in ink so
  * the silhouette stays readable at 320×200.
  */
-import { BLOOD, BONE, EYE_RED, EYE_YELLOW, FLAME, FLESH, GOBLIN, GOLD, GORE, HIDE, INK, IRON, SKIN, STONE, WOOD } from './palette';
+import { BLOOD, BONE, EYE_RED, EYE_YELLOW, FLAME, FLESH, GOLD, GORE, HIDE, INK, IRON, SKIN, STONE, WOOD } from './palette';
 import { Pix, hash2, type Ramp } from './pixel';
 
 /** `gore` is a death that tore the body apart; `dead` a plain one. */
@@ -34,7 +34,8 @@ interface GoblinLook {
   chief: boolean;
 }
 const LOOKS: Record<GoblinVariant, GoblinLook> = {
-  goblin: { g: GOBLIN, jerkin: [HIDE[0], HIDE[1], HIDE[2], HIDE[3]], chief: false },
+  // Feral, not comic: a sickly, dirty hide and filthy leathers.
+  goblin: { g: [0x121709, 0x202a12, 0x34401c, 0x4b5728, 0x666f38], jerkin: [0x1e140c, 0x2f2013, HIDE[1], HIDE[2]], chief: false },
   // The chief: duskier hide, iron plate, a horned helm and red war paint.
   goblin_chief: { g: [0x1b1f12, 0x30381c, 0x495427, 0x667335, 0x8a9648], jerkin: [IRON[0], IRON[1], IRON[2], IRON[3]], chief: true },
 };
@@ -65,6 +66,9 @@ function cleaver(p: Pix, hx: number, hy: number, tx: number, ty: number) {
   p.line(blade[3][0], blade[3][1], blade[2][0], blade[2][1], IRON[5], 1);
   p.line(blade[0][0], blade[0][1], blade[1][0], blade[1][1], IRON[1], 1);
   p.set(mx + nx * 3 + ux * 4, my + ny * 3 + uy * 4, IRON[1]); // notch
+  // Old blood dried along the edge.
+  for (const t of [0.55, 0.7, 0.85]) p.set(mx + (tx - mx) * t + nx * 6, my + (ty - my) * t + ny * 6, BLOOD[1]);
+  p.set(mx + (tx - mx) * 0.7 + nx * 5, my + (ty - my) * 0.7 + ny * 5, BLOOD[0]);
 }
 
 function goblinHead(p: Pix, cx: number, cy: number, mood: 'calm' | 'rage' | 'pain', scale = 1) {
@@ -82,21 +86,28 @@ function goblinHead(p: Pix, cx: number, cy: number, mood: 'calm' | 'rage' | 'pai
       s < 0 ? look.g[3] : look.g[2],
     );
     p.line(cx + s * (rx + 1), cy - 3, cx + s * (rx + 7), cy - 6, look.g[1], 1);
+    // Torn: a bite out of each ear.
+    for (const [ex, ey] of [[8, -6], [9, -6], [8, -5]]) p.clear(Math.round(cx + s * (rx + ex)), Math.round(cy + ey));
   }
   p.shaded(cx, cy, rx, ry, skinRamp());
   // Heavy brow.
-  p.line(cx - 9 * scale, cy - 5, cx - 2, cy - 2, look.g[0], 2);
-  p.line(cx + 9 * scale, cy - 5, cx + 2, cy - 2, look.g[0], 2);
+  p.line(cx - 10 * scale, cy - 5, cx - 1, cy - 1, look.g[0], 3);
+  p.line(cx + 10 * scale, cy - 5, cx + 1, cy - 1, look.g[0], 3);
+  // Matted tufts and an old scar across the face.
+  for (const [tx, ex, ey] of [[-6, -9, -2], [-3, -4, -4], [0, 2, -2], [3, 6, -3], [1, -1, -1]] as const) p.line(cx + tx, cy - ry + 2, cx + ex, cy - ry + ey, INK, 1);
+  p.line(cx - 9, cy - 7, cx - 3, cy + 5, 0x8f8460, 1);
   // Eyes.
   if (mood === 'pain') {
     p.line(cx - 7, cy - 1, cx - 3, cy, INK, 1);
     p.line(cx + 7, cy - 1, cx + 3, cy, INK, 1);
   } else {
+    // Deep-set slits under the brow, never round and never friendly.
     const eye = mood === 'rage' ? EYE_RED : EYE_YELLOW;
     for (const s of [-1, 1]) {
-      p.rect(Math.round(cx + s * 5 - 2), Math.round(cy - 1), 4, 3, eye);
-      p.set(cx + s * 5 - (s > 0 ? 1 : 0), cy, INK);
-      p.set(cx + s * 5 - 2 + (s > 0 ? 3 : 0), cy + 1, look.g[0]);
+      p.ellipse(cx + s * 5, cy, 3, 2, look.g[0]);
+      p.rect(Math.round(cx + s * 5 - 2), Math.round(cy), 4, 1, eye);
+      p.set(cx + s * 5 + (s > 0 ? -2 : 1), cy, EYE_RED);
+      p.set(cx + s * 5, cy, INK);
     }
   }
   // Nose.
@@ -119,14 +130,18 @@ function goblinHead(p: Pix, cx: number, cy: number, mood: 'calm' | 'rage' | 'pai
   }
   // Mouth and teeth.
   const open = mood === 'calm' ? 2 : 5;
-  p.rect(Math.round(cx - 7), Math.round(cy + 6), 15, open, INK);
-  for (const tx of [-6, -3, 3, 6]) p.set(cx + tx, cy + 6, BONE);
+  p.rect(Math.round(cx - 8), Math.round(cy + 6), 17, open, INK);
+  // A crooked row of filed teeth, and tusks jutting up from the jaw.
+  for (const tx of [-7, -5, -2, 1, 4, 7]) p.set(cx + tx, cy + 6, BONE);
+  for (const tx of [-6, 6]) {
+    p.set(cx + tx, cy + 6 + open, BONE);
+    p.set(cx + tx, cy + 5 + open, BONE);
+    p.set(cx + tx, cy + 4 + open, 0xb8ae92);
+  }
   if (open > 2) {
-    for (const tx of [-5, 5]) {
-      p.set(cx + tx, cy + 6 + open - 1, BONE);
-      p.set(cx + tx, cy + 6 + open - 2, BONE);
-    }
-    p.rect(Math.round(cx - 2), Math.round(cy + 8), 5, 2, BLOOD[1]);
+    for (const tx of [-4, 4]) p.set(cx + tx, cy + 6 + open - 1, BONE);
+    p.rect(Math.round(cx - 3), Math.round(cy + 8), 7, 2, BLOOD[1]);
+    p.set(cx + 2, cy + 6 + open, BLOOD[2]);
   }
 }
 
@@ -212,14 +227,17 @@ export function drawGoblin(pose: GoblinPose, variant: GoblinVariant = 'goblin'):
   const handL: [number, number] =
     pose === 'sweep' ? [cx - 18, y(46)] : pose === 'telegraph' ? [cx - 19, y(28)] : pose === 'attack' ? [cx - 20, y(48)] : [cx - 17 + lean, y(51)];
   p.shaded(handL[0], handL[1], 3, 3, limbRamp());
+  // Claws.
+  for (const d of [-2, 0, 2]) p.set(handL[0] + d, handL[1] + 3, BONE);
 
   // Torso: a ragged hide jerkin with a belt.
   p.shaded(cx + lean, y(42), 11.5, 12, look.jerkin);
   for (let i = -10; i <= 10; i += 3) p.poly([[cx + i + lean, y(52)], [cx + i + 3 + lean, y(52)], [cx + i + 1.5 + lean, y(56)]], HIDE[1]);
   p.rect(cx - 11 + lean, y(47), 23, 2, HIDE[0]);
   p.rect(cx - 1 + lean, y(47), 3, 2, GOLD[2]);
-  // Bone necklace.
+  // Bone necklace, and somebody else's blood down the front.
   for (let i = -5; i <= 5; i += 2.5) p.set(cx + i + lean, y(34) + Math.round(3 - Math.abs(i) * 0.5), BONE);
+  if (!look.chief) for (const [bx, by] of [[-4, 39], [-3, 40], [-3, 42], [5, 44], [6, 45], [2, 41]]) p.set(cx + bx + lean, y(by), BLOOD[0]);
 
   if (look.chief) {
     for (const s of [-1, 1]) {

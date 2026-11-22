@@ -34,6 +34,22 @@ describe('message log', () => {
     expect(kill?.text).toBe('Sela strikes the Goblin down!');
   });
 
+  it('says so when a body is torn apart, and when bones are smashed', () => {
+    const world = loadPartyMines();
+    const state = createSession(world, 1);
+    const enemy = state.enemies[0];
+    enemy.gore = true;
+    const torn = describeEvent({ type: 'attack.hit', actor: 'char_fighter', enemyId: enemy.id, damage: 12, killed: true, kind: 'heavy', critical: false }, state, world);
+    expect(torn?.text).toBe('You hew the Goblin apart. It comes down in pieces.');
+  });
+
+  it('names the wound and the healing of an injury', () => {
+    const world = loadPartyMines();
+    const state = createSession(world, 1);
+    expect(describeEvent({ type: 'member.injured', actor: 'char_rogue', kind: 'leg' }, state, world)?.text).toMatch(/^Sela's leg is laid open/);
+    expect(describeEvent({ type: 'member.recovered', actor: 'char_fighter', kind: 'arm' }, state, world)).toEqual({ text: 'Your arm has knit.', tone: 'good' });
+  });
+
   it('follows a change of control', () => {
     const world = loadPartyMines();
     const state = createSession(world, 1);
@@ -72,7 +88,7 @@ describe('message log', () => {
     const state = createSession(world, 1);
     const enemyId = state.enemies[0].id;
     expect(describeEvent({ type: 'xp.gained', amount: 40, enemyId }, state, world)?.text).toBe('You gain 40 experience.');
-    expect(describeEvent({ type: 'party.died' }, state, world)?.text).toBe('The dark closes in.');
+    expect(describeEvent({ type: 'party.died' }, state, world)?.text).toBe('The dark closes in. No one will come looking.');
     expect(describeEvent({ type: 'spell.cast', actor: 'char_fighter', spellId: 'spell_storm_bolt', itemId: 'item_storm_scroll' }, state, world)?.text).toBe('Brannoc reads the scroll. Storm bolt gathers!');
   });
 });

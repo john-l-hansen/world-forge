@@ -45,7 +45,7 @@
       "regionId": "region_forgotten_mines",
       "name": "Mine Entrance",
       "type": "entrance",
-      "description": "Cold air follows you in from the hillside.",
+      "description": "Cold air follows you in from the hillside. Somewhere below, something is chewing.",
       "layout": {
         "x": 3,
         "y": 12,
@@ -138,7 +138,7 @@
       "regionId": "region_forgotten_mines",
       "name": "Storeroom",
       "type": "treasure",
-      "description": "Barrels and crates, long since picked over.",
+      "description": "Barrels and crates, long since picked over. The last man to pick them is still here, in pieces.",
       "layout": {
         "x": 10,
         "y": 1,
@@ -734,7 +734,7 @@
           "optional": true
         }
       ],
-      "completionText": "The chief is dead and the mines are quiet again."
+      "completionText": "Gnarl is dead. The mines are quiet, for now. Something else will crawl in to fill the dark."
     }
   ],
   "npcs": [],

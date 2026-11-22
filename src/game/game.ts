@@ -375,7 +375,7 @@ export class Game {
         this.syncPack();
         break;
       case 'member.fell':
-        pushFloater(`${this.world.def.characters.find((c) => c.id === event.actor)?.name ?? 'A companion'} falls!`, 'taken', 1400);
+        pushFloater(`${this.world.def.characters.find((c) => c.id === event.actor)?.name ?? 'A companion'} is down`, 'taken', 1400);
         break;
       case 'spell.hit':
         if (getSettings().numbers) pushFloater(String(event.damage), 'spell');
@@ -404,7 +404,7 @@ export class Game {
       case 'enemy.telegraph':
         if (!this.tipShown) {
           this.tipShown = true;
-          pushLog('Step away, dodge with Space, or raise your guard (L) just as it lands to parry.', 'lore');
+          pushLog('A blow is coming. Step out of its way, dodge (Space), or raise your guard (L) as it lands to parry.', 'lore');
         }
         break;
       case 'enemy.attack.hit':

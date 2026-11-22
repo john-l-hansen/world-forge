@@ -41,7 +41,7 @@ const LIGHTING = /* glsl */ `
   // faded by distance and snapped to a small number of dithered bands.
   float shadeLight(float baked, float dist) {
     float carried = uPartyLight * pow(clamp(1.0 - dist / uPartyRange, 0.0, 1.0), 1.4);
-    float light = max(baked * (0.86 + 0.14 * uFlicker) * 1.15, carried * (0.9 + 0.1 * uFlicker)) + 0.035;
+    float light = max(baked * (0.86 + 0.14 * uFlicker) * 1.1, carried * (0.9 + 0.1 * uFlicker)) + 0.02;
     light *= 1.0 - smoothstep(uFogNear, uFogFar, dist);
     return floor(light * uBands + bayer4(gl_FragCoord.xy)) / uBands;
   }
@@ -61,10 +61,11 @@ export interface SharedUniforms {
 export function makeSharedUniforms(): SharedUniforms {
   return {
     uFlicker: { value: 1 },
-    uPartyLight: { value: 0.8 },
-    uPartyRange: { value: 4.6 },
-    uFogNear: { value: 4.5 },
-    uFogFar: { value: 10 },
+    // Light is scarce: the party's own reaches a little way, and the dark closes in soon after.
+    uPartyLight: { value: 0.68 },
+    uPartyRange: { value: 4.0 },
+    uFogNear: { value: 3.8 },
+    uFogFar: { value: 8.5 },
     uBands: { value: 12 },
   };
 }

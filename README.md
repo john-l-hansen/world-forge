@@ -1,9 +1,10 @@
 # World Forge
 
-A browser-based retro first-person RPG engine and, later, an AI-assisted world creator.
-This repository currently holds **The Forgotten Mines**, the golden reference adventure:
-a small complete dungeon with a locked door, a key, a secret room, a treasure chest, a
-boss and a quest, which the engine loads from validated world data.
+A browser-based retro first-person RPG engine and a world creator that makes new
+adventures from a description. It ships with **The Forgotten Mines**, the golden
+reference adventure (played alone or with a party of four), and **The Sunken Crypt**.
+Every world, bundled, opened from a file or made in the creator, is plain data that
+the engine loads only after it validates.
 
 ```
 npm install
@@ -43,6 +44,20 @@ with weapons and takes the blows from ahead; the back row casts and heals.
 
 Watch the enemy: when it rears back, step away, dodge, block or parry. A red glow means
 the blow cannot be blocked.
+
+## The world creator
+
+Press N (or Create) on the title screen, or open the page with `#create`. Describe the
+adventure in a sentence or two, or start from a suggestion; the designer reads what it
+can from your words, then asks seven quick questions (place, inhabitants, feel, size,
+goal, party, difficulty) with its reading already marked. Enter keeps a marked answer,
+1 to 3 (or 6) picks another, and "Decide the rest" draws the world up at once.
+
+The world it makes is summarised, checked and mapped. Play it (P), draw another layout,
+download it as a world file you can open again with O on the title screen, or start
+over. The same description always gives the same world. This first creator is a local
+generator: it needs no AI and no key. An AI provider can be added later behind the same
+interface, through a secure backend.
 
 ## Layout
 

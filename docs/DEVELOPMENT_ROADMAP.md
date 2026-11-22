@@ -1,12 +1,13 @@
 DEVELOPMENT ROADMAP — WORLD FORGE
-Status (2026-11-21)
+Status (2026-11-22)
 Phases 0, 1 and 2 are built and tested, and The Forgotten Mines is complete as the golden reference adventure. See DEVELOPMENT_LOG.md for the milestone reports.
 Phase 2 still needs one thing no test can give: a person playing it and judging whether the combat feels good. Its numbers are first guesses.
 The code lives at https://github.com/john-l-hansen/world-forge.
 Phase 3 is built and tested: attributes, classes, levels and experience, equipment and armour, consumables, spells and mana, and a party of up to four with rows, character switching and party AI. The party model is one body with a front and a back row (decided 2026-11-16; see the development log, milestone 7). A second adventure, the same mine for a party of four, can be chosen from the title screen.
 Phase 4 is built and tested: one loader for every world, tilesets chosen by each region's environment, a second adventure (The Sunken Crypt) that shares nothing with the Mines but the engine, and world files opened from the player's computer (see the development log, milestone 8).
 John played the three adventures on 2026-11-21. His notes were acted on in a feedback pass: an easy-to-find character sheet, shields that change blocking, pickup banners and floor glints, cracked walls you smash with heavy blows, a draft near hidden ways, and companion feedback in the party panel (see the development log, milestone 9). A second play session found it felt good.
-Next: Phase 5 (the AI world creator), with Phase 3b (co-op) still open.
+Phase 5 is built and tested: a person describes an adventure, answers a few questions, and plays the world the creator makes, or downloads it as a world file. The first provider is a deterministic local generator, with no AI and no key (see the development log, milestone 10).
+Next: targeted changes to a made world with undo and a change history, leading into Phase 6 (the visual world editor). Phase 3b (co-op) is still open.
 Two phases were added on 2026-11-15: Phase 3b (co-op play) and Phase 6b (dynamic world simulation).
 The world schema and world validation were brought forward from Phase 4, so that The Forgotten Mines loads from world data and is not hard-coded. The schema is at version 0.9.0 (rooms, doors, locks, secret doors, breakable walls, enemies with attack lists, poise and experience, encounters, bosses, objects, chests, pickups, weapons with light and heavy attacks, armour and shields that change blocking, keys, consumables, scrolls, treasure, spells, characters with class, level, attributes, equipment, row and known spells, bolt and healing spells, main and side quests, two environments).
 1. Development philosophy
@@ -200,7 +201,7 @@ World loading: done. One loader for bundled worlds and for files opened from the
 World validation: done. A world with faults is reported and never played.
 Proof: The Sunken Crypt, a second adventure in world data only, won by a scripted player by two different routes.
 Not done: more than one level, room shapes other than rectangles, outdoor places, and worlds that bring their own art.
-7. Phase 5: AI world creator
+7. Phase 5: AI world creator (built; NPCs wait on the engine)
 Objectives
 Create adventures through conversation.
 Tasks
@@ -221,6 +222,16 @@ System generates structured world data.
 World validates.
 Engine loads generated world.
 No external AI key is required for demo mode.
+Status of each task
+Guided questions: done. One open question with suggestions, then seven quick ones with the description's reading marked.
+Adventure concept: done. Read from free text by plain keywords; anything unsaid has a default.
+World structure, room graph, encounter, quest and item generation: done, by the local provider and the layout builder.
+NPC generation: not done. The engine has no NPCs yet.
+Validation: done. Every made world is validated; failures are retried with another seed and reported in words.
+Deterministic fallback generator: done. It is the first provider; the same description gives the same world.
+Provider abstraction: done. An AI provider can be added later behind it, through a secure backend.
+All five acceptance criteria are met, tested by unit tests and a browser playthrough.
+Not done from AI_CREATOR_SPEC: targeted modifications with undo and history (next), and an AI provider.
 8. Phase 6: Visual world editor
 Objectives
 Allow manual customization.
@@ -321,7 +332,7 @@ Large-scale asset generation.
 These belong to future development.
 Multiplayer was on this list until 2026-11-15. Co-op play is now Phase 3b. Other forms of multiplayer (competitive play, large shared worlds) remain out of scope.
 15. Immediate priority
-The immediate goal is Phase 5, the AI world creator, which will produce worlds for the loader built in Phase 4. The three adventures have been played and tuned once from that play.
+The immediate goal is targeted changes to a world made in the creator (regenerate one encounter, change the inhabitants, a stronger boss, add a side quest or a secret room), with undo and a change history, as the first step of Phase 6.
 Do not spend the initial development effort building the entire creator platform.
 Build a playable retro dungeon first.
 Then make it extensible.

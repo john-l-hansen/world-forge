@@ -1,5 +1,110 @@
 # Development log — World Forge
 
+## Milestone 10 — Phase 5: the world creator (2026-11-22)
+
+A person can now describe an adventure, answer a few questions, and play the world the
+creator makes, or take it away as a file.
+
+### What was implemented
+
+- **The generator** (`src/creator`, no React, Three.js or browser APIs):
+  - `brief.ts`: what the person wants, with defaults for everything, and a plain keyword
+    reading of their own words (place, inhabitants, feel, size, difficulty, party, goal,
+    a named treasure, a title in quotation marks). It never runs anything it is given.
+  - `provider.ts`: the provider interface. A provider turns a brief into a plan.
+  - `local.ts`: the first provider, a deterministic designer working from tables of
+    names and simple rules. Same brief and seed, same plan; no network, no key.
+  - `plan.ts`: a plan is design intent only: rooms and what each is for, which room each
+    opens off and how (archway, door, locked door, cracked wall), who lives where, what
+    lies about, the quests and the party. No geometry.
+  - `layout.ts`: the procedural layout builder. Places rooms as rectangles with a door in
+    the one-cell wall between each room and its parent, tries another parent when a room
+    will not fit, and adds a few loops in bigger worlds.
+  - `assemble.ts` and `bestiary.ts`: furnish the rooms (torches, props, chests, pickups,
+    enemies), keep every walkway and doorway clear, give everything a stable ID, and
+    write world data. Enemies are the tuned ones from the two hand-made adventures,
+    scaled for difficulty and party size.
+  - `generate.ts`: brief → plan → layout → world → validation. A plan that will not fit
+    or a world that fails validation is tried again with the next seed, up to twelve
+    times, and every failure is reported in words.
+- **Progression-aware plans.** A spine of rooms runs from the entrance to the boss, who
+  waits behind a locked door; the key lies on the near side, in the deepest branch.
+  Branches hold treasure, fights, story rooms and quiet rooms. Optionally a hidden room
+  behind a cracked wall, and a side quest. The goal is either to bring out a treasure
+  (get into the boss room, defeat the boss, take it) or to slay the master (find the
+  key, defeat the boss).
+- **Scales and places.** Small (4 to 6 rooms), medium (10 to 15), large (20 to 27). Old
+  mines, a crypt, or mines over a tomb, which mixes both tilesets in one world.
+  Goblins, the dead, or both. A lone fighter, a rogue and a cleric, or four.
+- **The creator screen** (`src/creator-ui`), on the game's own 480×270 screen and stone
+  panels: one open question with four suggestions, then seven quick ones with the
+  reading of the description already marked, and "Decide the rest". The made world is
+  summarised, checked ("valid, and ready to play", or what stood in the way) and drawn
+  as a map. Play, Another layout, Download, Start over and Back; extras for the hidden
+  room, the side quest and the treasure's name.
+- **Into the game.** N or Create on the title screen, or a `#create` link, opens the
+  creator. A made world goes through the same loader as any other and opens on its own
+  title screen; N leads back to the creator from there and from the defeat and victory
+  screens. The creator remembers everything while you play.
+
+### Decisions made
+
+- **The local generator first, as the spec says.** AI_CREATOR_SPEC section 10: a
+  provider-independent interface, a deterministic local generator first, an external AI
+  later through a secure backend, never credentials in the browser. Nothing here
+  decides how that backend will work.
+- **AI writes intent, code writes geometry** (spec section 6). A plan has no
+  coordinates; the layout builder and assembler place everything, so a plan from any
+  provider is built and checked the same way.
+- **The same description gives the same world.** The seed comes from the words.
+  Another layout moves to another seed.
+- **A made world opens on its title screen**, as a reveal and as the place to get back
+  to the creator, where a world file goes straight in.
+- **No NPCs.** The engine has no characters to talk to yet, so the creator makes none.
+
+### Tests executed
+
+- `npm run typecheck` and `npm run build` — pass.
+- `npm test` — 212 unit tests pass in 12 files. New: 11 in `tests/creator.test.ts`:
+  reading descriptions (and leaving alone what they do not say); the same brief and seed
+  giving the same world; progression in 20 plans; room counts by scale; no overlapping
+  rooms and every door between two rooms in 15 large layouts; every combination of
+  scale, place and party (27, two seeds each) validating, loading and starting a
+  session; the right tilesets, enemies and objectives; a world from a sentence alone; a
+  new explorer bot winning five generated worlds it has never seen; and the same bot
+  winning the hand-made Mines, to show it is a fair judge.
+- A balance trial (not kept as a test): the bot won all 18 classic worlds it played
+  (small and medium, each party), and 14 of 18 brutal ones; it died in four of the six
+  brutal worlds for a lone fighter.
+- `npm run test:browser` — 150 checks pass in headless Chrome. New: 14 for the creator,
+  from the title screen through a suggestion, a description, the reading, the
+  questions, a valid world and its map, a downloaded world file, another layout,
+  playing it with a party of four, a `#create` link, a world from no description at all,
+  and leaving with Escape.
+
+### Known limitations
+
+- **Nobody has used the creator yet.** The questions, the names and the balance of made
+  worlds are first guesses.
+- The reading of a description is keyword-based: it understands what it was told to
+  look for and no more. An AI provider would do better, behind the same interface.
+- No NPCs, dialogue or factions, since the engine has none.
+- Two places, four kinds of enemy, rectangular rooms on one level: the creator can only
+  use what the engine has.
+- Targeted changes to a made world (regenerate one encounter, swap inhabitants, a
+  stronger boss, add a side quest or a secret room) with undo and history are not built
+  yet. The roadmap puts natural-language changes and undo with the editor in Phase 6.
+- A made world is not saved between visits; download it to keep it. Saving projects is
+  Phase 7.
+- Download has only been tested in headless Chrome; whether the published artifact's
+  page lets a browser save files has not been tried.
+
+### Next milestone
+
+Targeted changes to a made world, with undo and a change history (the spec's acceptance
+criteria: modify one room, regenerate one encounter, keep the rest), which leads into
+Phase 6, the visual world editor.
+
 ## Milestone 9 — Feedback pass from the first play session (2026-11-21)
 
 John played all three adventures and left notes in the status spreadsheet. This
@@ -659,6 +764,8 @@ src/renderer   Three.js presentation                       (reads engine state, 
 src/audio      synthesized sound                           (listens to engine events)
 src/game       game loop, input, messages, interface store (the player app's glue)
 src/ui         React interface
+src/creator    world creator: brief, providers, plans, layout, assembly  (pure, added in milestone 10)
+src/creator-ui the creator's screen                        (React; talks to src/creator only)
 ```
 
 `schema`, `world`, `engine` and `art` have no React, Three.js or browser dependencies and

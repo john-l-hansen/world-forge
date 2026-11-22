@@ -1,5 +1,107 @@
 # Development log — World Forge
 
+## Milestone 11 — Living world L0 and the start of L1: the grim direction, saves (2026-11-22)
+
+The first milestone of LIVING_WORLD_PLAN.md. The existing Mines and Crypt now carry the
+new creative direction, and a world can be saved and loaded.
+
+### What was implemented
+
+- **Save and load (L1).** A save is one world: the definition it started from and the
+  session it reached (`src/engine/save.ts`). Loading checks both halves before anything
+  plays: the world through the normal validator and migrations, the session through its
+  version migrations and a fit check (right world, party and enemies inside it, known
+  characters, items and enemy kinds, one character under the player's control, an
+  explored map of the right size). Nothing in a save is executed.
+  - Quick save (F5), quick load (F9, from anywhere), and a quiet autosave each time the
+    party reaches a room for the first time. Kept in browser storage, guarded for pages
+    that refuse it (`src/game/saves.ts`).
+  - Continue (C) on the title screen when a save exists, L on the death screen, and Open
+    file accepts a save as well as a world file.
+- **Blood and gore (L0).** Blood is simulation state: `SessionState.stains` records where
+  a wound was dealt, what it spilled and how much (drops, spatter, pool). It is saved
+  with the world and stays where it fell, up to 160 stains (four to a cell). Stain
+  shapes come from a hash of when and where, never from the dice, so outcomes are the
+  same as before blood existed.
+  - Enemies say what they bleed (`blood`: red, dark, or none for the long dead, who leave
+    bone chips). World schema 0.10.0; older worlds' skeletons and wardens migrate to none.
+  - A heavy or critical killing blow, or a spell that does twice what was needed, tears
+    the body apart (`EnemyState.gore`). New gore pose for goblins (cut in two, the head
+    thrown clear) and the undead (smashed, skull split).
+  - The renderer draws floor decals (`src/renderer/stains.ts`, art in `src/art/blood.ts`)
+    and sprays of blood or bone from wounds, and your own blood when you are hit.
+  - **Gore setting.** G switches between full (the default) and low: dark old stains
+    no bigger than a spatter, plain deaths, no sprays. A display choice only, kept in
+    browser storage (`src/game/settings.ts`), never in the simulation or a save.
+- **Lasting injuries (L0).** A hard unblocked blow (15% or more of a character's health)
+  may leave an injury, rolled from the session's dice; the bigger the share, the
+  likelier, up to one in two. Broken arm: blows a quarter weaker. Torn leg: the whole
+  party walks slower. Broken ribs: stamina returns at half pace. Cracked skull: no
+  critical hits, spells cost half again. An injury heals only with time, two minutes of
+  play; a healing spell halves what is left of the worst. Injured portraits are cut and
+  bloodied, and the sheet lists each wound, what it does and its countdown.
+- **The grim look (L0).** Feral goblins: sickly hide, sunken slit eyes, torn ears, a
+  scar, tusks, claws, old blood on the cleaver and leathers. Scarcer light: the party's
+  own light reaches less far and the dark closes in sooner.
+- **The grim voice (L0).** Floating damage numbers are off by default (V shows them);
+  damage shows on bodies and in the log. Gore kills are described as such, the fallen do
+  not get up, the combat hint is terser, and a few lines in the Mines and the Crypt are
+  sharper.
+- Session version 9 (stains, gore deaths, injuries), migrated from 7 and 8.
+
+### Decisions made
+
+- **NPC decisions: the tiered hybrid** recommended in the plan, taken as confirmed when
+  John said to begin. It is not needed until L3.
+- **Blood never spends the dice.** Effects that are only for show, or for the floor,
+  take their variation from a hash of tick and place, so adding them changed no outcome:
+  every existing scripted test passed unchanged.
+- **Injuries do spend the dice.** They are rules, so they come from the session's seed.
+  Small blows never roll, which kept existing outcomes unchanged in every test.
+- **Gore and damage numbers are display settings**, not world state: a save looks the
+  same to anyone, and the setting is the viewer's.
+- **The save holds the whole world definition**, not a reference to a bundled one, so a
+  made world or an opened file can be continued without the file it came from.
+
+### Tests executed
+
+- `npm run typecheck` and `npm run build` — pass.
+- `npm test` — 246 unit tests pass in 15 files. New: `tests/save.test.ts` (15: round
+  trips, playing on identically after a load, created worlds, and ten kinds of damaged
+  save refused), `tests/gore.test.ts` (8: blood where goblins fell, bone in the Crypt,
+  limits, blood never changing a roll, gore deaths, the schema migration),
+  `tests/injury.test.ts` (9: each injury's effect, healing by time and by magic, small
+  blows never injuring, a worn hero injured, the bot still winning all three
+  adventures), two message tests, and the session migration test now carries a version 7
+  session to 9.
+- `npm run test:browser` — 165 checks pass in headless Chrome. New: no Continue with
+  nothing saved; F5 saves; after a reload the title offers Continue and C resumes at the
+  same place, level, health and world state; blood left by the first fight and all of it
+  drawn; gore full by default; no damage numbers by default; G turns gore down and up; an
+  injured portrait is bloodied and names the wound; the sheet lists the injury and still
+  fits; V turns damage numbers on.
+
+### Known limitations
+
+- Nobody has played this milestone yet. The darker light, the injury odds and the
+  two-minute healing time are first guesses.
+- The bot dodges so well that it is rarely hit hard enough to be injured, so the
+  standing tests show injuries happen and do what they say, not how often a person
+  will suffer them.
+- The world clock, the event bus and catch-up on return (the rest of L1) are not built.
+  Saves restore a world exactly; nothing moves while it is away.
+- Portraits show one wounded look per character, not which injury.
+- The Crypt's skeletons and the chief have not been redrawn for the new tone; only the
+  common goblin has.
+- GAMEPLAY_DESIGN.md has not yet been revised for injuries and scarcer healing.
+
+### Recommended next milestone
+
+John plays the grim Mines and Crypt and judges the light, the gore and the injuries.
+Then the rest of L1: the world clock with day and night, the world event bus, the
+coarse world tick, and catch-up when a save is loaded, with the first Dungeon Master
+commands (view hidden state, pause and skip time).
+
 ## Milestone 10 — Phase 5: the world creator (2026-11-22)
 
 A person can now describe an adventure, answer a few questions, and play the world the

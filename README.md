@@ -34,7 +34,11 @@ npm run art            # write the generated art to .art/ for review
 | Tab, or click a party cell | Take over the next character. The one you leave is played by the party AI |
 | 1 to 4 | Cast one of the driven character's spells, for mana |
 | M | Sound on or off |
-| R | Try again after a defeat or a victory |
+| G | Gore: full (the default) or low |
+| V | Floating damage numbers on or off (off by default) |
+| F5 / F9 | Save the game / load the last save |
+| C (title screen) | Continue the last saved game |
+| R | Begin again after a defeat or a victory (L loads the last save after a defeat) |
 
 The title screen offers three adventures: 1 for The Forgotten Mines with Brannoc
 alone, 2 for the Mines with a party of four, 3 for The Sunken Crypt (or open the page
@@ -44,6 +48,12 @@ with weapons and takes the blows from ahead; the back row casts and heals.
 
 Watch the enemy: when it rears back, step away, dodge, block or parry. A red glow means
 the blow cannot be blocked.
+
+The world is merciless. Blood stays where it falls, a hard blow can leave a lasting
+injury (a broken arm, a torn leg, broken ribs or a cracked skull) that heals only with
+time, and healing is scarce. A save holds the whole world, its definition and the state
+it reached; the game also saves quietly each time you reach a new room. A save file can
+be opened with O like a world file.
 
 ## The world creator
 

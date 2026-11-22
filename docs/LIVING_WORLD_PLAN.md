@@ -1,8 +1,14 @@
 # Living World — direction and implementation plan
 
 2026-11-22. Written in response to John's first set of ideas, then revised the same
-day with his answers to the decisions (section 3). Nothing here is built yet. Decision 4
-(how NPCs decide) has a recommendation awaiting his confirmation; the rest are settled.
+day with his answers to the decisions (section 3). All six decisions are settled;
+decision 4 (the tiered hybrid) was taken as confirmed when John said to begin.
+
+**Status.** The first milestone (section 7) is built: L0's rules, art and writing on the
+Mines and the Crypt, and L1's save and load (development log, milestone 11). Still to
+come in L0: GAMEPLAY_DESIGN revised for injuries and scarcer healing, the skeletons and
+the chief redrawn. Still to come in L1: the world clock, the event bus, the coarse world
+tick, catch-up on return and the first Dungeon Master commands.
 
 ## 1. The direction, as understood
 
@@ -82,7 +88,7 @@ This is an ongoing direction; more ideas will follow.
 | 1 | One shared world, or a world per save? | **A world per save** to start. The engine keeps its server-ready rules so shared worlds (L9) stay possible. |
 | 2 | Does the world move while nobody plays? | **Catch up on return.** The world layer simulates the elapsed time in coarse steps when a save is loaded. No always-on server. |
 | 3 | What is the creator for? | **The Dungeon Master side.** The creator makes starting worlds and can force-generate content or weave stories into a living world. It is used through a separate player type, the Dungeon Master (a god mode). See section 3a. |
-| 4 | How does an NPC decide? | **Recommended: a tiered hybrid** (section 3b). Awaiting John's confirmation. |
+| 4 | How does an NPC decide? | **A tiered hybrid** (section 3b). |
 | 5 | Gore as a setting? | **Yes.** Full strength by default, with a lower setting. |
 | 6 | The creator's look? | **Keep it retro and change the guide.** The creator stays a DOS-style application; retro is key to the whole experience. VISUAL_STYLE_GUIDE sections 3 and 12 have been rewritten. |
 
@@ -115,7 +121,7 @@ becomes the Dungeon Master's seat at the same table as the players.
   as a character. A setting decides whether a player's save allows Dungeon Master
   commands at all, so a world can also be played without god mode.
 
-### 3b. Recommendation: how NPCs decide
+### 3b. How NPCs decide
 
 A balanced split between deterministic rules and AI, in three tiers.
 

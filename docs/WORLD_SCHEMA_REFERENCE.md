@@ -1,4 +1,4 @@
-# World schema reference — version 0.9.0
+# World schema reference — version 0.10.0
 
 What the engine actually reads today. The source of truth is `src/schema/world.ts`
 (shapes) and `src/schema/validate.ts` (meaning). A world is one JSON object; see
@@ -10,13 +10,13 @@ which migrate, validate and compile it. Nothing in a world file is ever executed
 
 | Field | Contents |
 | --- | --- |
-| `schemaVersion` | `"0.9.0"`. Worlds from `0.1.0` onward are migrated on load, one version at a time. Anything else is rejected. |
+| `schemaVersion` | `"0.10.0"`. Worlds from `0.1.0` onward are migrated on load, one version at a time. Anything else is rejected. |
 | `world` | id, name, description, theme, difficulty, optional author and timestamps |
 | `settings` | movement mode, start room, start cell, start facing, starting party (one to four characters; the first is the one the player drives at the start), starting quests |
 | `regions` | id, name, room IDs, and an `environment` from the engine's list (`mine` or `crypt`), which chooses the tileset and ambience for the region's rooms. One world can mix environments |
 | `rooms` | id, region, name, type, description, `layout` rectangle, connections, encounter IDs, object IDs |
 | `doors` | id, name, `kind` (`archway`, `door`, `secret`, `breakable`), cell, optional `lock.keyItemId` (doors only), optional `toughness` (breakable walls only: the heavy blows it takes, 1 to 10, 3 if left out). A secret door looks like wall until searched; a breakable wall is visibly cracked and comes down under heavy blows. Both give off a draft (a low wind) until opened |
-| `enemies` | health, defence, `poise`, movement, sight range, a list of `attacks` (each `name` is a noun, shown as "rears back for a chop"), an optional `alertText` shown when it first notices the party, and `behaviour` and `visualAssetId` from engine-supported lists (`goblin`, `goblin_chief`, `skeleton`, `warden`) |
+| `enemies` | health, defence, `poise`, movement, sight range, a list of `attacks` (each `name` is a noun, shown as "rears back for a chop"), an optional `alertText` shown when it first notices the party, `blood` (`red`, the default, `dark`, or `none` for the long dead, who leave bone chips; worlds older than 0.10.0 give skeletons and wardens `none`), and `behaviour` and `visualAssetId` from engine-supported lists (`goblin`, `goblin_chief`, `skeleton`, `warden`) |
 | `encounters` | room, enemy placements, `boss` flag, optional `intro` line |
 | `objects` | `torch`, `prop` (`barrel`, `crate`, `rubble`, `sarcophagus`, `urn`, `bones`; blocking unless it says otherwise), `pickup` (an item on the floor) or `chest` (blocking, with contents) |
 | `items` | `weapon`, `armour` (with a slot, a defence value, and for a shield an optional `block`: `damageShare`, the part of a blocked blow that lands, 0 to 1, and `staminaCost`; only the off hand's counts), `key`, `consumable` (heals, or casts a spell as a scroll) or `treasure` |

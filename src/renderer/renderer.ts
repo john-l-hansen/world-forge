@@ -4,7 +4,7 @@
  * unfiltered, so every pixel on screen is a real pixel of the frame.
  */
 import * as THREE from 'three';
-import { CHEST_H, CHEST_W, GOBLIN_H, GOBLIN_POSES, GOBLIN_W, PROP_SIZE, SHIELD_H, SHIELD_W, SWORD_H, SWORD_W, TORCH_H, TORCH_W, drawChest, drawGoblin, drawHeld, drawHeldShield, drawPickup, drawProp, drawTorch, type GoblinPose, type GoblinVariant, type HeldKind } from '../art/sprites';
+import { CHEST_H, CHEST_W, GOBLIN_H, GOBLIN_POSES, GOBLIN_W, PROP_SIZE, SHIELD_H, SHIELD_W, SPARKLE_SIZE, SWORD_H, SWORD_W, TORCH_H, TORCH_W, drawChest, drawGoblin, drawHeld, drawHeldShield, drawSparkle, drawPickup, drawProp, drawTorch, type GoblinPose, type GoblinVariant, type HeldKind } from '../art/sprites';
 import { Pix } from '../art/pixel';
 import { drawUndead } from '../art/undead';
 import { activeMember, isGuarding } from '../engine/sim';
@@ -67,6 +67,25 @@ interface LootView {
   material: THREE.ShaderMaterial;
 }
 
+/** A floor item and the glint that catches the eye on it. */
+interface PickupView extends LootView {
+  x: number;
+  y: number;
+  sparkle: THREE.Mesh;
+  sparkleMaterial: THREE.ShaderMaterial;
+  /** When the current glint began, in seconds. */
+  glintAt: number;
+  /** Whether the party was close at the last frame, so coming close starts a glint. */
+  near: boolean;
+}
+
+/** Seconds a glint lasts, and how often one comes from afar and from close by. */
+const GLINT_SECONDS = 0.5;
+const GLINT_EVERY_FAR = 3.4;
+const GLINT_EVERY_NEAR = 1.3;
+/** Within this many cells of the party, an item counts as close. */
+const GLINT_NEAR_CELLS = 2;
+
 export class DungeonRenderer {
   readonly width: number;
   readonly height: number;
@@ -85,7 +104,7 @@ export class DungeonRenderer {
   private enemies = new Map<string, EnemyView>();
   private doors: DoorView[] = [];
   private chests: LootView[] = [];
-  private pickups: LootView[] = [];
+  private pickups: PickupView[] = [];
   private healFlash = 0;
   private spark = 0;
   private guard = 0;
@@ -211,6 +230,8 @@ export class DungeonRenderer {
       }
     }
     const pickupSheets = new Map<string, { texture: THREE.Texture; w: number; h: number }>();
+    const sparkleTexture = pixTexture(sheetOf(drawSparkle()));
+    this.disposables.push(sparkleTexture);
     for (const pickup of world.pickups) {
       const item = world.def.items.find((i) => i.id === pickup.itemId);
       const visual = item?.visualAssetId ?? 'sack';
@@ -228,8 +249,21 @@ export class DungeonRenderer {
       mesh.position.set(pickup.x, 0.04, pickup.y);
       this.scene.add(mesh);
       this.facers.push(mesh);
-      this.pickups.push({ id: pickup.id, mesh, material });
-      this.disposables.push(material, mesh.geometry);
+      // The glint, drawn at full brightness just above the item.
+      const sparkleMaterial = makeSpriteMaterial(sparkleTexture, this.shared, 3);
+      sparkleMaterial.uniforms.uFullbright.value = 1;
+      // Drawn after the item, so it wins where they meet; walls still hide it.
+      sparkleMaterial.depthWrite = false;
+      const sparkle = billboard(SPARKLE_SIZE * PROP_TEXEL * 2.2, SPARKLE_SIZE * PROP_TEXEL * 2.2, sparkleMaterial);
+      sparkle.position.set(pickup.x, 0.04 + sheet.h * PROP_TEXEL * 0.45, pickup.y);
+      sparkle.renderOrder = 2;
+      sparkle.visible = false;
+      this.scene.add(sparkle);
+      this.facers.push(sparkle);
+      // Stagger the glints so items do not all flash together.
+      const glintAt = -((pickup.x * 7 + pickup.y * 13) % 10) * (GLINT_EVERY_FAR / 10);
+      this.pickups.push({ id: pickup.id, mesh, material, x: pickup.x, y: pickup.y, sparkle, sparkleMaterial, glintAt, near: false });
+      this.disposables.push(material, mesh.geometry, sparkleMaterial, sparkle.geometry);
     }
 
     // --- Enemies -------------------------------------------------------------
@@ -388,13 +422,13 @@ export class DungeonRenderer {
       door.mesh.visible = door.open < 0.995;
     }
     for (const chest of this.chests) chest.material.uniforms.uFrame.value = state.chestsOpened[chest.id] ? 1 : 0;
-    for (const pickup of this.pickups) {
-      pickup.mesh.visible = !state.pickupsTaken[pickup.id];
-      pickup.material.uniforms.uFrame.value = Math.floor(timeSeconds * 2.5) % 4 === 0 ? 1 : 0;
-    }
+    for (const pickup of this.pickups) this.glint(pickup, state, timeSeconds);
 
     for (const enemy of state.enemies) this.placeEnemy(enemy, now);
     this.placeBolt(dt);
+    const offHand = this.world.def.items.find((i) => i.id === driven.equipment.offHand);
+    this.shield.visible = offHand?.category === 'armour' && offHand.visualAssetId === 'shield';
+    if (this.shield.visible) this.placeShield(state, now, timeSeconds);
     this.placeSword(state, now, timeSeconds);
 
     this.present.uniforms.uDamage.value = this.damageFlash;
@@ -409,9 +443,6 @@ export class DungeonRenderer {
     // The weapon is only drawn while one is held, and is whatever the driven character holds.
     const held = this.world.def.items.find((i) => i.id === driven.equipment.mainHand);
     this.sword.visible = held?.category === 'weapon';
-    const offHand = this.world.def.items.find((i) => i.id === driven.equipment.offHand);
-    this.shield.visible = offHand?.category === 'armour' && offHand.visualAssetId === 'shield';
-    if (this.shield.visible) this.placeShield(state, now, timeSeconds);
     if (held?.category === 'weapon' && held.visualAssetId !== this.heldKind) {
       this.heldKind = held.visualAssetId;
       this.swordMaterial.uniforms.uMap.value = this.heldTextures.get(this.heldKind);
@@ -564,6 +595,30 @@ export class DungeonRenderer {
   }
 
   /**
+   * Floor items glint now and then from afar, more often close by, and at once
+   * when the party comes close: a brightening of the item and a star above it.
+   */
+  private glint(pickup: PickupView, state: SessionState, timeSeconds: number) {
+    const taken = Boolean(state.pickupsTaken[pickup.id]);
+    pickup.mesh.visible = !taken;
+    if (taken) {
+      pickup.sparkle.visible = false;
+      return;
+    }
+    const near = Math.max(Math.abs(state.party.x - pickup.x), Math.abs(state.party.y - pickup.y)) <= GLINT_NEAR_CELLS;
+    const since = timeSeconds - pickup.glintAt;
+    const every = near ? GLINT_EVERY_NEAR : GLINT_EVERY_FAR;
+    if ((near && !pickup.near && since > GLINT_SECONDS) || since > every) pickup.glintAt = timeSeconds;
+    pickup.near = near;
+    const t = (timeSeconds - pickup.glintAt) / GLINT_SECONDS;
+    const on = t >= 0 && t < 1;
+    pickup.material.uniforms.uFrame.value = on ? 1 : 0;
+    pickup.material.uniforms.uFlash.value = on ? Math.sin(t * Math.PI) * (near ? 0.22 : 0.15) : 0;
+    pickup.sparkle.visible = on;
+    if (on) pickup.sparkleMaterial.uniforms.uFrame.value = Math.min(2, Math.floor(t * 3));
+  }
+
+  /**
    * The shield rests low at the left edge, its rim in view. Raising the guard
    * brings it up across the left of the view; a blow on it knocks it back.
    */
@@ -596,10 +651,12 @@ export class DungeonRenderer {
     let angle = 0;
 
     // Guard: the blade comes across the body, between the party and the blow.
+    // With a shield up, the shield does that, and the blade stays ready at the right.
     const g = smooth(this.guard);
-    x -= this.width * 0.2 * g;
-    y += this.height * 0.1 * g;
-    angle += 0.62 * g;
+    const across = this.shield.visible ? 0.25 : 1;
+    x -= this.width * 0.2 * g * across;
+    y += this.height * 0.1 * g * (this.shield.visible ? 0.6 : 1);
+    angle += 0.62 * g * across;
 
     const action = member?.action;
     if (action && action.kind === 'attack') {

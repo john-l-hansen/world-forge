@@ -4,7 +4,7 @@ import { DEFAULT_KEYMAP } from '../game/input';
 import { useHud } from '../game/store';
 import type { CompiledWorld } from '../world/compile';
 import { uiArt } from './art';
-import { ActionButtons, AutoMap, Belt, DeathOverlay, Floaters, JournalOverlay, MessageLog, MovePad, ObjectivePlate, PartyPanel, SheetOverlay, SpellBar, TargetBar, TitleOverlay, VictoryOverlay, type TitleChoice } from './Hud';
+import { ActionButtons, AutoMap, Belt, PickupBanner, DeathOverlay, Floaters, JournalOverlay, MessageLog, MovePad, ObjectivePlate, PartyPanel, SheetOverlay, SpellBar, TargetBar, TitleOverlay, VictoryOverlay, type TitleChoice } from './Hud';
 
 const LOGICAL_W = 480;
 const LOGICAL_H = 270;
@@ -171,6 +171,7 @@ export function GameScreen({ world, choices, current, autoBegin, onChoose, onOpe
           <canvas ref={canvasRef} width={320} height={200} />
           {screen === 'playing' && <TargetBar />}
           {screen === 'playing' && <Floaters />}
+          {screen === 'playing' && <PickupBanner />}
           {screen === 'title' && <TitleOverlay title={world.def.world.name} choices={choices} current={current} onChoose={choose} onOpenFile={onOpenFile} />}
           {screen === 'dead' && <DeathOverlay name={heroName} />}
           {screen === 'journal' && <JournalOverlay />}

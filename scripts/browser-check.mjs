@@ -353,18 +353,40 @@ await walkTo(8, 3);
 await use(E, 700);
 await walkTo(11, 3);
 await turnTo(E);
+// Close by, the key glints: the star above it shows within a moment of arriving.
+const glinted = await page
+  .waitForFunction(() => window.__worldForge.renderer.pickups.some((p) => p.id === 'object_shaft_key' && p.near && p.sparkle.visible), null, { timeout: 2500, polling: 30 })
+  .then(() => true)
+  .catch(() => false);
+check(glinted, 'a floor item glints when the party comes close');
 await shot('09-key-on-floor');
 await walkTo(12, 3);
 s = await state();
 h = await hud();
 check(s.inventory.item_shaft_key === 1, 'walking over the key picks it up');
 check(h.belt.includes('Iron key'), 'the key appears on the belt');
+const banner = await page.evaluate(() => document.querySelector('.pickup')?.innerText ?? '');
+check(/IRON KEY/i.test(banner) && /lock/i.test(banner), `a banner across the view names what was picked up ("${banner.replace(/\n/g, ' / ')}")`);
+check(await page.evaluate(() => Boolean(document.querySelector('.belt .slot.fresh[aria-label="Iron key"]'))), 'the key\'s belt slot flashes');
+await shot('09a-key-banner');
 await walkTo(11, 2);
 await turnTo(N);
 await shot('09b-shield-on-floor');
 await walkTo(11, 1);
 s = await state();
 check(s.equipment.offHand === 'item_wooden_shield', 'the shield in the storeroom is picked up and worn');
+check(/STRAPPED TO YOUR ARM/i.test(await page.evaluate(() => document.querySelector('.pickup')?.innerText ?? '')), 'the banner says the shield went straight on');
+check(await page.evaluate(() => window.__worldForge.renderer.shield.visible), 'the shield shows at the edge of the view');
+await page.keyboard.down('KeyL');
+await page.waitForTimeout(400);
+const shieldUp = await page.evaluate(() => window.__worldForge.renderer.shield.position.y);
+await page.keyboard.up('KeyL');
+await page.waitForTimeout(400);
+const shieldDown = await page.evaluate(() => window.__worldForge.renderer.shield.position.y);
+check(shieldUp > shieldDown + 30, `raising the guard brings the shield up (${shieldDown} to ${shieldUp})`);
+await key('KeyC', 300);
+check(/BLOCK\s*12% of a blow, 5 stamina/i.test((await hud()).overlay ?? ''), 'the sheet shows what a block with the shield lets through');
+await key('KeyC', 300);
 check(/Slay the chief/i.test(h.objective), `the objective moves on ("${h.objective}")`);
 
 // --- Draught -------------------------------------------------------------------

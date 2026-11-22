@@ -25,6 +25,28 @@ export function TargetBar() {
   );
 }
 
+/** What was just picked up: its icon and name across the lower view, for a moment. */
+export function PickupBanner() {
+  const art = uiArt();
+  const pickup = useHud((s) => s.pickup);
+  if (!pickup) return null;
+  const names = pickup.items.map((i) => i.name);
+  return (
+    // The key replays the animation for each new pickup.
+    <div key={pickup.serial} className="pickup raised" role="status">
+      <span className="icons">
+        {pickup.items.slice(0, 4).map((item) => (
+          <img key={item.itemId} src={art.items[item.icon]} alt="" />
+        ))}
+      </span>
+      <span className="what">
+        <b>{names.length > 1 ? names.join(', ') : names[0]}</b>
+        <em>{pickup.note}</em>
+      </span>
+    </div>
+  );
+}
+
 export function Floaters() {
   const floaters = useHud((s) => s.floaters);
   return (
@@ -277,14 +299,16 @@ export function ObjectivePlate() {
 export function Belt({ game }: { game: Game }) {
   const art = uiArt();
   const belt = useHud((s) => s.belt);
+  const fresh = useHud((s) => s.beltFresh);
   const slots = [...belt, ...new Array<null>(Math.max(0, 6 - belt.length)).fill(null)].slice(0, 6);
   return (
     <div className="belt">
       {slots.map((item, i) =>
         item ? (
           <button
-            key={item.itemId}
-            className={`slot sunk${item.action ? ' usable' : ''}`}
+            // A fresh item gets a new key, which replays its flash.
+            key={fresh.itemIds.includes(item.itemId) ? `${item.itemId}:${fresh.serial}` : item.itemId}
+            className={`slot sunk${item.action ? ' usable' : ''}${fresh.itemIds.includes(item.itemId) ? ' fresh' : ''}`}
             title={`${item.name}. ${item.description}${
               item.action === 'drink' ? ' (click or H to drink)' : item.action === 'read' ? ' (click or R to read)' : item.action === 'equip' ? ' (click to equip)' : ''
             }`}
@@ -533,10 +557,10 @@ export function ActionButtons({ game }: { game: Game }) {
       <button className="btn" title="Dodge: a quick step, back unless you are steering" onPointerDown={() => game.act('dodge')}>
         Dodge <kbd>Space</kbd>
       </button>
-      <button className="btn wide" title="Open, unlock, search" onPointerDown={() => game.act('interact')}>
+      <button className="btn" title="Open, unlock, search" onPointerDown={() => game.act('interact')}>
         Use <kbd>F</kbd>
       </button>
-      <button className="btn" title="Quest journal" onPointerDown={() => game.toggleJournal()}>
+      <button className="btn wide" title="Quest journal" onPointerDown={() => game.toggleJournal()}>
         Journal <kbd>B</kbd>
       </button>
       <button className="btn" title="Character sheet: attributes, what is worn and held" onPointerDown={() => game.toggleSheet()}>

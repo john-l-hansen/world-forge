@@ -37,6 +37,9 @@ export class Game {
   private hurt: Record<string, number> = {};
   private mended: Record<string, number> = {};
   private partySignature = '';
+  /** Items gained this step, announced together once the step's events are handled. */
+  private gained: string[] = [];
+  private pickupSerial = 0;
 
   /** The character the player is driving. */
   private get driven() {
@@ -77,6 +80,7 @@ export class Game {
     this.lastBumpTick = -1000;
     this.hurt = {};
     this.mended = {};
+    this.gained = [];
     this.acc = 0;
     this.resetHud('playing');
     this.announceStart();
@@ -224,6 +228,7 @@ export class Game {
       floaters: [],
       target: null,
       belt: [],
+      pickup: null,
       quest: null,
       quests: [],
       cleared: false,
@@ -267,6 +272,7 @@ export class Game {
     }
     const events = step(this.state, this.world, commands);
     for (const event of events) this.handle(event);
+    if (this.gained.length) this.announcePickup();
     this.syncHud();
   }
 
@@ -343,6 +349,9 @@ export class Game {
         this.syncPack();
         break;
       case 'item.gained':
+        this.gained.push(event.itemId);
+        this.syncPack();
+        break;
       case 'item.equipped':
       case 'item.unequipped':
       case 'quest.objective':
@@ -470,6 +479,37 @@ export class Game {
     ) {
       useHud.setState({ hp: member.hp, maxHp: member.maxHp, stamina: member.stamina, maxStamina: member.maxStamina, guarding, facing: s.party.facing, roomName, target });
     }
+  }
+
+  /**
+   * Show what was just picked up across the view, and flash it on the belt.
+   * A chest's contents come in one step, so they share one banner.
+   */
+  private announcePickup() {
+    const def = this.world.def;
+    const items = this.gained.flatMap((id) => {
+      const item = def.items.find((i) => i.id === id);
+      return item ? [item] : [];
+    });
+    this.gained = [];
+    if (items.length === 0) return;
+    const worn = (id: string) => this.state.party.members.some((m) => Object.values(m.equipment).includes(id));
+    let note = '';
+    if (items.length === 1) {
+      const item = items[0];
+      if (worn(item.id)) note = item.category === 'armour' && item.slot === 'offHand' ? 'Strapped to your arm' : 'Put on';
+      else if (item.category === 'key') note = 'It should fit a lock somewhere';
+      else if (item.category === 'consumable') note = item.effect.type === 'cast' ? 'On your belt - R to read' : 'On your belt - H to drink';
+      else if (item.category === 'weapon' || item.category === 'armour') note = 'On your belt - click it to use';
+      else note = 'On your belt';
+    } else {
+      note = items.some((i) => worn(i.id)) ? 'Some of it is already on' : 'On your belt';
+    }
+    this.pickupSerial++;
+    useHud.setState((s) => ({
+      pickup: { serial: this.pickupSerial, items: items.map((i) => ({ itemId: i.id, name: i.name, icon: i.visualAssetId })), note },
+      beltFresh: { itemIds: items.filter((i) => !worn(i.id)).map((i) => i.id), serial: s.beltFresh.serial + 1 },
+    }));
   }
 
   /** Copy the inventory and quest progress to the interface. */

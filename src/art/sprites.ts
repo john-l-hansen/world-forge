@@ -678,3 +678,26 @@ export function drawHeldShield(): Pix {
   p.outline(INK);
   return p;
 }
+
+export const SPARKLE_SIZE = 15;
+
+/** Three frames of a four-pointed glint: opening, full, closing to a point. */
+export function drawSparkle(): Pix[] {
+  const frames: Pix[] = [];
+  for (const reach of [3, 7, 4]) {
+    const p = new Pix(SPARKLE_SIZE, SPARKLE_SIZE);
+    const c = 7;
+    for (let i = -reach; i <= reach; i++) {
+      const edge = Math.abs(i) / reach;
+      const col = edge < 0.35 ? 0xffffff : edge < 0.7 ? GOLD[3] : GOLD[2];
+      p.set(c + i, c, col);
+      p.set(c, c + i, col);
+    }
+    if (reach > 4) {
+      for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) p.set(c + dx * 2, c + dy * 2, GOLD[3]);
+    }
+    p.set(c, c, 0xffffff);
+    frames.push(p);
+  }
+  return frames;
+}

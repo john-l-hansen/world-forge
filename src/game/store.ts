@@ -29,6 +29,15 @@ export interface BeltItem {
   action: 'drink' | 'read' | 'equip' | null;
 }
 
+/** What was just picked up, shown across the view for a moment. */
+export interface PickupNotice {
+  /** Counts notices, so each one replays the banner. */
+  serial: number;
+  items: { itemId: string; name: string; icon: BeltItem['icon'] }[];
+  /** A short line on what to do with it, or where it went. */
+  note: string;
+}
+
 export interface QuestView {
   id: string;
   /** Main quests win the adventure; side quests are extra. */
@@ -125,6 +134,9 @@ export interface HudState {
   log: LogEntry[];
   target: { name: string; hp: number; maxHp: number; winding: boolean; danger: boolean; boss: boolean } | null;
   belt: BeltItem[];
+  pickup: PickupNotice | null;
+  /** Belt items just gained, which flash once; the serial replays the flash. */
+  beltFresh: { itemIds: string[]; serial: number };
   /** The quest the adventure is about: the first main quest held. */
   quest: QuestView | null;
   /** Every quest held, main quests first. */
@@ -158,6 +170,8 @@ export const useHud = create<HudState>(() => ({
   log: [],
   target: null,
   belt: [],
+  pickup: null,
+  beltFresh: { itemIds: [], serial: 0 },
   quest: null,
   quests: [],
   floaters: [],

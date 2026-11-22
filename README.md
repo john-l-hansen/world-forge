@@ -22,14 +22,14 @@ npm run art            # write the generated art to .art/ for review
 | W A S D | Step forward, left, back, right |
 | Q E (or left/right arrows) | Turn |
 | J or left click | Light attack |
-| K or Shift + left click | Heavy attack: slow, hits hard, can break a goblin's wind-up |
-| Hold L or right click | Block. Raise it just as a blow lands to parry |
+| K or Shift + left click | Heavy attack: slow, hits hard, can break a goblin's wind-up, and brings down cracked walls |
+| Hold L or right click | Block. Raise it just as a blow lands to parry. A shield in the off hand blocks better |
 | Space | Dodge back, or the way you are steering |
 | F or Enter | Open and close doors, unlock, search walls, open chests |
 | H | Drink a healing draught |
 | R | Read a spell scroll at the enemy straight ahead |
 | B | Quest journal |
-| C | Character sheet (click a worn item to take it off; click an item on the belt to equip it; the row button moves the character forward or back) |
+| C, the Sheet button, or click the portrait | Character sheet (click a worn item to take it off; click an item on the belt to equip it; the row button moves the character forward or back) |
 | Tab, or click a party cell | Take over the next character. The one you leave is played by the party AI |
 | 1 to 4 | Cast one of the driven character's spells, for mana |
 | M | Sound on or off |

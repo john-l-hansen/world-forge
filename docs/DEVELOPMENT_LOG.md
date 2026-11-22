@@ -1,5 +1,85 @@
 # Development log — World Forge
 
+## Milestone 9 — Feedback pass from the first play session (2026-11-21)
+
+John played all three adventures and left notes in the status spreadsheet. This
+milestone acts on them. The common thread was that things happened without enough
+signal on screen.
+
+### What was implemented
+
+- **The character sheet is easy to find.** It was only on the C key. It now has a
+  Sheet button beside Journal, and clicking the portrait, or the party cell of the
+  character you drive, opens it.
+- **Shields matter.** World schema 0.9.0 lets a piece of armour carry a `block`: the
+  share of a blocked blow that still lands, and its stamina cost. Only the off hand's
+  counts. The Mines' wooden shield lets 12% through for 5 stamina, against 30% for 10
+  with a bare guard, and can stop a blow outright. The shield rests at the lower left
+  of the view, comes up across it while guarding, jolts when it takes a blow, and
+  thuds like wood. The character sheet shows what a block lets through.
+- **Pickup feedback.** Picking something up shows its icon and name in a banner
+  across the lower view for about two seconds, with a line on what to do with it
+  ("On your belt - H to drink", "Strapped to your arm"). A chest's contents share
+  one banner. The item's belt slot flashes gold. Floor items glint, a brightening and
+  a star, every few seconds from afar, more often within two cells, and at once when
+  the party comes close.
+- **Cracked walls you smash** (a door kind `breakable`, with a `toughness` of heavy
+  blows, 3 if left out). The wall is drawn over its set's own stone with jagged
+  cracks and grit at its foot. Each heavy blow throws grit, shakes the view and
+  cracks it further, through three looks; the last brings it down in a cloud of dust
+  with a long rumble. Searching it says a heavy blow might work, and a light blow
+  skitters off and says so. The Mines' hidden cache is now behind one.
+- **A draft.** Every hidden way still shut, cracked or secret, breathes a thin
+  stream of dust and a low wind that grows louder as the party nears. The log
+  mentions the draft the first time the party stands by a cracked wall.
+- **Companion feedback.** Every party cell shows its character's hand, as in Eye of
+  the Beholder: what they hold, flashing gold when their blow lands, grey while they
+  strike, blue while they cast. A companion's damage number carries their name,
+  their blows shake the view less, and their bolt starts from their side of the view.
+
+### Decisions made
+
+- **Breakable walls are a new kind, not a change to secret doors.** The quiet
+  secret door stays, for secrets meant to be hard; the crypt's walled-up way is
+  still one, since John found its colour difference clear enough.
+- **Only heavy blows break a wall**, so the action ties into combat and the heavy
+  attack has a second use.
+- **Session state is now version 8** (it counts the blows on each wall). Version 7
+  sessions still load.
+
+### Tests executed
+
+- `npm run typecheck` and `npm run build` — pass.
+- `npm test` — 201 unit tests pass in 11 files. New: five on shields (the numbers a
+  shield gives, a blow that barely lands, a shield holding where a bare guard breaks,
+  an unblockable attack, and validation), and on walls: the cracked wall from first
+  bump to collapse, a tougher wall, validation of `toughness`, and loading a
+  version 7 session.
+- `tests/adventure.test.ts`, the standing regression for the Mines, passes. It now
+  smashes the cracked wall where it used to search the secret door.
+- `npm run test:browser` — 135 checks pass in headless Chrome. New: the Sheet button
+  and clickable portrait, the party sheet from the driven cell, the key glinting when
+  the party comes close, the pickup banner, the belt flash, the shield going on and
+  coming up on guard, the sheet's block line, the draft in the log and as dust, the
+  cracked wall from search through a light blow and three heavy ones, and the
+  party's hands and named damage numbers.
+
+### Known limitations
+
+- **None of this has been played by a person yet.** The shield may now make the
+  chief too easy; the glint timing, banner length and the draft's loudness are first
+  guesses.
+- The new sounds (shield thud, crunch, collapse, wind) have not been heard by a
+  person.
+- Companions still do not block, dodge or use items, and the hand shows the main
+  hand only.
+- The weapon swing is still the sword's for every weapon.
+- The crypt has no cracked walls; it could use one.
+
+### Next milestone
+
+Play it again and tell me what still feels wrong. Then Phase 5, the AI world creator.
+
 ## Milestone 8 — Phase 4: the world engine, and a second world (2026-11-16)
 
 The engine now plays a second adventure that shares nothing with The Forgotten Mines

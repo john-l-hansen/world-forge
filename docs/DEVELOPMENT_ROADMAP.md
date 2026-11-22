@@ -1,13 +1,14 @@
 DEVELOPMENT ROADMAP — WORLD FORGE
-Status (2026-11-16)
+Status (2026-11-21)
 Phases 0, 1 and 2 are built and tested, and The Forgotten Mines is complete as the golden reference adventure. See DEVELOPMENT_LOG.md for the milestone reports.
 Phase 2 still needs one thing no test can give: a person playing it and judging whether the combat feels good. Its numbers are first guesses.
 The code lives at https://github.com/john-l-hansen/world-forge.
 Phase 3 is built and tested: attributes, classes, levels and experience, equipment and armour, consumables, spells and mana, and a party of up to four with rows, character switching and party AI. The party model is one body with a front and a back row (decided 2026-11-16; see the development log, milestone 7). A second adventure, the same mine for a party of four, can be chosen from the title screen.
 Phase 4 is built and tested: one loader for every world, tilesets chosen by each region's environment, a second adventure (The Sunken Crypt) that shares nothing with the Mines but the engine, and world files opened from the player's computer (see the development log, milestone 8).
-Next: a person plays the Mines, the party and the crypt, and combat is tuned from that. Then Phase 5 (the AI world creator), with Phase 3b (co-op) still open.
+John played the three adventures on 2026-11-21. His notes were acted on in a feedback pass: an easy-to-find character sheet, shields that change blocking, pickup banners and floor glints, cracked walls you smash with heavy blows, a draft near hidden ways, and companion feedback in the party panel (see the development log, milestone 9).
+Next: play again and tune from that. Then Phase 5 (the AI world creator), with Phase 3b (co-op) still open.
 Two phases were added on 2026-11-15: Phase 3b (co-op play) and Phase 6b (dynamic world simulation).
-The world schema and world validation were brought forward from Phase 4, so that The Forgotten Mines loads from world data and is not hard-coded. The schema is at version 0.8.0 (rooms, doors, locks, secret doors, enemies with attack lists, poise and experience, encounters, bosses, objects, chests, pickups, weapons with light and heavy attacks, armour, keys, consumables, scrolls, treasure, spells, characters with class, level, attributes, equipment, row and known spells, bolt and healing spells, main and side quests, two environments).
+The world schema and world validation were brought forward from Phase 4, so that The Forgotten Mines loads from world data and is not hard-coded. The schema is at version 0.9.0 (rooms, doors, locks, secret doors, breakable walls, enemies with attack lists, poise and experience, encounters, bosses, objects, chests, pickups, weapons with light and heavy attacks, armour and shields that change blocking, keys, consumables, scrolls, treasure, spells, characters with class, level, attributes, equipment, row and known spells, bolt and healing spells, main and side quests, two environments).
 1. Development philosophy
 Build incrementally.
 Every milestone must produce functioning software.

@@ -59,6 +59,15 @@ export const MAX_STAINS = 160;
 /** Lasting harm to one part of the body. */
 export type InjuryKind = 'arm' | 'leg' | 'head' | 'ribs';
 
+/** How long an injury takes to heal: two minutes of play. */
+export const INJURY_TICKS = 7200;
+/** An arm injury leaves this share of a weapon blow. */
+export const ARM_INJURY_DAMAGE_SHARE = 0.75;
+/** A leg injury makes each step take this much longer, for the whole party. */
+export const LEG_INJURY_MOVE_FACTOR = 1.4;
+/** A head injury makes spells cost this much more mana. */
+export const HEAD_INJURY_MANA_FACTOR = 1.5;
+
 export interface Injury {
   kind: InjuryKind;
   /** The tick it heals by. */
@@ -249,6 +258,8 @@ export type GameEvent =
   | { type: 'party.control'; actor: string }
   | { type: 'member.row'; actor: string; row: Row }
   | { type: 'member.fell'; actor: string }
+  | { type: 'member.injured'; actor: string; kind: InjuryKind }
+  | { type: 'member.recovered'; actor: string; kind: InjuryKind }
   | { type: 'attack.out_of_reach'; actor: string }
   | { type: 'spell.refused'; actor: string; spellId: string; reason: 'unknown' | 'no_mana' | 'no_target' }
   | { type: 'spell.healed'; actor: string; spellId: string; target: string; healed: number }

@@ -5,6 +5,7 @@
 import { GOLD, INK, IRON, STONE } from '../art/palette';
 import { Pix, tileNoise } from '../art/pixel';
 import { drawPortrait, type PortraitKind } from '../art/portraits';
+import { bloodied } from '../art/blood';
 
 export function pixToDataUrl(pix: Pix): string {
   const canvas = document.createElement('canvas');
@@ -208,6 +209,8 @@ export interface UiArt {
   /** The solo card's portrait (the fighter), kept for the single-character layout. */
   portrait: string;
   portraits: Record<PortraitKind, string>;
+  /** The same faces, cut and bloodied, for a character carrying an injury. */
+  wounded: Record<PortraitKind, string>;
   sword: string;
   icons: Record<IconKind, string>;
   items: Record<ItemIcon, string>;
@@ -218,11 +221,14 @@ let cache: UiArt | null = null;
 export function uiArt(): UiArt {
   if (cache) return cache;
   const kinds: IconKind[] = ['forward', 'back', 'strafeLeft', 'strafeRight', 'turnLeft', 'turnRight'];
-  const portraits = Object.fromEntries((['fighter', 'rogue', 'mage', 'cleric'] as const).map((k) => [k, pixToDataUrl(drawPortrait(k))])) as Record<PortraitKind, string>;
+  const sitters = ['fighter', 'rogue', 'mage', 'cleric'] as const;
+  const portraits = Object.fromEntries(sitters.map((k) => [k, pixToDataUrl(drawPortrait(k))])) as Record<PortraitKind, string>;
+  const wounded = Object.fromEntries(sitters.map((k, i) => [k, pixToDataUrl(bloodied(drawPortrait(k), i + 1))])) as Record<PortraitKind, string>;
   cache = {
     panel: pixToDataUrl(panelStone()),
     portrait: portraits.fighter,
     portraits,
+    wounded,
     sword: pixToDataUrl(swordIcon()),
     items: {
       key: pixToDataUrl(keyIcon()),

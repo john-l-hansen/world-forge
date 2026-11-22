@@ -92,7 +92,7 @@ function PartyCell({ game, member }: { game: Game; member: PartyView }) {
     >
       {/* The keys restart the flashes each time a blow or a healing lands. */}
       <span key={`${member.hurt}:${member.mended}`} className={`face${member.hurt ? ' hurt' : ''}${member.mended ? ' mended' : ''}${member.guarding ? ' guarding' : ''}`}>
-        <i style={{ backgroundImage: `url(${art.portraits[member.portrait]})` }} />
+        <i style={{ backgroundImage: `url(${member.injuries.length ? art.wounded[member.portrait] : art.portraits[member.portrait]})` }} title={member.injuries.length ? member.injuries.join(', ') : undefined} />
         <b>{member.row === 'front' ? 'F' : 'B'}</b>
       </span>
       <span className="cell-body">
@@ -157,6 +157,8 @@ export function PartyCard({ game }: { game: Game }) {
   const level = useHud((s) => s.level);
   const xpProgress = useHud((s) => s.xpProgress);
   const hurtPulse = useHud((s) => s.hurtPulse);
+  const me = useHud((s) => s.party.find((m) => m.active));
+  const face = me ? (me.injuries.length ? art.wounded[me.portrait] : art.portraits[me.portrait]) : art.portrait;
   const ratio = hp / maxHp;
   const colour = ratio > 0.5 ? '#4f9a3a' : ratio > 0.25 ? '#c9952a' : '#b02a22';
   const wind = stamina / maxStamina;
@@ -169,7 +171,7 @@ export function PartyCard({ game }: { game: Game }) {
         title={`${name}: open the character sheet (C)`}
         onPointerDown={() => game.toggleSheet()}
       >
-        <img src={art.portrait} alt={name} />
+        <img src={face} alt={name} title={me?.injuries.length ? me.injuries.join(', ') : undefined} />
       </button>
       <div className="card-body">
         <div className="title-row">
@@ -415,6 +417,13 @@ export function SheetOverlay({ game }: { game: Game }) {
         </dl>
       </div>
       {sheet.spells.length > 0 && <h2>Knows {sheet.spells.join(', ')}.</h2>}
+      {sheet.injuries.length > 0 && (
+        <ul className="wounds">
+          {sheet.injuries.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
+      )}
       <div className="worn">
         {sheet.canChangeRow && (
           <button

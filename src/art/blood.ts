@@ -94,3 +94,29 @@ export function drawStainSheet(): Pix {
   });
   return sheet;
 }
+
+/**
+ * A portrait after a hard fight: a gash across the face, blood running from
+ * it, spatter. Drawn over a copy, only where the portrait already has paint.
+ */
+export function bloodied(source: Pix, seed = 1): Pix {
+  const p = new Pix(source.w, source.h);
+  p.data.set(source.data);
+  const paint = (x: number, y: number, c: number) => {
+    if (p.get(Math.round(x), Math.round(y)) !== -1) p.set(x, y, c);
+  };
+  const ox = Math.round((hash2(seed, 1, 5) - 0.5) * 4);
+  // The gash, with a dark lip on one side.
+  for (let t = 0; t <= 1; t += 0.04) {
+    const x = 12 + ox + t * 11;
+    const y = 15 + t * 11;
+    paint(x, y, GORE[3]);
+    paint(x + 1, y, GORE[1]);
+  }
+  // Blood running down from it, and from the brow.
+  for (const [x0, y0, len] of [[17 + ox, 21, 7], [22 + ox, 26, 9], [14 + ox, 17, 4], [26, 11, 6]] as const) {
+    for (let i = 0; i < len; i++) paint(x0, y0 + i, i < len - 2 ? GORE[2] : GORE[1]);
+  }
+  for (let i = 0; i < 14; i++) paint(8 + hash2(i, seed, 9) * 24, 8 + hash2(seed, i, 9) * 30, GORE[hash2(i, i, seed) > 0.5 ? 2 : 1]);
+  return p;
+}

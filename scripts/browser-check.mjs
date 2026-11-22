@@ -376,6 +376,31 @@ await page.locator('.belt button[aria-label="Studded jerkin"]').dispatchEvent('p
 await page.waitForTimeout(300);
 s = await state();
 check(s.equipment.body === 'item_studded_jerkin' && !s.inventory.item_studded_jerkin, 'clicking armour on the belt puts it on');
+
+// --- Injuries ----------------------------------------------------------------------
+const plainFace = await page.evaluate(() => document.querySelector('.card .portrait img').getAttribute('src'));
+await page.evaluate(() => {
+  const g = window.__worldForge;
+  g.state.party.members[0].injuries.push({ kind: 'arm', until: g.state.tick + 3600 });
+});
+await page.waitForTimeout(200);
+const woundedFace = await page.evaluate(() => ({ src: document.querySelector('.card .portrait img').getAttribute('src'), title: document.querySelector('.card .portrait img').getAttribute('title') }));
+check(woundedFace.src !== plainFace && /Broken arm/.test(woundedFace.title ?? ''), 'an injured hero\'s portrait is cut and bloodied, and names the wound');
+await key('KeyC', 300);
+h = await hud();
+check(/BROKEN ARM:\s*BLOWS LAND A QUARTER WEAKER/i.test(h.overlay ?? ''), 'the sheet lists the injury and what it does');
+await shot('08c-injury-sheet');
+const sheetFits = await page.evaluate(() => {
+  const box = document.querySelector('.viewport').getBoundingClientRect();
+  return [...document.querySelectorAll('.overlay.sheet > *')].every((el) => {
+    const r = el.getBoundingClientRect();
+    return r.top >= box.top && r.bottom <= box.bottom;
+  });
+});
+check(sheetFits, 'the sheet still fits with an injury listed');
+await key('KeyC', 300);
+await page.evaluate(() => (window.__worldForge.state.party.members[0].injuries = []));
+await page.waitForTimeout(200);
 // The sheet can also be found without knowing the key.
 await page.locator('.buttons .btn', { hasText: /Sheet/ }).dispatchEvent('pointerdown');
 await page.waitForTimeout(250);

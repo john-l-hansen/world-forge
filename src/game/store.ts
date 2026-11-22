@@ -69,6 +69,8 @@ export interface PartyView {
   busy: 'attack' | 'cast' | null;
   /** The icon of what they hold in the main hand, or null when unarmed. */
   hand: BeltItem['icon'] | null;
+  /** Lasting injuries, named, for the panel to mark. */
+  injuries: string[];
   /** Counts their blows that landed; a change replays the flash on their hand. */
   struck: number;
   /** Counts blows taken and healing received; a change replays the flash. */
@@ -114,6 +116,8 @@ export interface SheetView {
   block: string;
   /** One row per equipment slot that holds something. */
   equipment: { slot: string; label: string; itemId: string; name: string; detail: string }[];
+  /** Each lasting injury: what it is, what it does, and how long until it heals. */
+  injuries: string[];
 }
 
 export interface HudState {

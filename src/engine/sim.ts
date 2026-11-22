@@ -47,6 +47,11 @@ import {
   type PartyMember,
   type SessionState,
   type StainKind,
+  type InjuryKind,
+  INJURY_TICKS,
+  ARM_INJURY_DAMAGE_SHARE,
+  LEG_INJURY_MOVE_FACTOR,
+  HEAD_INJURY_MANA_FACTOR,
 } from './types';
 
 const NEVER = -1000;
@@ -207,6 +212,67 @@ function bleed(state: SessionState, x: number, y: number, kind: StainKind, size:
   }
   state.stains.push({ x, y, kind, size, v: hashOf(state.tick, x, y, state.stains.length) % 64, tick: state.tick });
   if (state.stains.length > MAX_STAINS) state.stains.shift();
+}
+
+// ---------------------------------------------------------------------------
+// Injuries: lasting harm that heals only with time
+// ---------------------------------------------------------------------------
+
+export function hasInjury(member: PartyMember, kind: InjuryKind): boolean {
+  return member.injuries.some((i) => i.kind === kind);
+}
+
+/** How long one walking step takes. A wounded leg slows everyone: the party moves as one. */
+export function partyMoveTicks(state: SessionState): number {
+  const limping = state.party.members.some((m) => m.hp > 0 && hasInjury(m, 'leg'));
+  return limping ? Math.round(MOVE_TICKS * LEG_INJURY_MOVE_FACTOR) : MOVE_TICKS;
+}
+
+/** What a spell costs this character. A blow to the head makes the words hard to hold. */
+export function manaCostFor(member: PartyMember, spell: SpellDef): number {
+  return hasInjury(member, 'head') ? Math.ceil(spell.manaCost * HEAD_INJURY_MANA_FACTOR) : spell.manaCost;
+}
+
+const INJURY_WEIGHTS: [InjuryKind, number][] = [
+  ['arm', 3],
+  ['leg', 3],
+  ['ribs', 2],
+  ['head', 2],
+];
+
+/**
+ * A hard blow may leave a lasting injury. The bigger the share of the
+ * character's health it took, the likelier. Small blows never roll at all.
+ */
+function maybeInjure(state: SessionState, member: PartyMember, damage: number, events: GameEvent[]) {
+  if (member.hp <= 0 || damage * 100 < member.maxHp * 15) return;
+  const chance = Math.min(50, Math.round((damage / member.maxHp) * 120));
+  if (randomInt(state, 1, 100) > chance) return;
+  let pick = randomInt(state, 1, INJURY_WEIGHTS.reduce((n, [, w]) => n + w, 0));
+  let kind: InjuryKind = 'arm';
+  for (const [k, w] of INJURY_WEIGHTS) {
+    if (pick <= w) {
+      kind = k;
+      break;
+    }
+    pick -= w;
+  }
+  const existing = member.injuries.find((i) => i.kind === kind);
+  // The same wound struck again takes longer to heal.
+  if (existing) existing.until = Math.max(existing.until, state.tick) + INJURY_TICKS / 2;
+  else member.injuries.push({ kind, until: state.tick + INJURY_TICKS });
+  events.push({ type: 'member.injured', actor: member.id, kind });
+}
+
+/** Injuries whose time has come close up. */
+function healInjuries(state: SessionState, events: GameEvent[]) {
+  for (const member of state.party.members) {
+    if (!member.injuries.length) continue;
+    const healed = member.injuries.filter((i) => state.tick >= i.until);
+    if (!healed.length) continue;
+    member.injuries = member.injuries.filter((i) => state.tick < i.until);
+    for (const i of healed) if (member.hp > 0) events.push({ type: 'member.recovered', actor: member.id, kind: i.kind });
+  }
 }
 
 function bloodOf(def: EnemyDef): StainKind {
@@ -378,6 +444,7 @@ export function step(state: SessionState, world: CompiledWorld, commands: readon
   updatePartyAi(state, world, events);
   for (const enemy of state.enemies) updateEnemy(state, world, enemy, events);
   restoreStamina(state);
+  healInjuries(state, events);
   trackQuests(state, world, events);
 
   return events;
@@ -399,7 +466,7 @@ function runCommand(state: SessionState, world: CompiledWorld, command: Command,
     }
     case 'move': {
       const dir = (p.facing + MOVE_OFFSET[command.dir]) % 4;
-      moveParty(state, world, dir, MOVE_TICKS, events);
+      moveParty(state, world, dir, partyMoveTicks(state), events);
       return;
     }
     case 'dodge': {
@@ -625,9 +692,10 @@ function castKnownSpell(state: SessionState, world: CompiledWorld, member: Party
     return false;
   };
   if (!spell) return refuse('unknown');
-  if (member.mana < spell.manaCost) return refuse('no_mana');
+  const cost = manaCostFor(member, spell);
+  if (member.mana < cost) return refuse('no_mana');
   if (!spellHasTarget(state, world, spell)) return refuse('no_target');
-  member.mana -= spell.manaCost;
+  member.mana -= cost;
   startCast(state, member, spell, events);
   return true;
 }
@@ -678,6 +746,8 @@ function restoreStamina(state: SessionState) {
   for (const member of state.party.members) {
     if (member.hp <= 0 || member.stamina >= member.maxStamina) continue;
     if (state.tick < member.staminaRegenFrom || member.blocking || member.action.kind !== 'idle') continue;
+    // Cracked ribs: breath comes back at half the pace.
+    if (hasInjury(member, 'ribs') && state.tick % (STAMINA_REGEN_INTERVAL * 2) !== 0) continue;
     member.stamina += 1;
   }
   if (state.tick % MANA_REGEN_INTERVAL !== 0) return;
@@ -787,10 +857,12 @@ function resolvePartyAttacks(state: SessionState, world: CompiledWorld, events: 
         const attack = weaponOf(world, member)[action.attack];
         const def = enemyDef(world, enemy);
         const rolled = randomInt(state, attack.damage.min, attack.damage.max) + damageBonus(member.attributes);
-        const critical = randomInt(state, 1, 100) <= criticalChance(member.attributes);
+        // A dazed fighter still rolls, so the dice fall the same, but cannot land a telling blow.
+        const critical = randomInt(state, 1, 100) <= criticalChance(member.attributes) && !hasInjury(member, 'head');
         // Some classes hit harder when the enemy is reeling or recovering.
         const opening = enemy.ai === 'stagger' || enemy.ai === 'recover' ? CLASSES[member.classId].opportunist : 1;
-        const damage = Math.max(1, Math.round(rolled * (critical ? CRITICAL_MULTIPLIER : 1) * opening) - def.defence);
+        const grip = hasInjury(member, 'arm') ? ARM_INJURY_DAMAGE_SHARE : 1;
+        const damage = Math.max(1, Math.round(rolled * (critical ? CRITICAL_MULTIPLIER : 1) * opening * grip) - def.defence);
         const heavy = attack.impact >= 3;
         enemy.hp = Math.max(0, enemy.hp - damage);
         enemy.lastHitTick = state.tick;
@@ -917,6 +989,9 @@ function resolveHeal(state: SessionState, member: PartyMember, spell: HealSpellD
   const healed = Math.min(spell.amount + Math.max(0, modifier(member.attributes.wisdom)), target.maxHp - target.hp);
   target.hp += healed;
   events.push({ type: 'spell.healed', actor: member.id, spellId: spell.id, target: target.id, healed });
+  // Healing magic eases the worst injury: it heals in half the time it had left.
+  const worst = target.injuries.reduce<(typeof target.injuries)[number] | null>((a, b) => (!a || b.until > a.until ? b : a), null);
+  if (worst) worst.until = state.tick + Math.floor((worst.until - state.tick) / 2);
 }
 
 // ---------------------------------------------------------------------------
@@ -935,13 +1010,13 @@ function updatePartyAi(state: SessionState, world: CompiledWorld, events: GameEv
     const hurt = mostHurt(state);
     if (hurt && hurt.hp / hurt.maxHp <= AI_HEAL_THRESHOLD) {
       const heal = knownSpell(world, member, 'heal');
-      if (heal && member.mana >= heal.manaCost) acted = castKnownSpell(state, world, member, heal.id, events);
+      if (heal && member.mana >= manaCostFor(member, heal)) acted = castKnownSpell(state, world, member, heal.id, events);
     }
 
     // 2. Strike with a bolt spell at whatever is ahead and aware of the party.
     if (!acted) {
       const bolt = knownSpell(world, member, 'bolt');
-      if (bolt && bolt.shape === 'bolt' && member.mana >= bolt.manaCost) {
+      if (bolt && bolt.shape === 'bolt' && member.mana >= manaCostFor(member, bolt)) {
         const target = spellTarget(state, world, bolt);
         if (target?.alerted) acted = castKnownSpell(state, world, member, bolt.id, events);
       }
@@ -1179,11 +1254,13 @@ function resolveEnemyAttack(state: SessionState, world: CompiledWorld, enemy: En
         target.hp = Math.max(0, target.hp - damage);
         bleed(state, p.x, p.y, 'red', 1);
         events.push({ type: 'guard.broken', enemyId: enemy.id, target: target.id, damage, ...shield });
+        maybeInjure(state, target, damage, events);
       }
     } else {
       target.hp = Math.max(0, target.hp - damage);
       bleed(state, p.x, p.y, 'red', damage >= target.maxHp * 0.25 ? 2 : 1);
       events.push({ type: 'enemy.attack.hit', enemyId: enemy.id, target: target.id, damage, attackId: attack.id });
+      maybeInjure(state, target, damage, events);
     }
     if (target.hp === 0) {
       bleed(state, p.x, p.y, 'red', 3);

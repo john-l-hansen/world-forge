@@ -111,6 +111,21 @@ export function describeEvent(event: GameEvent, state: SessionState, world: Comp
       return { text: `${does(event.actor, 'move')} to the ${event.row} row.`, tone: 'plain' };
     case 'member.fell':
       return { text: `${heroName(event.actor)} falls!`, tone: 'bad' };
+    case 'member.injured': {
+      const whose = event.actor === you ? 'Your' : `${heroName(event.actor)}'s`;
+      const lines = {
+        arm: `${whose} arm cracks under the blow. Every swing is weaker now.`,
+        leg: `${whose} leg is laid open to the bone. The party limps.`,
+        ribs: `${whose} ribs break. Every breath is fire, and slow to come.`,
+        head: `${whose} skull rings from the blow. Thoughts swim; spells come hard.`,
+      } as const;
+      return { text: lines[event.kind], tone: 'bad' };
+    }
+    case 'member.recovered': {
+      const whose = event.actor === you ? 'Your' : `${heroName(event.actor)}'s`;
+      const part = { arm: 'arm has knit', leg: 'leg will bear weight again', ribs: 'ribs have mended', head: 'head has cleared' } as const;
+      return { text: `${whose} ${part[event.kind]}.`, tone: 'good' };
+    }
     case 'attack.out_of_reach':
       return event.actor === you ? { text: 'You cannot reach from the back row.', tone: 'plain' } : null;
     case 'spell.hit': {

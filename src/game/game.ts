@@ -4,9 +4,9 @@
  * in fixed 60 Hz ticks no matter how fast the screen refreshes.
  */
 import { AudioEngine, type Voice } from '../audio/audio';
-import { activeMember, createSession, defenceOf, enemyAt, guardOf, hasLineOfSight, isGuarding, partyIsBusy, step } from '../engine/sim';
+import { activeMember, createSession, defenceOf, enemyAt, guardOf, hasInjury, hasLineOfSight, isGuarding, manaCostFor, partyIsBusy, step } from '../engine/sim';
 import { EQUIP_SLOTS, type EquipSlot } from '../schema/world';
-import { TICKS_PER_SECOND, type Command, type GameEvent, type SessionState } from '../engine/types';
+import { TICKS_PER_SECOND, type Command, type GameEvent, type InjuryKind, type SessionState } from '../engine/types';
 import { DungeonRenderer } from '../renderer/renderer';
 import { DIR_X, DIR_Y, roomAtCell, type CompiledWorld } from '../world/compile';
 import { InputState, commandFor, type Action } from './input';
@@ -19,6 +19,14 @@ import { getSettings, updateSettings } from './settings';
 import { pushFloater, pushLog, useHud, type BeltItem, type PartyView, type QuestView, type SheetView, type SpellView } from './store';
 
 const TICK_MS = 1000 / TICKS_PER_SECOND;
+
+const INJURY_NAMES: Record<InjuryKind, string> = { arm: 'Broken arm', leg: 'Torn leg', ribs: 'Broken ribs', head: 'Cracked skull' };
+const INJURY_EFFECTS: Record<InjuryKind, string> = {
+  arm: 'blows land a quarter weaker',
+  leg: 'the party walks slower',
+  ribs: 'stamina returns at half pace',
+  head: 'no telling blows; spells cost half again',
+};
 
 export class Game {
   state: SessionState;
@@ -489,6 +497,7 @@ export class Game {
           const held = def.items.find((i) => i.id === m.equipment.mainHand);
           return held ? held.visualAssetId : null;
         })(),
+        injuries: m.injuries.map((i) => INJURY_NAMES[i.kind]),
         struck: this.struck[m.id] ?? 0,
         hurt: this.hurt[m.id] ?? 0,
         mended: this.mended[m.id] ?? 0,
@@ -496,7 +505,8 @@ export class Game {
     });
     const spells: SpellView[] = driven.spells.flatMap((id) => {
       const spell = def.spells.find((sp) => sp.id === id);
-      return spell ? [{ id, name: spell.name, description: spell.description, cost: spell.manaCost, ready: driven.mana >= spell.manaCost }] : [];
+      const cost = spell ? manaCostFor(driven, spell) : 0;
+      return spell ? [{ id, name: spell.name, description: spell.description, cost, ready: driven.mana >= cost }] : [];
     });
     const signature = JSON.stringify([party, spells]);
     if (signature !== this.partySignature) {
@@ -662,7 +672,7 @@ export class Game {
       spells: member.spells.flatMap((id) => def.spells.find((sp) => sp.id === id)?.name ?? []),
       light: range(weapon?.category === 'weapon' ? weapon.weapon.light.damage : { min: 1, max: 2 }),
       heavy: range(weapon?.category === 'weapon' ? weapon.weapon.heavy.damage : { min: 2, max: 4 }),
-      critical: `${criticalChance(member.attributes)}%`,
+      critical: hasInjury(member, 'head') ? 'None (dazed)' : `${criticalChance(member.attributes)}%`,
       weapon: weapon?.name ?? 'Unarmed',
       defence: defenceOf(this.world, member),
       block: (() => {
@@ -670,6 +680,10 @@ export class Game {
         return `${Math.round(g.damageShare * 100)}% of a blow, ${g.staminaCost} stamina`;
       })(),
       equipment,
+      injuries: member.injuries.map((i) => {
+        const seconds = Math.max(0, Math.ceil((i.until - this.state.tick) / TICKS_PER_SECOND));
+        return `${INJURY_NAMES[i.kind]}: ${INJURY_EFFECTS[i.kind]} (${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')})`;
+      }),
     };
     const xpProgress = Math.max(0, Math.min(1, (member.xp - levelStart) / Math.max(1, nextLevel - levelStart)));
     useHud.setState({ belt, quest, quests, sheet, level: member.level, xpProgress, heroName: character.name, heroClass: member.classId, weaponName: weapon?.name ?? 'Unarmed' });

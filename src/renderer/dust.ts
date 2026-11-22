@@ -1,7 +1,6 @@
 /**
- * Dust and grit, as square points in the low-resolution view: bursts when a
- * cracked wall is struck, and a thin stream of motes drifting out of hidden
- * ways, which is the draft a sharp eye can catch. Presentation only.
+ * Dust and grit, as square points in the low-resolution view, thrown when a
+ * cracked wall is struck. Presentation only.
  */
 import * as THREE from 'three';
 
@@ -70,21 +69,6 @@ export class Dust {
         weight: this.rand() > 0.35 ? 5 : 0.6,
       });
     }
-  }
-
-  /** One slow mote drifting out of a wall face: the draft. */
-  breathe(x: number, z: number, nx: number, nz: number) {
-    this.add({
-      x: x + nz * (this.rand() - 0.5) * 0.7,
-      y: 0.15 + this.rand() * 0.7,
-      z: z + nx * (this.rand() - 0.5) * 0.7,
-      vx: nx * (0.18 + this.rand() * 0.15) + nz * (this.rand() - 0.5) * 0.05,
-      vy: (this.rand() - 0.4) * 0.05,
-      vz: nz * (0.18 + this.rand() * 0.15) + nx * (this.rand() - 0.5) * 0.05,
-      life: 1.6 + this.rand() * 1.4,
-      age: 0,
-      weight: 0.02,
-    });
   }
 
   private add(m: Mote) {

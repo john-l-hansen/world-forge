@@ -107,9 +107,8 @@ export class DungeonRenderer {
   private enemies = new Map<string, EnemyView>();
   private doors: DoorView[] = [];
   private dust = new Dust();
-  /** Hidden ways the draft comes through: each wall face's centre and the way out into the open. */
+  /** Hidden ways: each wall's cell and orientation, for aiming the dust when one is struck. */
   private drafts: { id: string; x: number; y: number; axis: 'ns' | 'ew' }[] = [];
-  private draftClock = 0;
   /** Where the party stood at the last frame, for aiming effects. */
   private partyAt = { x: 0, y: 0 };
   private chests: LootView[] = [];
@@ -475,7 +474,6 @@ export class DungeonRenderer {
     for (const pickup of this.pickups) this.glint(pickup, state, timeSeconds);
     this.partyAt = { x: state.party.x, y: state.party.y };
     if (this.partyOrder.length !== state.party.members.length) this.partyOrder = state.party.members.map((m) => m.id);
-    this.breathe(state, dt);
     this.dust.update(dt);
 
     for (const enemy of state.enemies) this.placeEnemy(enemy, now);
@@ -659,19 +657,6 @@ export class DungeonRenderer {
     }
     const nz = this.partyAt.y >= d.y ? 1 : -1;
     return { x: d.x, z: d.y + nz * 0.5, nx: 0, nz };
-  }
-
-  /** A thin stream of dust out of every hidden way still shut near the party: the draft. */
-  private breathe(state: SessionState, dt: number) {
-    this.draftClock += dt;
-    if (this.draftClock < 0.14) return;
-    this.draftClock = 0;
-    for (const d of this.drafts) {
-      if (state.doorsOpen[d.id]) continue;
-      if (Math.hypot(d.x - state.party.x, d.y - state.party.y) > 4.5) continue;
-      const face = this.wallFace(d.id);
-      if (face) this.dust.breathe(face.x, face.z, face.nx, face.nz);
-    }
   }
 
   /**

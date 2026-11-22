@@ -29,9 +29,11 @@ signal on screen.
   cracks it further, through three looks; the last brings it down in a cloud of dust
   with a long rumble. Searching it says a heavy blow might work, and a light blow
   skitters off and says so. The Mines' hidden cache is now behind one.
-- **A draft.** Every hidden way still shut, cracked or secret, breathes a thin
-  stream of dust and a low wind that grows louder as the party nears. The log
-  mentions the draft the first time the party stands by a cracked wall.
+- **A draft.** Every hidden way still shut, cracked or secret, gives off a low wind
+  that grows louder as the party nears. The log mentions the draft the first time
+  the party stands by a cracked wall. (A thin stream of dust drifting out of the
+  wall was tried and taken out after John's second play session: an untouched
+  wall shows only its cracks, and dust flies only when it is hit.)
 - **Companion feedback.** Every party cell shows its character's hand, as in Eye of
   the Beholder: what they hold, flashing gold when their blow lands, grey while they
   strike, blue while they cast. A companion's damage number carries their name,
@@ -57,10 +59,11 @@ signal on screen.
   version 7 session.
 - `tests/adventure.test.ts`, the standing regression for the Mines, passes. It now
   smashes the cracked wall where it used to search the secret door.
-- `npm run test:browser` — 135 checks pass in headless Chrome. New: the Sheet button
+- `npm run test:browser` — 136 checks pass in headless Chrome (after the dust
+  change; 135 before it). New: the Sheet button
   and clickable portrait, the party sheet from the driven cell, the key glinting when
   the party comes close, the pickup banner, the belt flash, the shield going on and
-  coming up on guard, the sheet's block line, the draft in the log and as dust, the
+  coming up on guard, the sheet's block line, the draft in the log, no dust from an untouched wall and grit when it is hit, the
   cracked wall from search through a light blow and three heavy ones, and the
   party's hands and named damage numbers.
 
@@ -76,9 +79,14 @@ signal on screen.
 - The weapon swing is still the sword's for every weapon.
 - The crypt has no cracked walls; it could use one.
 
+### Second play session (2026-11-21)
+
+John played the published build and found it felt good. One note, acted on: a
+cracked wall should show only its cracks, with dust only when it is hit.
+
 ### Next milestone
 
-Play it again and tell me what still feels wrong. Then Phase 5, the AI world creator.
+Phase 5, the AI world creator.
 
 ## Milestone 8 — Phase 4: the world engine, and a second world (2026-11-16)
 

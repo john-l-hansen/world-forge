@@ -261,11 +261,8 @@ await shot('02-locked-door');
 // --- Cracked wall, hidden room and chest -------------------------------------------
 await turnTo(E);
 check(/cold draft breathes through cracks/i.test((await hud()).text), 'standing by the cracked wall, the log mentions a draft');
-const motes = await page
-  .waitForFunction(() => window.__worldForge.renderer.dust.motes.length > 0, null, { timeout: 2000 })
-  .then(() => true)
-  .catch(() => false);
-check(motes, 'dust drifts out of the cracked wall');
+await page.waitForTimeout(800);
+check((await page.evaluate(() => window.__worldForge.renderer.dust.motes.length)) === 0, 'an untouched cracked wall shows its cracks, and no dust');
 await shot('03-cracked-wall');
 await key('KeyW');
 s = await state();
@@ -275,7 +272,9 @@ check(/heavy blow \(K\) might bring it down/i.test((await hud()).text), 'searchi
 await key('KeyJ', 900);
 s = await state();
 check(s.doors.door_tunnel_cache === false && /skitters off/i.test((await hud()).text), 'a light blow does not break it');
-await key('KeyK', 1300);
+await key('KeyK', 450);
+check((await page.evaluate(() => window.__worldForge.renderer.dust.motes.length)) > 10, 'a heavy blow throws grit from the wall');
+await page.waitForTimeout(850);
 s = await state();
 check(s.wallDamage.door_tunnel_cache === 1 && s.doors.door_tunnel_cache === false, 'a heavy blow cracks it further');
 check(await page.evaluate(() => window.__worldForge.renderer.doors.find((d) => d.id === 'door_tunnel_cache').stages[1].visible), 'the wall shows the damage');

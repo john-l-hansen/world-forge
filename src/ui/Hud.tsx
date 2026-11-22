@@ -41,7 +41,7 @@ export function Floaters() {
 /** The party. One character gets the full card; a company gets a cell each. */
 export function PartyPanel({ game }: { game: Game }) {
   const party = useHud((s) => s.party);
-  if (party.length <= 1) return <PartyCard />;
+  if (party.length <= 1) return <PartyCard game={game} />;
   return (
     <div className="party" role="group" aria-label="Party">
       {party.map((member) => (
@@ -63,8 +63,9 @@ function PartyCell({ game, member }: { game: Game; member: PartyView }) {
       aria-pressed={member.active}
       title={`${member.name}, ${member.className.toLowerCase()} level ${member.level}, ${member.row} row. Health ${member.hp}/${member.maxHp}, stamina ${member.stamina}/${member.maxStamina}${
         member.maxMana > 0 ? `, mana ${member.mana}/${member.maxMana}` : ''
-      }.${member.active ? ' You are playing this character.' : dead ? '' : ' Click to play this character.'}`}
-      onPointerDown={() => game.takeControl(member.id)}
+      }.${member.active ? ' You are playing this character. Click for the character sheet.' : dead ? '' : ' Click to play this character.'}`}
+      // Clicking the character you drive opens their sheet; clicking another takes them over.
+      onPointerDown={() => (member.active ? game.toggleSheet() : game.takeControl(member.id))}
     >
       {/* The keys restart the flashes each time a blow or a healing lands. */}
       <span key={`${member.hurt}:${member.mended}`} className={`face${member.hurt ? ' hurt' : ''}${member.mended ? ' mended' : ''}${member.guarding ? ' guarding' : ''}`}>
@@ -111,7 +112,7 @@ export function SpellBar({ game }: { game: Game }) {
   );
 }
 
-export function PartyCard() {
+export function PartyCard({ game }: { game: Game }) {
   const art = uiArt();
   const name = useHud((s) => s.heroName);
   const cls = useHud((s) => s.heroClass);
@@ -129,9 +130,14 @@ export function PartyCard() {
   return (
     <div className="card raised">
       {/* The key restarts the flash animation each time damage lands. */}
-      <div key={hurtPulse} className={`portrait${hurtPulse ? ' hurt' : ''}${guarding ? ' guarding' : ''}`}>
+      <button
+        key={hurtPulse}
+        className={`portrait${hurtPulse ? ' hurt' : ''}${guarding ? ' guarding' : ''}`}
+        title={`${name}: open the character sheet (C)`}
+        onPointerDown={() => game.toggleSheet()}
+      >
         <img src={art.portrait} alt={name} />
-      </div>
+      </button>
       <div className="card-body">
         <div className="title-row">
           <span className="name">{name}</span>
@@ -525,11 +531,14 @@ export function ActionButtons({ game }: { game: Game }) {
       <button className="btn" title="Dodge: a quick step, back unless you are steering" onPointerDown={() => game.act('dodge')}>
         Dodge <kbd>Space</kbd>
       </button>
-      <button className="btn" title="Open, unlock, search" onPointerDown={() => game.act('interact')}>
+      <button className="btn wide" title="Open, unlock, search" onPointerDown={() => game.act('interact')}>
         Use <kbd>F</kbd>
       </button>
       <button className="btn" title="Quest journal" onPointerDown={() => game.toggleJournal()}>
         Journal <kbd>B</kbd>
+      </button>
+      <button className="btn" title="Character sheet: attributes, what is worn and held" onPointerDown={() => game.toggleSheet()}>
+        Sheet <kbd>C</kbd>
       </button>
     </div>
   );

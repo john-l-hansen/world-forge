@@ -325,6 +325,16 @@ await page.locator('.belt button[aria-label="Studded jerkin"]').dispatchEvent('p
 await page.waitForTimeout(300);
 s = await state();
 check(s.equipment.body === 'item_studded_jerkin' && !s.inventory.item_studded_jerkin, 'clicking armour on the belt puts it on');
+// The sheet can also be found without knowing the key.
+await page.locator('.buttons .btn', { hasText: /Sheet/ }).dispatchEvent('pointerdown');
+await page.waitForTimeout(250);
+check(/STRENGTH/i.test((await hud()).overlay ?? ''), 'the Sheet button opens the character sheet');
+await page.locator('.buttons .btn', { hasText: /Sheet/ }).dispatchEvent('pointerdown');
+await page.waitForTimeout(250);
+await page.locator('.card .portrait').dispatchEvent('pointerdown');
+await page.waitForTimeout(250);
+check(/STRENGTH/i.test((await hud()).overlay ?? ''), 'clicking the portrait opens the character sheet');
+await key('KeyC', 300);
 
 // --- Scroll --------------------------------------------------------------------
 await walkTo(3, 5);
@@ -534,9 +544,11 @@ await key('KeyJ', 500);
 check(/cannot reach from the back row/i.test((await hud()).text), 'a back-row character cannot swing a weapon');
 
 // The character sheet follows the driven character, and changes rows.
-await key('KeyC', 300);
+// Clicking the cell of the character you drive opens their sheet.
+await page.locator('.party .cell[data-member="char_mage"]').dispatchEvent('pointerdown');
+await page.waitForTimeout(300);
 h = await hud();
-check(/ILVANE/i.test(h.overlay ?? '') && /MANA/i.test(h.overlay ?? '') && /BACK ROW/i.test(h.overlay ?? ''), 'the sheet shows the driven character, with mana and row');
+check(/ILVANE/i.test(h.overlay ?? '') && /MANA/i.test(h.overlay ?? '') && /BACK ROW/i.test(h.overlay ?? ''), 'clicking the driven character\'s cell opens their sheet, with mana and row');
 await page.locator('.overlay.sheet .btn.row').dispatchEvent('pointerdown');
 await page.waitForTimeout(250);
 s = await state();

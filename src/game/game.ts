@@ -13,6 +13,8 @@ import { InputState, commandFor, type Action } from './input';
 import { describeEvent } from './messages';
 import { CLASSES, ATTRIBUTES } from '../engine/classes';
 import { criticalChance, damageBonus, experienceForLevel, modifier } from '../engine/stats';
+import { makeSave } from '../engine/save';
+import { writeSlot, type SlotId } from './saves';
 import { pushFloater, pushLog, useHud, type BeltItem, type PartyView, type QuestView, type SheetView, type SpellView } from './store';
 
 const TICK_MS = 1000 / TICKS_PER_SECOND;
@@ -50,11 +52,29 @@ export class Game {
     return activeMember(this.state);
   }
 
-  constructor(canvas: HTMLCanvasElement, readonly world: CompiledWorld, private seed = 1) {
+  /** The world was made in the creator; saves remember it. */
+  private readonly created: boolean;
+  /** Set when the game began from a save rather than from the world's start. */
+  private resumed: boolean;
+
+  constructor(canvas: HTMLCanvasElement, readonly world: CompiledWorld, private seed = 1, opts: { resume?: SessionState; created?: boolean } = {}) {
     this.renderer = new DungeonRenderer(canvas, world);
-    this.state = createSession(world, seed);
+    this.created = opts.created ?? false;
+    this.resumed = Boolean(opts.resume);
+    this.state = opts.resume ?? createSession(world, seed);
     this.resetHud('title');
     this.raf = requestAnimationFrame(this.frame);
+  }
+
+  /** Write the whole world to a save slot. Says in the log whether it worked. */
+  save(slot: SlotId, quiet = false): boolean {
+    if (this.state.status !== 'playing') {
+      if (!quiet) pushLog('The dead cannot save.', 'warn');
+      return false;
+    }
+    const ok = writeSlot(slot, makeSave(this.world, this.state, { seed: this.seed, created: this.created, savedAt: Date.now() }));
+    if (!quiet) pushLog(ok ? 'Game saved.' : 'The game could not be saved: this browser refused the storage.', ok ? 'good' : 'warn');
+    return ok;
   }
 
   /** Whether an enemy sounds like a living thing or like dry bone. */
@@ -67,8 +87,8 @@ export class Game {
   /** Leave the title screen. Called from a key press or click, so audio may start. */
   begin() {
     if (useHud.getState().screen !== 'title') return;
-    // The place the party starts in sets the ambience.
-    const { x, y } = this.world.start;
+    // The place the party stands in sets the ambience.
+    const { x, y } = this.state.party;
     this.audio.start(this.world.environments[this.world.envAt[y * this.world.width + x]]);
     this.input.clear();
     useHud.setState({ screen: 'playing' });
@@ -78,6 +98,7 @@ export class Game {
   restart() {
     this.seed += 1;
     this.sessionNumber += 1;
+    this.resumed = false;
     this.state = createSession(this.world, this.seed);
     this.input.clear();
     this.pending = [];
@@ -93,6 +114,12 @@ export class Game {
   }
 
   private announceStart() {
+    if (this.resumed) {
+      pushLog('Game loaded.', 'good');
+      const here = roomAtCell(this.world, this.state.party.x, this.state.party.y);
+      if (here) pushLog(here.name + '.', 'lore');
+      return;
+    }
     for (const questId of Object.keys(this.state.quests)) {
       const quest = this.world.def.quests.find((q) => q.id === questId);
       if (quest) pushLog(`Quest: ${quest.title}. ${quest.description}`.trim(), 'quest');
@@ -298,6 +325,10 @@ export class Game {
     }
 
     switch (event.type) {
+      case 'room.entered':
+        // Each new place reached is kept, without a word in the log.
+        if (event.firstVisit) this.save('auto', true);
+        break;
       case 'attack.hit':
         this.struck[event.actor] = (this.struck[event.actor] ?? 0) + 1;
         if (event.actor === driven) pushFloater(`${event.damage}${event.critical ? '!' : ''}`, event.kind === 'heavy' || event.critical ? 'heavy' : 'dealt');

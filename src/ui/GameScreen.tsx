@@ -3,6 +3,8 @@ import { Game } from '../game/game';
 import { DEFAULT_KEYMAP } from '../game/input';
 import { useHud } from '../game/store';
 import type { CompiledWorld } from '../world/compile';
+import type { SessionState } from '../engine/types';
+import { latestSlot, type SlotId } from '../game/saves';
 import { uiArt } from './art';
 import { ActionButtons, AutoMap, Belt, PickupBanner, DeathOverlay, Floaters, JournalOverlay, MessageLog, MovePad, ObjectivePlate, PartyPanel, SheetOverlay, SpellBar, TargetBar, TitleOverlay, VictoryOverlay, type TitleChoice } from './Hud';
 
@@ -34,9 +36,15 @@ export interface GameScreenProps {
   onCreate: () => void;
   /** This world was made in the creator, so the way back leads there. */
   created: boolean;
+  /** Resume from this saved state instead of the world's start. */
+  resume?: SessionState;
+  /** The seed the saved session began with. */
+  seed?: number;
+  /** Load a save slot, or the latest save when no slot is named. */
+  onLoadSave: (slot?: SlotId) => void;
 }
 
-export function GameScreen({ world, choices, current, autoBegin, onChoose, onOpenFile, onCreate, created }: GameScreenProps) {
+export function GameScreen({ world, choices, current, autoBegin, onChoose, onOpenFile, onCreate, created, resume, seed: savedSeed, onLoadSave }: GameScreenProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [game, setGame] = useState<Game | null>(null);
   const scale = useWholeNumberScale();
@@ -47,8 +55,8 @@ export function GameScreen({ world, choices, current, autoBegin, onChoose, onOpe
   const art = uiArt();
 
   useEffect(() => {
-    const seed = Number(new URLSearchParams(window.location.search).get('seed')) || 1;
-    const instance = new Game(canvasRef.current!, world, seed);
+    const seed = savedSeed ?? (Number(new URLSearchParams(window.location.search).get('seed')) || 1);
+    const instance = new Game(canvasRef.current!, world, seed, { resume, created });
     setGame(instance);
     // A handle for browser tests and debugging. Not used by the game itself.
     (window as unknown as { __worldForge?: Game }).__worldForge = instance;
@@ -72,12 +80,24 @@ export function GameScreen({ world, choices, current, autoBegin, onChoose, onOpe
     const down = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const current = useHud.getState().screen;
+      // F9 loads the last save from anywhere; F5 saves while playing.
+      if (e.code === 'F9') {
+        e.preventDefault();
+        if (!e.repeat) onLoadSave();
+        return;
+      }
+      if (e.code === 'F5') {
+        e.preventDefault();
+        if (!e.repeat && current === 'playing') game.save('quick');
+        return;
+      }
       if (current === 'title') {
         e.preventDefault();
         const picked = /^(Digit|Numpad)[1-9]$/.test(e.code) ? choices[Number(e.code.slice(-1)) - 1] : undefined;
         if (picked) chooseRef.current(picked.key);
         else if (e.code === 'KeyO') onOpenFile();
         else if (e.code === 'KeyN') onCreate();
+        else if (e.code === 'KeyC' && latestSlot()) onLoadSave();
         else game.begin();
         return;
       }
@@ -87,6 +107,7 @@ export function GameScreen({ world, choices, current, autoBegin, onChoose, onOpe
       }
       if (current === 'dead') {
         if (e.code === 'KeyR') game.restart();
+        else if (e.code === 'KeyL' && latestSlot()) onLoadSave();
         else if (e.code === 'KeyN' && created) onCreate();
         return;
       }
@@ -154,7 +175,7 @@ export function GameScreen({ world, choices, current, autoBegin, onChoose, onOpe
       window.removeEventListener('keyup', up);
       window.removeEventListener('blur', blur);
     };
-  }, [game, choices, onOpenFile, onCreate, created]);
+  }, [game, choices, onOpenFile, onCreate, created, onLoadSave]);
 
   return (
     <div className="stage">
@@ -179,8 +200,8 @@ export function GameScreen({ world, choices, current, autoBegin, onChoose, onOpe
           {screen === 'playing' && <TargetBar />}
           {screen === 'playing' && <Floaters />}
           {screen === 'playing' && <PickupBanner />}
-          {screen === 'title' && <TitleOverlay title={world.def.world.name} choices={choices} current={current} onChoose={choose} onOpenFile={onOpenFile} onCreate={onCreate} created={created} />}
-          {screen === 'dead' && <DeathOverlay name={heroName} created={created} />}
+          {screen === 'title' && <TitleOverlay title={world.def.world.name} choices={choices} current={current} onChoose={choose} onOpenFile={onOpenFile} onCreate={onCreate} created={created} saved={latestSlot()} onContinue={() => onLoadSave()} />}
+          {screen === 'dead' && <DeathOverlay name={heroName} created={created} canLoad={Boolean(latestSlot())} />}
           {screen === 'journal' && <JournalOverlay />}
           {screen === 'sheet' && game && <SheetOverlay game={game} />}
           {screen === 'victory' && <VictoryOverlay world={world.def.world.name} created={created} />}

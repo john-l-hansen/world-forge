@@ -7,6 +7,7 @@ import { Fragment, useEffect, useRef } from 'react';
 import type { Game } from '../game/game';
 import type { Action } from '../game/input';
 import { useHud, type PartyView } from '../game/store';
+import type { SlotSummary } from '../game/saves';
 import { TILE_DOORWAY, TILE_WALL } from '../world/compile';
 import { uiArt, type IconKind } from './art';
 
@@ -607,6 +608,8 @@ export function TitleOverlay({
   onOpenFile,
   onCreate,
   created,
+  saved,
+  onContinue,
 }: {
   title: string;
   choices: TitleChoice[];
@@ -615,6 +618,9 @@ export function TitleOverlay({
   onOpenFile: () => void;
   onCreate: () => void;
   created: boolean;
+  /** The latest save, offered as Continue. */
+  saved: SlotSummary | null;
+  onContinue: () => void;
 }) {
   return (
     <div className="overlay title">
@@ -622,6 +628,19 @@ export function TitleOverlay({
       <h1>{title}</h1>
       {choices.length > 1 && (
         <div className="choices">
+          {saved && (
+            <button
+              className="btn wide continue"
+              title={`Continue ${saved.label}`}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                onContinue();
+              }}
+            >
+              <kbd>C</kbd> Continue: {saved.label}
+            </button>
+          )}
           {choices.map((choice, i) => (
             <button
               key={choice.key}
@@ -684,18 +703,23 @@ export function TitleOverlay({
         <dd>Next character</dd>
         <dt>1 - 4</dt>
         <dd>Cast a spell</dd>
+        <dt>F5 / F9</dt>
+        <dd>Save, load</dd>
       </dl>
       <div className="blink">{choices.length > 1 ? `Press 1 to ${choices.length} to choose - any other key to enter` : 'Press any key or click to enter'}</div>
     </div>
   );
 }
 
-export function DeathOverlay({ name, created }: { name: string; created: boolean }) {
+export function DeathOverlay({ name, created, canLoad }: { name: string; created: boolean; canLoad: boolean }) {
   const company = useHud((s) => s.party.length > 1);
   return (
     <div className="overlay dead">
       <h1>{company ? 'The party has fallen' : `${name} has fallen`}</h1>
-      <div className="blink">Press R to try again{created ? ' - N for the creator' : ''}</div>
+      <div className="blink">
+        Press R to begin again{canLoad ? ' - L to load the last save' : ''}
+        {created ? ' - N for the creator' : ''}
+      </div>
     </div>
   );
 }

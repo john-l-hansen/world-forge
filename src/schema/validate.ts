@@ -16,7 +16,9 @@ export interface ValidationIssue {
     | 'connection'
     | 'placement'
     | 'unreachable'
-    | 'quest';
+    | 'quest'
+    /** A save file whose game state does not fit its world. */
+    | 'save';
   message: string;
   path?: string;
 }

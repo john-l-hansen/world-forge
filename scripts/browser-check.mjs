@@ -192,6 +192,7 @@ await page.waitForTimeout(500);
 let h = await hud();
 check(/THE FORGOTTEN MINES/i.test(h.overlay ?? ''), 'title screen shows the adventure name');
 check((await state()).tick === 0, 'simulation is paused on the title screen');
+check(!/CONTINUE/i.test(h.overlay ?? ''), 'with nothing saved, the title offers no Continue');
 const size = await page.evaluate(() => {
   const c = document.querySelector('.viewport canvas');
   return { w: c.width, h: c.height, cssW: c.getBoundingClientRect().width, rendering: getComputedStyle(c).imageRendering };
@@ -324,6 +325,26 @@ h = await hud();
 check(/reaches level 2/i.test(h.text) && /LV 2/i.test(h.text), 'the level-up is announced and shown on the party card');
 const hpAfterGoblin = s.hp;
 const maxAfterGoblin = s.maxHp;
+
+// --- Save and load -------------------------------------------------------------
+await key('F5', 300);
+check(/Game saved/i.test((await hud()).text), 'F5 saves the game');
+const savedState = await state();
+await page.reload();
+await page.waitForFunction(() => window.__worldForge);
+await page.waitForTimeout(500);
+h = await hud();
+check(/CONTINUE:\s*THE FORGOTTEN MINES/i.test(h.overlay ?? ''), `after a reload, the title offers Continue (${(h.overlay ?? '').slice(0, 60).replace(/\s+/g, ' ')})`);
+await shot('08a-continue');
+await key('KeyC', 700);
+s = await state();
+h = await hud();
+check(h.overlay === null && /Game loaded/i.test(h.text), 'C continues the saved game');
+check(
+  s.x === savedState.x && s.y === savedState.y && s.facing === savedState.facing && s.level === 2 && s.hp === savedState.hp && s.enemies[0].ai === 'dead' && s.doors.door_tunnel_hall === true && s.inventory.item_healing_draught === 1,
+  `the loaded game is where it was saved (at ${s.x},${s.y}, level ${s.level}, hp ${s.hp})`,
+);
+check(s.tick >= savedState.tick, 'the loaded game runs on from the saved tick');
 
 // --- Character sheet -----------------------------------------------------------
 await key('KeyC', 300);

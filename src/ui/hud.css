@@ -256,7 +256,8 @@ html, body, #root {
 .overlay.title { gap: 4px; }
 .overlay.title .keys { margin: 0; white-space: nowrap; }
 .overlay.title h2 { max-width: 316px; white-space: nowrap; }
-.choices { display: flex; gap: 2px; }
+.choices { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px; max-width: 316px; }
+.choices .btn.continue { flex: 0 0 100%; justify-content: center; overflow: hidden; text-overflow: ellipsis; color: var(--gold-hi); }
 .choices .btn { flex: none; padding: 2px 4px; gap: 3px; white-space: nowrap; }
 .choices .btn.chosen { color: var(--gold-hi); border-color: var(--gold-hi) var(--gold-lo) var(--gold-lo) var(--gold-hi); background: #4e4237; }
 .overlay.sheet .worn .btn.row { color: var(--gold-hi); }

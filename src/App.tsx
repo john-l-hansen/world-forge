@@ -2,6 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CreatorScreen, freshCreator, type CreatorMemory } from './creator-ui/CreatorScreen';
 import { GameScreen } from './ui/GameScreen';
 import { loadWorld, loadWorldText, type LoadResult } from './world/load';
+import { looksLikeSave, readSaveText, type ReadSaveResult } from './engine/save';
+import type { SessionState } from './engine/types';
+import { latestSlot, readSlot, type SlotId } from './game/saves';
+import { pushLog } from './game/store';
 import { WORLDS } from './worlds';
 
 /** The adventure named in the address (#party), or the first on the list. */
@@ -18,6 +22,23 @@ interface OpenedFile {
   result: LoadResult;
   /** Made in the creator: going back from it returns there. */
   created?: boolean;
+  /** Opened from a save: the game resumes from this state. */
+  session?: SessionState;
+  seed?: number;
+}
+
+/** A save that passed its checks, as an opened world. */
+function fromSave(name: string, serial: number, read: Extract<ReadSaveResult, { ok: true }>): OpenedFile {
+  return { name, serial, result: { ok: true, world: read.world }, created: read.save.created, session: read.session, seed: read.save.seed };
+}
+
+/** Whether the text is a save rather than a world file. Text that is not JSON is neither; the world loader reports it. */
+function isSaveText(text: string): boolean {
+  try {
+    return looksLikeSave(JSON.parse(text));
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -61,7 +82,31 @@ export function App() {
   const readFile = useCallback(async (file: File | undefined) => {
     if (!file) return;
     const text = await file.text();
+    // A save file holds its own world; it is checked the same way and resumes where it was left.
+    if (isSaveText(text)) {
+      const read = readSaveText(text);
+      setOpened((previous) => {
+        const serial = (previous?.serial ?? 0) + 1;
+        return read.ok ? fromSave(file.name, serial, read) : { name: file.name, serial, result: { ok: false, issues: read.issues } };
+      });
+      return;
+    }
     setOpened((previous) => ({ name: file.name, serial: (previous?.serial ?? 0) + 1, result: loadWorldText(text) }));
+  }, []);
+
+  /** Load the game in a save slot, or the most recent one. A save that fails its checks is reported, never played. */
+  const loadSlot = useCallback((slot?: SlotId) => {
+    const which = slot ?? latestSlot()?.slot;
+    const read = which ? readSlot(which) : null;
+    if (!read) {
+      pushLog('There is no saved game.', 'warn');
+      return;
+    }
+    if (!read.ok) {
+      pushLog(`The saved game could not be loaded: ${read.issues[0]?.message ?? 'it is damaged.'}`, 'warn');
+      return;
+    }
+    setOpened((previous) => fromSave(read.save.label, (previous?.serial ?? 0) + 1, read));
   }, []);
 
   const input = (
@@ -123,8 +168,11 @@ export function App() {
         world={loaded.world}
         choices={WORLDS}
         current={opened ? '' : entry.key}
-        // A made world opens on its own title, as a reveal; a file goes straight in.
-        autoBegin={opened ? !opened.created : selection.chosen}
+        // A made world opens on its own title, as a reveal; a file or a save goes straight in.
+        autoBegin={opened ? Boolean(opened.session) || !opened.created : selection.chosen}
+        resume={opened?.session}
+        seed={opened?.seed}
+        onLoadSave={loadSlot}
         created={Boolean(opened?.created)}
         onChoose={choose}
         onOpenFile={openFile}

@@ -8,7 +8,8 @@ import { CHEST_H, CHEST_W, GOBLIN_H, GOBLIN_POSES, GOBLIN_W, PROP_SIZE, SHIELD_H
 import { Pix } from '../art/pixel';
 import { drawUndead } from '../art/undead';
 import { activeMember, isGuarding } from '../engine/sim';
-import { Dust } from './dust';
+import { BLOOD_SPRAY, BONE_SPRAY, Dust, ICHOR_SPRAY } from './dust';
+import { StainLayer, type GoreLevel } from './stains';
 import { BUMP_TICKS, ENEMY_ATTACK_POSE_TICKS, MOVE_TICKS, TURN_TICKS, type EnemyState, type GameEvent, type SessionState } from '../engine/types';
 import { DIR_X, DIR_Y, type CompiledWorld } from '../world/compile';
 import { DOOR_HEIGHT, buildAtlas, buildDoorGeometry, buildDungeonGeometry, TILE, buildSecretGeometry } from './dungeon';
@@ -52,6 +53,10 @@ function billboard(width: number, height: number, material: THREE.Material): THR
 interface EnemyView {
   mesh: THREE.Mesh;
   material: THREE.ShaderMaterial;
+  /** What its wounds spill. */
+  blood: 'red' | 'dark' | 'none';
+  /** Height of the sprite, for aiming sprays at the body. */
+  height: number;
 }
 
 interface DoorView {
@@ -107,6 +112,10 @@ export class DungeonRenderer {
   private enemies = new Map<string, EnemyView>();
   private doors: DoorView[] = [];
   private dust = new Dust();
+  /** Blood on the floor, from the session's stains. */
+  private stainLayer: StainLayer;
+  /** Full shows sprays, pools and torn bodies; low shows dark stains and plain deaths. */
+  gore: GoreLevel = 'full';
   /** Hidden ways: each wall's cell and orientation, for aiming the dust when one is struck. */
   private drafts: { id: string; x: number; y: number; axis: 'ns' | 'ew' }[] = [];
   /** Where the party stood at the last frame, for aiming effects. */
@@ -297,6 +306,10 @@ export class DungeonRenderer {
       this.disposables.push(material, mesh.geometry, sparkleMaterial, sparkle.geometry);
     }
 
+    // --- Blood on the floor ---------------------------------------------------
+    this.stainLayer = new StainLayer(world, this.shared);
+    this.scene.add(this.stainLayer.mesh);
+
     // --- Enemies -------------------------------------------------------------
     const enemySheets = new Map<EnemyVisual, THREE.Texture>();
     for (const spawn of world.spawns) {
@@ -312,7 +325,8 @@ export class DungeonRenderer {
       const mesh = billboard((height * GOBLIN_W) / GOBLIN_H, height, material);
       this.scene.add(mesh);
       this.facers.push(mesh);
-      this.enemies.set(spawn.instanceId, { mesh, material });
+      const blood = world.def.enemies.find((e) => e.id === spawn.enemyId)!.blood;
+      this.enemies.set(spawn.instanceId, { mesh, material, blood, height });
       this.disposables.push(material, mesh.geometry);
     }
 
@@ -366,6 +380,7 @@ export class DungeonRenderer {
       case 'attack.hit':
         // A companion's blow nudges the view; your own jolts it.
         this.hitKick = Math.max(this.hitKick, mine ? 1 : 0.3);
+        this.wound(event.enemyId, event.killed ? 3 : event.kind === 'heavy' || event.critical ? 2 : 1);
         break;
       case 'attack.clang':
         if (mine) this.hitKick = 0.6;
@@ -399,6 +414,13 @@ export class DungeonRenderer {
         break;
       case 'guard.broken':
       case 'enemy.attack.hit':
+        // Your own blood, thrown up in front of your eyes.
+        if (this.gore === 'full' && (driven === undefined || event.target === driven) && event.damage > 0) {
+          const ahead = this.yaw;
+          const fx = this.camera.position.x - Math.sin(ahead) * 0.35;
+          const fz = this.camera.position.z - Math.cos(ahead) * 0.35;
+          this.dust.spray(fx, this.camera.position.y - 0.1, fz, -Math.sin(ahead), -Math.cos(ahead), 10 + Math.min(20, event.damage), 0.6, BLOOD_SPRAY);
+        }
         // The whole party shares one view: a blow on a companion is felt, but less.
         if (driven === undefined || event.target === driven) {
           this.hurtKick = 1;
@@ -415,6 +437,7 @@ export class DungeonRenderer {
         this.healFlash = 1;
         break;
       case 'spell.hit': {
+        this.wound(event.enemyId, event.killed ? 3 : 2);
         const spell = this.world.def.spells.find((sp) => sp.id === event.spellId);
         this.boltMaterial.color.setHex(BOLT_COLOUR[spell?.shape === 'bolt' ? spell.element : 'lightning']);
         // Your own spell leaves your right hand; a companion's comes from their side of the party,
@@ -475,6 +498,7 @@ export class DungeonRenderer {
     this.partyAt = { x: state.party.x, y: state.party.y };
     if (this.partyOrder.length !== state.party.members.length) this.partyOrder = state.party.members.map((m) => m.id);
     this.dust.update(dt);
+    this.stainLayer.update(state.stains, this.gore);
 
     for (const enemy of state.enemies) this.placeEnemy(enemy, now);
     this.placeBolt(dt);
@@ -557,7 +581,7 @@ export class DungeonRenderer {
     const sinceHit = now - enemy.lastHitTick;
 
     if (enemy.ai === 'dead') {
-      pose = 'dead';
+      pose = enemy.gore && this.gore === 'full' ? 'gore' : 'dead';
     } else if (sinceHit < 10 || enemy.ai === 'stagger') {
       pose = 'hurt';
       // Knocked back a little, away from the party.
@@ -759,7 +783,28 @@ export class DungeonRenderer {
     this.sword.rotation.z = angle;
   }
 
+  /** Blood (or bone) thrown from an enemy as a blow lands, harder for a bigger wound. */
+  private wound(enemyId: string, size: 1 | 2 | 3) {
+    const view = this.enemies.get(enemyId);
+    if (!view || this.gore !== 'full') return;
+    const p = view.mesh.position;
+    // Away from the party, which is where the blow came from.
+    let dx = p.x - this.partyAt.x;
+    let dz = p.z - this.partyAt.y;
+    const len = Math.hypot(dx, dz) || 1;
+    dx /= len;
+    dz /= len;
+    const palette = view.blood === 'none' ? BONE_SPRAY : view.blood === 'dark' ? ICHOR_SPRAY : BLOOD_SPRAY;
+    this.dust.spray(p.x - dx * 0.15, view.height * 0.55, p.z - dz * 0.15, dx, dz, [0, 14, 30, 70][size], [0, 0.8, 1.1, 1.5][size], palette);
+  }
+
+  /** How many stains are on the floor. For tests. */
+  get stainCount(): number {
+    return this.stainLayer.count;
+  }
+
   dispose() {
+    this.stainLayer.dispose();
     this.dust.dispose();
     for (const d of this.disposables) d.dispose();
     this.gl.dispose();

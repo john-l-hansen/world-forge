@@ -230,3 +230,40 @@ export function makePresentMaterial(frame: THREE.Texture): THREE.ShaderMaterial 
     `,
   });
 }
+
+/** Decals lying on the floor, such as blood. Light comes per vertex from the cell beneath. */
+export function makeDecalMaterial(sheet: THREE.Texture, shared: SharedUniforms): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    uniforms: { ...shared, uMap: { value: sheet } },
+    side: THREE.DoubleSide,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+    polygonOffsetUnits: -2,
+    vertexShader: /* glsl */ `
+      attribute float aLight;
+      varying vec2 vUv;
+      varying float vLight;
+      varying float vDist;
+      void main() {
+        vUv = uv;
+        vLight = aLight;
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        vDist = length(mv.xyz);
+        gl_Position = projectionMatrix * mv;
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      uniform sampler2D uMap;
+      varying vec2 vUv;
+      varying float vLight;
+      varying float vDist;
+      ${LIGHTING}
+      void main() {
+        vec4 tex = texture2D(uMap, vUv);
+        if (tex.a < 0.5) discard;
+        gl_FragColor = vec4(tex.rgb * shadeLight(vLight, vDist) * ${TORCH_TINT}, 1.0);
+      }
+    `,
+  });
+}

@@ -38,6 +38,33 @@ export const AI_HEAL_THRESHOLD = 0.6;
 
 export type AttackKind = 'light' | 'heavy';
 
+/** What a wound leaves on the floor: red blood, dark ichor, or chips of bone from the dead that do not bleed. */
+export type StainKind = 'red' | 'dark' | 'bone';
+
+/** Blood where it fell. It stays, and it is saved with the world. */
+export interface Stain {
+  x: number;
+  y: number;
+  kind: StainKind;
+  /** 1 a few drops, 2 a spatter, 3 a pool. */
+  size: 1 | 2 | 3;
+  /** Which of the drawn shapes, and where in the cell. From a hash, never from the dice. */
+  v: number;
+  tick: number;
+}
+
+/** The floor keeps this many stains; the oldest dry away first. */
+export const MAX_STAINS = 160;
+
+/** Lasting harm to one part of the body. */
+export type InjuryKind = 'arm' | 'leg' | 'head' | 'ribs';
+
+export interface Injury {
+  kind: InjuryKind;
+  /** The tick it heals by. */
+  until: number;
+}
+
 export type MoveDir = 'forward' | 'back' | 'left' | 'right';
 
 /**
@@ -105,6 +132,8 @@ export interface PartyMember {
   /** Tick the guard last became effective, which decides block or parry. */
   blockStart: number;
   action: MemberAction;
+  /** Wounds that have not healed yet. */
+  injuries: Injury[];
 }
 
 export interface PartyState {
@@ -150,6 +179,8 @@ export interface EnemyState {
   attackId: string;
   alerted: boolean;
   lastHitTick: number;
+  /** Killed by a blow that tore it apart, not merely felled. */
+  gore: boolean;
 }
 
 export interface QuestProgress {
@@ -159,7 +190,7 @@ export interface QuestProgress {
 }
 
 export interface SessionState {
-  stateVersion: 8;
+  stateVersion: 9;
   worldId: string;
   tick: number;
   rng: number;
@@ -186,6 +217,8 @@ export interface SessionState {
   explored: number[];
   currentRoomId: string | null;
   visitedRoomIds: string[];
+  /** Blood on the floor, oldest first. */
+  stains: Stain[];
 }
 
 export type BumpReason = 'wall' | 'door' | 'enemy' | 'object';

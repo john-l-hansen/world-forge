@@ -315,9 +315,16 @@ describe('progression checks in validation', () => {
     const saved = JSON.parse(serializeSession(createSession(world, 3)));
     saved.stateVersion = 7;
     delete saved.wallDamage;
+    delete saved.stains;
+    for (const e of saved.enemies) delete e.gore;
+    for (const m of saved.party.members) delete m.injuries;
     const restored = deserializeSession(JSON.stringify(saved));
-    expect(restored.stateVersion).toBe(8);
+    // Carried through every version since: walls, then blood and injuries.
+    expect(restored.stateVersion).toBe(9);
     expect(restored.wallDamage).toEqual({});
+    expect(restored.stains).toEqual([]);
+    expect(restored.enemies.every((e) => e.gore === false)).toBe(true);
+    expect(restored.party.members.every((m) => m.injuries.length === 0)).toBe(true);
   });
 
   it('rejects a chest or pickup with a missing item', () => {

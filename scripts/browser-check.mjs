@@ -326,6 +326,19 @@ check(/reaches level 2/i.test(h.text) && /LV 2/i.test(h.text), 'the level-up is 
 const hpAfterGoblin = s.hp;
 const maxAfterGoblin = s.maxHp;
 
+// --- Blood -----------------------------------------------------------------------
+const blood = await page.evaluate(() => ({ stains: window.__worldForge.state.stains.length, drawn: window.__worldForge.renderer.stainCount, gore: window.__worldForge.renderer.gore }));
+check(blood.stains > 0 && blood.drawn === blood.stains, `the fight left blood on the floor, and all of it is drawn (${blood.stains} stains, ${blood.drawn} drawn)`);
+check(blood.gore === 'full', 'gore is full by default');
+check(!(await page.evaluate(() => document.querySelector('.floater') !== null && /^\d+!?$/.test(document.querySelector('.floater').innerText.trim()))), 'damage numbers are off by default');
+await shot('07c-blood');
+await key('KeyG', 300);
+check((await page.evaluate(() => window.__worldForge.renderer.gore)) === 'low' && /Gore: low/i.test((await hud()).text), 'G turns gore down');
+await page.waitForTimeout(100);
+await shot('07d-gore-low');
+await key('KeyG', 300);
+check((await page.evaluate(() => window.__worldForge.renderer.gore)) === 'full', 'G turns it back up');
+
 // --- Save and load -------------------------------------------------------------
 await key('F5', 300);
 check(/Game saved/i.test((await hud()).text), 'F5 saves the game');
@@ -581,6 +594,8 @@ s = await state();
 h = await hud();
 check(s.members.length === 4 && (await page.evaluate(() => location.hash)) === '#party', 'pressing 2 on the title loads the party of four');
 check(h.overlay === null && s.tick > 0, 'choosing an adventure starts it at once');
+await key('KeyV', 300);
+check(/Damage numbers: shown/i.test((await hud()).text), 'V turns floating damage numbers on');
 check(h.cells.map((c) => c.name).join(',').toUpperCase() === 'BRANNOC,SELA,ILVANE,MAREN', `the party panel shows all four (${h.cells.map((c) => c.name).join(', ')})`);
 check(h.cells[0].active && h.cells.filter((c) => c.active).length === 1 && s.held === 'short_sword', 'the party starts with the fighter being driven');
 check(h.spells.length === 0, 'a character with no spells shows no spell bar');

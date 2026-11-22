@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "0.9.0",
+  "schemaVersion": "0.10.0",
   "world": {
     "id": "world_sunken_crypt",
     "name": "The Sunken Crypt",
@@ -350,6 +350,7 @@
       "staggerTicks": 16,
       "behaviour": "melee_aggressive",
       "visualAssetId": "skeleton",
+      "blood": "none",
       "poise": 2,
       "alertText": "Bones rattle upright in the dark!",
       "attacks": [
@@ -394,6 +395,7 @@
       "staggerTicks": 6,
       "behaviour": "melee_aggressive",
       "visualAssetId": "warden",
+      "blood": "none",
       "poise": 5,
       "alertText": "The Warden turns its hollow gaze on you.",
       "attacks": [

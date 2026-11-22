@@ -29,6 +29,7 @@ import {
   GUARD_BREAK_DAMAGE_SHARE,
   HIT_STOP_TICKS,
   INPUT_BUFFER_TICKS,
+  MAX_STAINS,
   MOVE_TICKS,
   PARRY_STAGGER_TICKS,
   PARRY_WINDOW_TICKS,
@@ -45,6 +46,7 @@ import {
   type MoveDir,
   type PartyMember,
   type SessionState,
+  type StainKind,
 } from './types';
 
 const NEVER = -1000;
@@ -84,6 +86,7 @@ export function createSession(world: CompiledWorld, seed = 1): SessionState {
       blocking: false,
       blockStart: NEVER,
       action: { kind: 'idle' },
+      injuries: [],
     };
   });
 
@@ -108,6 +111,7 @@ export function createSession(world: CompiledWorld, seed = 1): SessionState {
       attackId: e.attacks[0].id,
       alerted: false,
       lastHitTick: NEVER,
+      gore: false,
     };
   });
 
@@ -119,7 +123,7 @@ export function createSession(world: CompiledWorld, seed = 1): SessionState {
 
   const startRoom = roomAtCell(world, world.start.x, world.start.y);
   const state: SessionState = {
-    stateVersion: 8,
+    stateVersion: 9,
     worldId: def.world.id,
     tick: 0,
     rng: seed | 0,
@@ -154,6 +158,7 @@ export function createSession(world: CompiledWorld, seed = 1): SessionState {
     explored: new Array(world.width * world.height).fill(0),
     currentRoomId: startRoom ? startRoom.id : null,
     visitedRoomIds: startRoom ? [startRoom.id] : [],
+    stains: [],
   };
   reveal(state, world);
   return state;
@@ -164,11 +169,48 @@ export function serializeSession(state: SessionState): string {
 }
 
 export function deserializeSession(json: string): SessionState {
-  const state = JSON.parse(json) as SessionState | (Omit<SessionState, 'stateVersion' | 'wallDamage'> & { stateVersion: 7 });
-  // Version 7 had no breakable walls; nothing else changed.
-  if (state.stateVersion === 7) return { ...state, stateVersion: 8, wallDamage: {} };
-  if (state.stateVersion !== 8) throw new Error(`Unsupported session version ${String((state as { stateVersion: unknown }).stateVersion)}`);
-  return state;
+  // Older sessions are carried forward one version at a time.
+  let state = JSON.parse(json) as { stateVersion: unknown } & Record<string, unknown>;
+  if (state.stateVersion === 7) {
+    // Version 7 had no breakable walls; nothing else changed.
+    state = { ...state, stateVersion: 8, wallDamage: {} };
+  }
+  if (state.stateVersion === 8) {
+    // Version 9 added blood on the floor, gore deaths and lasting injuries. Nothing existing changes.
+    const old = state as unknown as Omit<SessionState, 'stateVersion'>;
+    state = {
+      ...state,
+      stateVersion: 9,
+      stains: [],
+      enemies: old.enemies.map((e) => ({ ...e, gore: false })),
+      party: { ...old.party, members: old.party.members.map((m) => ({ ...m, injuries: [] })) },
+    };
+  }
+  if (state.stateVersion !== 9) throw new Error(`Unsupported session version ${String(state.stateVersion)}`);
+  return state as unknown as SessionState;
+}
+
+/** A repeatable number from where and when something happened, so effects never spend the dice. */
+function hashOf(...parts: number[]): number {
+  let h = 0x811c9dc5;
+  for (const n of parts) h = Math.imul(h ^ (n | 0), 0x01000193);
+  return (h ^ (h >>> 15)) >>> 0;
+}
+
+/** Leave blood on the floor of a cell. A cell holds at most four stains; more makes the biggest one bigger. */
+function bleed(state: SessionState, x: number, y: number, kind: StainKind, size: 1 | 2 | 3) {
+  const here = state.stains.filter((st) => st.x === x && st.y === y);
+  if (here.length >= 4) {
+    const biggest = here.reduce((a, b) => (b.size > a.size ? b : a));
+    biggest.size = Math.min(3, Math.max(biggest.size, size) + (size >= 2 ? 1 : 0)) as 1 | 2 | 3;
+    return;
+  }
+  state.stains.push({ x, y, kind, size, v: hashOf(state.tick, x, y, state.stains.length) % 64, tick: state.tick });
+  if (state.stains.length > MAX_STAINS) state.stains.shift();
+}
+
+function bloodOf(def: EnemyDef): StainKind {
+  return def.blood === 'none' ? 'bone' : def.blood;
 }
 
 // ---------------------------------------------------------------------------
@@ -754,6 +796,9 @@ function resolvePartyAttacks(state: SessionState, world: CompiledWorld, events: 
         enemy.lastHitTick = state.tick;
         if (!enemy.alerted) alertEnemy(state, world, enemy, events);
         const killed = enemy.hp === 0;
+        // A heavy or critical killing blow tears the body apart.
+        if (killed) enemy.gore = action.attack === 'heavy' || critical;
+        bleed(state, enemy.x, enemy.y, bloodOf(def), killed ? 3 : heavy || critical ? 2 : 1);
         events.push({ type: 'attack.hit', actor: member.id, enemyId: enemy.id, damage, killed, kind: action.attack, critical });
         // The world only holds its breath for the player's own blows.
         if (member.controller !== 'ai') state.hitStop = heavy ? HIT_STOP_TICKS + 3 : HIT_STOP_TICKS;
@@ -842,10 +887,14 @@ function resolveSpell(state: SessionState, world: CompiledWorld, member: PartyMe
   const def = enemyDef(world, enemy);
   // Magic ignores armour, and a keen mind sharpens it.
   const damage = Math.max(1, randomInt(state, spell.damage.min, spell.damage.max) + Math.max(0, modifier(member.attributes.intelligence)));
+  const before = enemy.hp;
   enemy.hp = Math.max(0, enemy.hp - damage);
   enemy.lastHitTick = state.tick;
   if (!enemy.alerted) alertEnemy(state, world, enemy, events);
   const killed = enemy.hp === 0;
+  // A spell that does twice what was needed leaves little behind.
+  if (killed) enemy.gore = damage >= before * 2;
+  bleed(state, enemy.x, enemy.y, bloodOf(def), killed ? 3 : 2);
   events.push({ type: 'spell.hit', actor: member.id, spellId: spell.id, enemyId: enemy.id, damage, killed });
   if (member.controller !== 'ai') state.hitStop = HIT_STOP_TICKS + 2;
   if (killed) killEnemy(state, world, enemy, events);
@@ -1120,6 +1169,7 @@ function resolveEnemyAttack(state: SessionState, world: CompiledWorld, enemy: En
         damage = guard.shieldId ? Math.round(rolled * guard.damageShare) : Math.max(1, Math.ceil(rolled * guard.damageShare));
         spendStamina(state, target, guard.staminaCost);
         target.hp = Math.max(0, target.hp - damage);
+        if (damage > 0) bleed(state, p.x, p.y, 'red', 1);
         events.push({ type: 'attack.blocked', enemyId: enemy.id, target: target.id, damage, ...shield });
       } else {
         // Too tired to hold the guard: it is knocked aside.
@@ -1127,13 +1177,18 @@ function resolveEnemyAttack(state: SessionState, world: CompiledWorld, enemy: En
         spendStamina(state, target, target.stamina);
         target.blocking = false;
         target.hp = Math.max(0, target.hp - damage);
+        bleed(state, p.x, p.y, 'red', 1);
         events.push({ type: 'guard.broken', enemyId: enemy.id, target: target.id, damage, ...shield });
       }
     } else {
       target.hp = Math.max(0, target.hp - damage);
+      bleed(state, p.x, p.y, 'red', damage >= target.maxHp * 0.25 ? 2 : 1);
       events.push({ type: 'enemy.attack.hit', enemyId: enemy.id, target: target.id, damage, attackId: attack.id });
     }
-    if (target.hp === 0) memberFell(state, target, events);
+    if (target.hp === 0) {
+      bleed(state, p.x, p.y, 'red', 3);
+      memberFell(state, target, events);
+    }
   }
 
   if (!p.members.some((m) => m.hp > 0)) {

@@ -105,6 +105,14 @@ export function GameScreen({ world, choices, current, autoBegin, onChoose, onOpe
         game.toggleMute();
         return;
       }
+      if (e.code === 'KeyG' && current === 'playing') {
+        game.toggleGore();
+        return;
+      }
+      if (e.code === 'KeyV' && current === 'playing') {
+        game.toggleNumbers();
+        return;
+      }
       if (current === 'dead') {
         if (e.code === 'KeyR') game.restart();
         else if (e.code === 'KeyL' && latestSlot()) onLoadSave();

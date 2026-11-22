@@ -11,12 +11,12 @@ import type { EnemyKind, PlanCharacter } from './plan';
 const ENEMIES: Record<EnemyKind, EnemyDef> = {
   goblin: {
     id: 'enemy_goblin', name: 'Goblin', description: 'Quick, mean and never as alone as it looks.', archetype: 'goblin', health: 24, defence: 0, moveTicks: 26,
-    sightRange: 6, staggerTicks: 14, behaviour: 'melee_aggressive', visualAssetId: 'goblin', poise: 2, xp: 40,
+    sightRange: 6, staggerTicks: 14, behaviour: 'melee_aggressive', visualAssetId: 'goblin', blood: 'red', poise: 2, xp: 40,
     attacks: [{ id: 'chop', name: 'chop', damage: { min: 4, max: 7 }, telegraphTicks: 34, recoverTicks: 40, pattern: 'front', blockable: true, weight: 1 }],
   },
   goblin_chief: {
     id: 'enemy_goblin_chief', name: 'Goblin Chief', description: 'Twice the weight of his kin and three times as cruel.', archetype: 'goblin_chief', health: 60, defence: 1,
-    moveTicks: 32, sightRange: 7, staggerTicks: 6, behaviour: 'melee_aggressive', visualAssetId: 'goblin_chief', poise: 4, xp: 150,
+    moveTicks: 32, sightRange: 7, staggerTicks: 6, behaviour: 'melee_aggressive', visualAssetId: 'goblin_chief', blood: 'red', poise: 4, xp: 150,
     attacks: [
       { id: 'cleave', name: 'cleave', damage: { min: 7, max: 11 }, telegraphTicks: 44, recoverTicks: 46, pattern: 'front', blockable: true, weight: 2 },
       { id: 'sweep', name: 'great sweep', damage: { min: 9, max: 13 }, telegraphTicks: 58, recoverTicks: 56, pattern: 'sweep', blockable: false, weight: 1 },
@@ -24,7 +24,7 @@ const ENEMIES: Record<EnemyKind, EnemyDef> = {
   },
   skeleton: {
     id: 'enemy_skeleton', name: 'Skeleton', description: 'Dry, quick and past caring.', archetype: 'skeleton', health: 20, defence: 0, moveTicks: 22, sightRange: 6,
-    staggerTicks: 16, behaviour: 'melee_aggressive', visualAssetId: 'skeleton', poise: 2, xp: 30, alertText: 'Bones rattle upright in the dark!',
+    staggerTicks: 16, behaviour: 'melee_aggressive', visualAssetId: 'skeleton', blood: 'none', poise: 2, xp: 30, alertText: 'Bones rattle upright in the dark!',
     attacks: [
       { id: 'slash', name: 'slash', damage: { min: 3, max: 6 }, telegraphTicks: 28, recoverTicks: 34, pattern: 'front', blockable: true, weight: 3 },
       { id: 'rake', name: 'raking cut', damage: { min: 4, max: 7 }, telegraphTicks: 40, recoverTicks: 44, pattern: 'sweep', blockable: true, weight: 1 },
@@ -32,7 +32,7 @@ const ENEMIES: Record<EnemyKind, EnemyDef> = {
   },
   warden: {
     id: 'enemy_warden', name: 'Warden', description: 'It was set to guard this place, and nobody told it to stop.', archetype: 'warden', health: 110, defence: 2, moveTicks: 34,
-    sightRange: 7, staggerTicks: 6, behaviour: 'melee_aggressive', visualAssetId: 'warden', poise: 5, xp: 200, alertText: 'The Warden turns its hollow gaze on you.',
+    sightRange: 7, staggerTicks: 6, behaviour: 'melee_aggressive', visualAssetId: 'warden', blood: 'none', poise: 5, xp: 200, alertText: 'The Warden turns its hollow gaze on you.',
     attacks: [
       { id: 'crush', name: 'crush', damage: { min: 8, max: 12 }, telegraphTicks: 46, recoverTicks: 44, pattern: 'front', blockable: true, weight: 2 },
       { id: 'reap', name: 'reaping sweep', damage: { min: 10, max: 14 }, telegraphTicks: 60, recoverTicks: 56, pattern: 'sweep', blockable: false, weight: 1 },

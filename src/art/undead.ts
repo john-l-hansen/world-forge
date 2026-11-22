@@ -4,7 +4,7 @@
  * enemy alike.
  */
 import { EYE_RED, INK, IRON, RUST } from './palette';
-import { Pix, type Ramp } from './pixel';
+import { Pix, hash2, type Ramp } from './pixel';
 import { GOBLIN_H, GOBLIN_W, type GoblinPose } from './sprites';
 
 export type UndeadVariant = 'skeleton' | 'warden';
@@ -14,6 +14,7 @@ const SHROUD: Ramp = [0x121018, 0x1e1a28, 0x2e283c, 0x443c56];
 const HOLLOW = 0x16131a;
 const COLD_EYE = 0x7fd0ff;
 const limb: Ramp = [BONES[1], BONES[2], BONES[3]];
+const hash = (a: number, b: number) => hash2(a, b, 57);
 
 /** A notched old blade from the hand to the tip. The Warden's is a heavy hooked glaive. */
 function blade(p: Pix, hx: number, hy: number, tx: number, ty: number, heavy: boolean) {
@@ -85,6 +86,29 @@ export function drawUndead(pose: GoblinPose, variant: UndeadVariant): Pix {
   const warden = variant === 'warden';
   const p = new Pix(GOBLIN_W, GOBLIN_H);
   const cx = 32;
+
+  if (pose === 'gore') {
+    // Smashed apart: bones flung wide, the skull caved in, dust where the rest was.
+    for (let i = 0; i < 26; i++) p.set(6 + hash(i, 1) * 54, 62 + hash(1, i) * 9, i % 3 ? BONES[0] : BONES[1]);
+    if (warden) p.poly([[10, 66], [26, 60], [44, 63], [58, 68], [30, 70]], SHROUD[1]);
+    p.limb(14, 69, 24, 66, limb, 3);
+    p.limb(40, 70, 52, 68, limb, 3);
+    p.limb(28, 64, 33, 70, limb, 2);
+    p.limb(54, 63, 60, 66, limb, 2);
+    for (let i = 0; i < 3; i++) p.line(30 + i * 3, 60, 31 + i * 3, 64, BONES[3], 1);
+    p.line(44, 61, 47, 64, BONES[2], 1);
+    // The skull, split by the blow.
+    p.shaded(20, 62, 6.5, 5.5, [BONES[1], BONES[2], BONES[3], BONES[4]]);
+    p.line(19, 56, 22, 66, HOLLOW, 1);
+    p.ellipse(17.5, 62, 1.6, 1.8, HOLLOW);
+    p.rect(17, 66, 3, 1, HOLLOW);
+    p.set(11, 64, BONES[3]);
+    p.set(27, 58, BONES[3]);
+    if (warden) p.rect(48, 66, 9, 2, RUST[2]);
+    blade(p, 40, 69, 58, 70, warden);
+    p.outline(INK);
+    return p;
+  }
 
   if (pose === 'dead') {
     // A heap of bones. No blood: there was none left.

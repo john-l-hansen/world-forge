@@ -697,8 +697,8 @@ export function TitleOverlay({
         <dd>Drink, read</dd>
         <dt>B / C</dt>
         <dd>Journal, sheet</dd>
-        <dt>M</dt>
-        <dd>Sound</dd>
+        <dt>M / G</dt>
+        <dd>Sound, gore</dd>
         <dt>Tab</dt>
         <dd>Next character</dd>
         <dt>1 - 4</dt>

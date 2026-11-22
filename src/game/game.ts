@@ -15,6 +15,7 @@ import { CLASSES, ATTRIBUTES } from '../engine/classes';
 import { criticalChance, damageBonus, experienceForLevel, modifier } from '../engine/stats';
 import { makeSave } from '../engine/save';
 import { writeSlot, type SlotId } from './saves';
+import { getSettings, updateSettings } from './settings';
 import { pushFloater, pushLog, useHud, type BeltItem, type PartyView, type QuestView, type SheetView, type SpellView } from './store';
 
 const TICK_MS = 1000 / TICKS_PER_SECOND;
@@ -62,8 +63,24 @@ export class Game {
     this.created = opts.created ?? false;
     this.resumed = Boolean(opts.resume);
     this.state = opts.resume ?? createSession(world, seed);
+    this.renderer.gore = getSettings().gore;
     this.resetHud('title');
     this.raf = requestAnimationFrame(this.frame);
+  }
+
+  /** Switch between full gore and the lower setting. A display choice: the world is unchanged. */
+  toggleGore() {
+    const gore = getSettings().gore === 'full' ? 'low' : 'full';
+    updateSettings({ gore });
+    this.renderer.gore = gore;
+    pushLog(gore === 'full' ? 'Gore: full.' : 'Gore: low. Blood shows as old stains; the dead fall whole.', 'plain');
+  }
+
+  /** Show or hide floating damage numbers. */
+  toggleNumbers() {
+    const numbers = !getSettings().numbers;
+    updateSettings({ numbers });
+    pushLog(numbers ? 'Damage numbers: shown.' : 'Damage numbers: hidden.', 'plain');
   }
 
   /** Write the whole world to a save slot. Says in the log whether it worked. */
@@ -331,6 +348,7 @@ export class Game {
         break;
       case 'attack.hit':
         this.struck[event.actor] = (this.struck[event.actor] ?? 0) + 1;
+        if (!getSettings().numbers) break;
         if (event.actor === driven) pushFloater(`${event.damage}${event.critical ? '!' : ''}`, event.kind === 'heavy' || event.critical ? 'heavy' : 'dealt');
         else {
           // A companion's blow carries their name, so it is clear who struck.
@@ -341,7 +359,7 @@ export class Game {
       case 'spell.healed': {
         this.mended[event.target] = (this.mended[event.target] ?? 0) + 1;
         const name = this.world.def.characters.find((c) => c.id === event.target)?.name ?? '';
-        pushFloater(event.target === driven ? `+${event.healed}` : `+${event.healed} ${name}`, 'healed');
+        if (getSettings().numbers) pushFloater(event.target === driven ? `+${event.healed}` : `+${event.healed} ${name}`, 'healed');
         break;
       }
       case 'party.control':
@@ -352,7 +370,7 @@ export class Game {
         pushFloater(`${this.world.def.characters.find((c) => c.id === event.actor)?.name ?? 'A companion'} falls!`, 'taken', 1400);
         break;
       case 'spell.hit':
-        pushFloater(String(event.damage), 'spell');
+        if (getSettings().numbers) pushFloater(String(event.damage), 'spell');
         break;
       case 'spell.cast':
         this.syncPack();
@@ -368,11 +386,11 @@ export class Game {
         pushFloater('Parry!', 'parry');
         break;
       case 'attack.blocked':
-        pushFloater(event.damage === 0 ? 'Blocked' : `-${event.damage}`, 'block');
+        pushFloater(event.damage === 0 || !getSettings().numbers ? 'Blocked' : `-${event.damage}`, 'block');
         this.tookBlow(event.target);
         break;
       case 'guard.broken':
-        pushFloater(`-${event.damage}`, 'taken');
+        pushFloater(getSettings().numbers ? `-${event.damage}` : 'Guard broken!', 'taken');
         this.tookBlow(event.target);
         break;
       case 'enemy.telegraph':
@@ -383,12 +401,12 @@ export class Game {
         break;
       case 'enemy.attack.hit':
         // A companion's wound shows on their portrait; only your own fills the view.
-        if (event.target === driven) pushFloater(`-${event.damage}`, 'taken');
+        if (event.target === driven && getSettings().numbers) pushFloater(`-${event.damage}`, 'taken');
         this.tookBlow(event.target);
         break;
       case 'item.used':
         this.mended[event.actor] = (this.mended[event.actor] ?? 0) + 1;
-        pushFloater(`+${event.healed}`, 'healed');
+        if (getSettings().numbers) pushFloater(`+${event.healed}`, 'healed');
         this.syncPack();
         break;
       case 'item.gained':

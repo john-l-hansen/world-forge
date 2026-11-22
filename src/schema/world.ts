@@ -18,7 +18,7 @@
  */
 import { z } from 'zod';
 
-export const SCHEMA_VERSION = '0.9.0';
+export const SCHEMA_VERSION = '0.10.0';
 
 const id = z.string().regex(/^[a-z][a-z0-9_]*$/, 'ids are lower_snake_case');
 const cell = z.object({ x: z.number().int().min(1), y: z.number().int().min(1) });
@@ -155,6 +155,8 @@ export const EnemySchema = z.object({
   /** Names an engine-supported behaviour. Never code. */
   behaviour: z.enum(['melee_aggressive']),
   visualAssetId: z.enum(['goblin', 'goblin_chief', 'skeleton', 'warden']),
+  /** What a wound spills: red blood, dark ichor, or nothing (bone chips, for the long dead). */
+  blood: z.enum(['red', 'dark', 'none']).default('red'),
   /** The line shown when this enemy first notices the party. A plain one is used if left out. */
   alertText: z.string().min(1).optional(),
 });

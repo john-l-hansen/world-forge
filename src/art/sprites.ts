@@ -3,11 +3,25 @@
  * the held sword. Each is posed from simple shapes, then outlined in ink so
  * the silhouette stays readable at 320×200.
  */
-import { BLOOD, BONE, EYE_RED, EYE_YELLOW, FLAME, GOBLIN, GOLD, HIDE, INK, IRON, SKIN, STONE, WOOD } from './palette';
+import { BLOOD, BONE, EYE_RED, EYE_YELLOW, FLAME, FLESH, GOBLIN, GOLD, GORE, HIDE, INK, IRON, SKIN, STONE, WOOD } from './palette';
 import { Pix, hash2, type Ramp } from './pixel';
 
-export type GoblinPose = 'idle0' | 'idle1' | 'walk0' | 'walk1' | 'telegraph' | 'attack' | 'hurt' | 'dead' | 'sweep';
-export const GOBLIN_POSES: readonly GoblinPose[] = ['idle0', 'idle1', 'walk0', 'walk1', 'telegraph', 'attack', 'hurt', 'dead', 'sweep'];
+/** `gore` is a death that tore the body apart; `dead` a plain one. */
+export type GoblinPose = 'idle0' | 'idle1' | 'walk0' | 'walk1' | 'telegraph' | 'attack' | 'hurt' | 'dead' | 'sweep' | 'gore';
+export const GOBLIN_POSES: readonly GoblinPose[] = ['idle0', 'idle1', 'walk0', 'walk1', 'telegraph', 'attack', 'hurt', 'dead', 'sweep', 'gore'];
+
+/** A ragged pool: overlapping blobs, darkest where it is deepest. */
+export function bloodPool(p: Pix, cx: number, cy: number, rx: number, ry: number, seed: number) {
+  for (let i = 0; i < 7; i++) {
+    const a = hash2(seed, i, 91) * Math.PI * 2;
+    const d = hash2(i, seed + 3, 91) * 0.55;
+    p.ellipse(cx + Math.cos(a) * rx * d, cy + Math.sin(a) * ry * d, rx * (0.45 + hash2(seed + i, 7, 91) * 0.4), ry * (0.5 + hash2(7, seed + i, 91) * 0.4), GORE[1]);
+  }
+  p.ellipse(cx + rx * 0.1, cy, rx * 0.6, ry * 0.55, GORE[2]);
+  // A wet glint and a few flung drops.
+  p.set(cx - rx * 0.25, cy - ry * 0.3, GORE[4]);
+  for (let i = 0; i < 6; i++) p.set(cx + (hash2(seed, i + 20, 91) - 0.5) * rx * 2.6, cy + (hash2(i + 20, seed, 91) - 0.5) * ry * 2.4, GORE[2]);
+}
 export const GOBLIN_W = 64;
 export const GOBLIN_H = 72;
 
@@ -121,8 +135,43 @@ export function drawGoblin(pose: GoblinPose, variant: GoblinVariant = 'goblin'):
   const p = new Pix(GOBLIN_W, GOBLIN_H);
   const cx = 32;
 
+  if (pose === 'gore') {
+    // Hewn in two: the legs and hips on one side, the trunk on the other, the head
+    // thrown clear, and what was inside spilled across the gap.
+    bloodPool(p, 33, 67, 28, 4.5, 11);
+    // Lower half: hips and splayed legs.
+    p.limb(46, 64, 57, 67, limbRamp(), 5);
+    p.limb(46, 62, 56, 59, limbRamp(), 5);
+    p.shaded(44, 63, 6, 4, look.jerkin);
+    p.ellipse(39, 63.5, 1.8, 3, FLESH[1]);
+    // Upper half: the trunk, one arm flung back, torn open where it was cut.
+    p.shaded(23, 63, 8, 4.5, look.jerkin);
+    p.limb(20, 60, 15, 54, limbRamp(), 4);
+    p.ellipse(30, 63, 2.2, 3.4, FLESH[1]);
+    p.ellipse(30.5, 63, 1.2, 2.2, FLESH[2]);
+    p.set(31, 61, BONE);
+    p.set(31, 65, BONE);
+    // The gap: coils of gut over the blood.
+    for (const [x, y, r] of [[33, 66, 1.8], [35, 64.5, 1.6], [36, 67, 1.7], [34, 68.5, 1.5]] as const) {
+      p.ellipse(x, y, r, r * 0.8, FLESH[2]);
+      p.set(x - 0.6, y - 0.6, FLESH[3]);
+    }
+    // The arm, cut off at the elbow, still gripping the cleaver.
+    p.limb(48, 56, 55, 55, limbRamp(), 4);
+    p.set(47, 56, FLESH[1]);
+    cleaver(p, 55, 56, 62, 50);
+    // The head, rolled away face down, a ragged stump of neck.
+    p.shaded(7, 66, 6.5, 5, skinRamp());
+    p.poly([[3, 62], [0, 56], [7, 61]], look.g[3]);
+    p.ellipse(12.5, 66.5, 1.6, 2.4, FLESH[1]);
+    p.outline(INK);
+    // Fresh blood over the outline, so it reads as wet on top.
+    for (const [x, y] of [[38, 61], [29, 60], [24, 66], [17, 68], [45, 68], [50, 57]] as const) p.set(x, y, GORE[3]);
+    return p;
+  }
+
   if (pose === 'dead') {
-    p.ellipse(34, 68, 22, 3.4, BLOOD[0]);
+    bloodPool(p, 34, 68, 22, 3.6, 5);
     p.ellipse(30, 68, 12, 2, BLOOD[1]);
     // Legs splayed to the right, body slumped, head on the left.
     p.limb(40, 63, 54, 66, limbRamp(), 5);

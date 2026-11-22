@@ -18,6 +18,10 @@ export const SKIN: Ramp = [0x4a2c1c, 0x6b432b, 0x90603d, 0xb38053, 0xd4a374];
 export const HAIR: Ramp = [0x160f0b, 0x2a1b12, 0x432b1a];
 export const GOLD: Ramp = [0x5e4010, 0x9a701c, 0xcfa436, 0xf0d878];
 export const BLOOD: Ramp = [0x3d0b0b, 0x6e1212, 0xa01e1e];
+/** Blood as it ages: near-black clot, drying brown-red, fresh arterial red. */
+export const GORE: Ramp = [0x1a0404, 0x3d0b0b, 0x5c1010, 0x841818, 0xa82620];
+/** Opened flesh and what is inside it. */
+export const FLESH: Ramp = [0x4a1616, 0x76302a, 0x9c4c3e, 0xc0705a];
 export const BONE = 0xd8cfb4;
 export const EYE_YELLOW = 0xf2d23a;
 export const EYE_RED = 0xe0401c;

@@ -82,3 +82,14 @@ console.log('wrote .art/*.png');
   const { TILESETS } = await import('../src/art/tilesets');
   writeFileSync('.art/mine-cracks.png', encodePng(sheet(TILESETS.mine().slice(10), 3, 0x3a312a)));
 }
+
+{
+  const { drawStainSheet } = await import('../src/art/blood');
+  const { drawUndead } = await import('../src/art/undead');
+  writeFileSync('.art/stains.png', encodePng(sheet([drawStainSheet()], 3, 0x3f3223)));
+  // The deaths side by side: plain and torn apart.
+  writeFileSync(
+    '.art/deaths.png',
+    encodePng(sheet([drawGoblin('dead'), drawGoblin('gore'), drawGoblin('gore', 'goblin_chief'), drawUndead('dead', 'skeleton'), drawUndead('gore', 'skeleton'), drawUndead('gore', 'warden')], 4, 0x3f3223)),
+  );
+}

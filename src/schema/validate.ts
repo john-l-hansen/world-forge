@@ -115,6 +115,16 @@ export function migrateWorld(input: unknown): unknown {
     // 0.9.0 added shields that change a block, and walls that break. Nothing existing changes.
     data = { ...data, schemaVersion: '0.9.0' };
   }
+  if (data.schemaVersion === '0.9.0') {
+    // 0.10.0 added what an enemy bleeds. The skeletons and wardens of older worlds have no blood to spill.
+    const enemies = Array.isArray(data.enemies)
+      ? data.enemies.map((e: unknown) => {
+          const enemy = e as { visualAssetId?: unknown; blood?: unknown };
+          return enemy && typeof enemy === 'object' && enemy.blood === undefined && (enemy.visualAssetId === 'skeleton' || enemy.visualAssetId === 'warden') ? { ...enemy, blood: 'none' } : e;
+        })
+      : data.enemies;
+    data = { ...data, schemaVersion: '0.10.0', enemies };
+  }
   return data;
 }
 

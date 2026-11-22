@@ -254,12 +254,13 @@
     },
     {
       "id": "door_tunnel_cache",
-      "name": "Loose stonework",
-      "kind": "secret",
+      "name": "Cracked wall",
+      "kind": "breakable",
       "cell": {
         "x": 6,
         "y": 9
-      }
+      },
+      "toughness": 3
     }
   ],
   "enemies": [

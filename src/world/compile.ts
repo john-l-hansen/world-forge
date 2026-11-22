@@ -233,7 +233,8 @@ export function compileWorld(def: WorldDefinition): CompiledWorld {
         if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
         if (tiles[ni] === TILE_WALL || dist[ni] >= 0) continue;
         // Light must not give a secret door away by shining through it.
-        if (doorAt.get(ni)?.def.kind === 'secret') continue;
+        const hiddenKind = doorAt.get(ni)?.def.kind;
+        if (hiddenKind === 'secret' || hiddenKind === 'breakable') continue;
         dist[ni] = d + 1;
         queue.push(ni);
       }

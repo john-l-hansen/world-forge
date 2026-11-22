@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { createSession, defenceOf, deserializeSession, serializeSession, step } from '../src/engine/sim';
 import type { Command, GameEvent } from '../src/engine/types';
 import { validateWorld } from '../src/schema/validate';
-import { HERO, act, attack, face, interact, loadMines, minesData, run, walkTo } from './helpers';
+import { HERO, act, attack, face, interact, loadMines, minesData, run, smash, walkTo } from './helpers';
 
 const types = (events: GameEvent[]) => events.map((e) => e.type);
 const equip = (itemId: string): Command => ({ type: 'equip', actor: HERO, itemId });
@@ -119,7 +119,7 @@ describe('equipment', () => {
     const state = createSession(world);
     walkTo(state, world, 5, 9);
     face(state, world, 1);
-    act(state, world, interact());
+    smash(state, world);
     walkTo(state, world, 8, 9);
     face(state, world, 2);
     act(state, world, interact());

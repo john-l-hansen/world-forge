@@ -10,6 +10,7 @@ import {
   TILE_WALL,
   inBounds,
   roomAtCell,
+  type CompiledDoor,
   type CompiledWorld,
 } from '../world/compile';
 import type { BoltSpellDef, EnemyAttackDef, EnemyDef, EquipSlot, HealSpellDef, ItemDef, SpellDef, WeaponAttackDef } from '../schema/world';
@@ -118,7 +119,7 @@ export function createSession(world: CompiledWorld, seed = 1): SessionState {
 
   const startRoom = roomAtCell(world, world.start.x, world.start.y);
   const state: SessionState = {
-    stateVersion: 7,
+    stateVersion: 8,
     worldId: def.world.id,
     tick: 0,
     rng: seed | 0,
@@ -144,6 +145,7 @@ export function createSession(world: CompiledWorld, seed = 1): SessionState {
     enemies,
     doorsOpen,
     doorsUnlocked: {},
+    wallDamage: {},
     chestsOpened: {},
     pickupsTaken: {},
     inventory: {},
@@ -162,8 +164,10 @@ export function serializeSession(state: SessionState): string {
 }
 
 export function deserializeSession(json: string): SessionState {
-  const state = JSON.parse(json) as SessionState;
-  if (state.stateVersion !== 7) throw new Error(`Unsupported session version ${String(state.stateVersion)}`);
+  const state = JSON.parse(json) as SessionState | (Omit<SessionState, 'stateVersion' | 'wallDamage'> & { stateVersion: 7 });
+  // Version 7 had no breakable walls; nothing else changed.
+  if (state.stateVersion === 7) return { ...state, stateVersion: 8, wallDamage: {} };
+  if (state.stateVersion !== 8) throw new Error(`Unsupported session version ${String((state as { stateVersion: unknown }).stateVersion)}`);
   return state;
 }
 
@@ -406,6 +410,11 @@ function runCommand(state: SessionState, world: CompiledWorld, command: Command,
       const door = world.doorAt.get(front);
       if (!door || door.def.kind === 'archway') {
         events.push({ type: 'interact.nothing' });
+        return;
+      }
+      if (door.def.kind === 'breakable') {
+        // Searching a cracked wall tells you what it needs; only blows open it.
+        events.push(state.doorsOpen[door.def.id] ? { type: 'interact.nothing' } : { type: 'wall.inspected', doorId: door.def.id });
         return;
       }
       if (door.def.kind === 'secret') {
@@ -695,7 +704,8 @@ function blockReason(state: SessionState, world: CompiledWorld, x: number, y: nu
   if (world.tiles[i] === TILE_WALL) return 'wall';
   if (world.tiles[i] === TILE_DOORWAY && !isDoorOpenAt(state, world, x, y)) {
     // An undiscovered secret door feels exactly like the wall it pretends to be.
-    return world.doorAt.get(i)!.def.kind === 'secret' ? 'wall' : 'door';
+    const kind = world.doorAt.get(i)!.def.kind;
+    return kind === 'secret' || kind === 'breakable' ? 'wall' : 'door';
   }
   if (world.blocked[i]) return 'object';
   if (enemyAt(state, x, y)) return 'enemy';
@@ -765,6 +775,8 @@ function resolvePartyAttacks(state: SessionState, world: CompiledWorld, events: 
           // Never shorten a recovery: hitting an open enemy must not speed it up.
           enemy.aiEnd = Math.max(enemy.aiEnd, state.tick + staggerTicks);
         }
+      } else if (breakableAt(state, world, fx, fy)) {
+        strikeWall(state, member, breakableAt(state, world, fx, fy)!, action.attack === 'heavy', events);
       } else if (!inBounds(world, fx, fy) || world.tiles[fy * world.width + fx] === TILE_WALL || !isDoorOpenAt(state, world, fx, fy)) {
         events.push({ type: 'attack.clang', actor: member.id });
       } else {
@@ -777,6 +789,32 @@ function resolvePartyAttacks(state: SessionState, world: CompiledWorld, events: 
       if (member.blocking) member.blockStart = state.tick;
     }
   }
+}
+
+/** The breakable wall still standing at a cell, if there is one. */
+function breakableAt(state: SessionState, world: CompiledWorld, x: number, y: number): CompiledDoor | null {
+  if (!inBounds(world, x, y)) return null;
+  const door = world.doorAt.get(y * world.width + x);
+  return door && door.def.kind === 'breakable' && !state.doorsOpen[door.def.id] ? door : null;
+}
+
+/** Heavy blows chip a breakable wall until it gives way; light ones bounce off. */
+function strikeWall(state: SessionState, member: PartyMember, door: CompiledDoor, heavy: boolean, events: GameEvent[]) {
+  const id = door.def.id;
+  if (!heavy) {
+    events.push({ type: 'wall.held', doorId: id, actor: member.id });
+    return;
+  }
+  const taken = (state.wallDamage[id] ?? 0) + 1;
+  state.wallDamage[id] = taken;
+  if (member.controller !== 'ai') state.hitStop = HIT_STOP_TICKS + 3;
+  const hitsLeft = (door.def.toughness ?? 3) - taken;
+  if (hitsLeft > 0) {
+    events.push({ type: 'wall.cracked', doorId: id, actor: member.id, hitsLeft });
+    return;
+  }
+  state.doorsOpen[id] = true;
+  events.push({ type: 'wall.broken', doorId: id, actor: member.id });
 }
 
 /** The first living enemy straight ahead within a spell's reach, if the way is clear. */

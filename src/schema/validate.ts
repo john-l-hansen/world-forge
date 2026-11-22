@@ -247,6 +247,8 @@ export function validateWorld(input: unknown): ValidationResult {
       add('geometry', `Door "${door.id}" sits inside a room instead of in the wall between rooms.`);
   }
   for (const door of world.doors) {
+    if (door.toughness !== undefined && door.kind !== 'breakable')
+      add('connection', `Only a breakable wall has a toughness, but "${door.id}" is a ${door.kind}.`);
     if (!door.lock) continue;
     if (door.kind !== 'door') add('connection', `Only a door can be locked, but "${door.id}" is a ${door.kind}.`);
     const key = world.items.find((i) => i.id === door.lock!.keyItemId);

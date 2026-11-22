@@ -8,7 +8,7 @@ import type { Command, EnemyState, GameEvent, PartyMember, SessionState } from '
 import { validateWorld } from '../src/schema/validate';
 import type { CompiledWorld } from '../src/world/compile';
 import { minesForParty } from '../src/worlds';
-import { HERO, act, attack, face, fight, interact, loadMines, loadPartyMines, minesData, move, run, turn, walkTo } from './helpers';
+import { HERO, act, attack, face, fight, interact, loadMines, loadPartyMines, minesData, move, run, smash, turn, walkTo } from './helpers';
 
 const ROGUE = 'char_rogue';
 const MAGE = 'char_mage';
@@ -437,7 +437,8 @@ describe('the whole adventure with a party', () => {
       act(state, world, interact(), 4);
     };
     walkTo(state, world, 5, 9);
-    use(1);
+    face(state, world, 1);
+    smash(state, world);
     walkTo(state, world, 8, 9);
     use(2);
     walkTo(state, world, 5, 7);
@@ -479,7 +480,7 @@ describe('the whole adventure with a party', () => {
   });
 });
 
-/** Open the secret door and the chest, with whoever is being driven. */
+/** Break the cracked wall and open the chest, with whoever is being driven. */
 function walkTo2(state: SessionState, world: CompiledWorld) {
   const actor = activeMember(state).id;
   const go = (command: Command, wait = 20) => {
@@ -488,7 +489,8 @@ function walkTo2(state: SessionState, world: CompiledWorld) {
   };
   for (let i = 0; i < 5; i++) go({ type: 'move', actor, dir: 'forward' });
   go({ type: 'turn', actor, dir: 'right' }, 12);
-  go({ type: 'interact', actor }, 4);
+  // The cracked wall takes three heavy blows.
+  for (let i = 0; i < 3; i++) go({ type: 'attack', actor, kind: 'heavy' }, 80);
   for (let i = 0; i < 3; i++) go({ type: 'move', actor, dir: 'forward' });
   go({ type: 'turn', actor, dir: 'right' }, 12);
   go({ type: 'interact', actor }, 4);

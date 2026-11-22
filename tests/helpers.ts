@@ -47,6 +47,15 @@ export function act(state: SessionState, world: CompiledWorld, command: Command,
   return events;
 }
 
+/** Heavy blows on whatever is ahead until a breakable wall there gives way (at most ten). */
+export function smash(state: SessionState, world: CompiledWorld): GameEvent[] {
+  const events: GameEvent[] = [];
+  for (let i = 0; i < 10 && !events.some((e) => e.type === 'wall.broken'); i++) {
+    events.push(...act(state, world, { type: 'attack', actor: HERO, kind: 'heavy' }, 70));
+  }
+  return events;
+}
+
 export function run(state: SessionState, world: CompiledWorld, ticks: number): GameEvent[] {
   const events: GameEvent[] = [];
   for (let i = 0; i < ticks; i++) events.push(...step(state, world, []));

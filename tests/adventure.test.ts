@@ -8,7 +8,8 @@ import { createSession, deserializeSession, serializeSession } from '../src/engi
 import type { GameEvent } from '../src/engine/types';
 import { validateWorld } from '../src/schema/validate';
 import { SCHEMA_VERSION } from '../src/schema/world';
-import { HERO, act, face, fight, interact, loadMines, minesData, move, walkTo } from './helpers';
+import { compileWorld } from '../src/world/compile';
+import { HERO, act, attack, face, fight, interact, loadMines, minesData, move, smash, walkTo } from './helpers';
 
 const N = 0;
 const E = 1;
@@ -72,13 +73,24 @@ describe('locked door and key', () => {
 });
 
 describe('secret room and chest', () => {
-  it('the secret door feels like wall until it is tried', () => {
+  it('the cracked wall is a wall until heavy blows bring it down', () => {
     const world = loadMines();
     const state = createSession(world);
     walkTo(state, world, 5, 9);
     face(state, world, E);
     expect(act(state, world, move('forward'))).toContainEqual({ type: 'party.bumped', reason: 'wall' });
-    expect(act(state, world, interact())).toContainEqual({ type: 'secret.found', doorId: 'door_tunnel_cache' });
+    // Searching it says what it needs, and opens nothing.
+    expect(types(act(state, world, interact()))).toEqual(['wall.inspected']);
+    // A light blow bounces off.
+    expect(act(state, world, attack(), 60)).toContainEqual({ type: 'wall.held', doorId: 'door_tunnel_cache', actor: HERO });
+    expect(state.doorsOpen.door_tunnel_cache).toBe(false);
+    const blows = smash(state, world).filter((e) => e.type.startsWith('wall.'));
+    expect(blows).toEqual([
+      { type: 'wall.cracked', doorId: 'door_tunnel_cache', actor: HERO, hitsLeft: 2 },
+      { type: 'wall.cracked', doorId: 'door_tunnel_cache', actor: HERO, hitsLeft: 1 },
+      { type: 'wall.broken', doorId: 'door_tunnel_cache', actor: HERO },
+    ]);
+    expect(state.doorsOpen.door_tunnel_cache).toBe(true);
     expect(types(act(state, world, interact()))).toEqual(['interact.nothing']);
     const entered = walkTo(state, world, 7, 9);
     expect(entered).toContainEqual({ type: 'room.entered', roomId: 'room_hidden_cache', firstVisit: true });
@@ -89,7 +101,7 @@ describe('secret room and chest', () => {
     const state = createSession(world);
     walkTo(state, world, 5, 9);
     face(state, world, E);
-    act(state, world, interact());
+    smash(state, world);
     walkTo(state, world, 8, 9);
     face(state, world, S);
     expect(act(state, world, move('forward'))).toContainEqual({ type: 'party.bumped', reason: 'object' });
@@ -154,10 +166,11 @@ describe('the whole adventure', () => {
       log.push(...act(state, world, interact(), 4));
     };
 
-    // The shaft door is locked, so look around: the east wall gives way.
+    // The shaft door is locked, so look around: the cracked east wall gives way.
     go(5, 9);
     use(W);
-    use(E);
+    log.push(...face(state, world, E));
+    log.push(...smash(state, world));
     go(8, 9);
     use(S);
     // Through the hall door and the goblin patrol.
@@ -191,8 +204,8 @@ describe('the whole adventure', () => {
     // The story happens in the right order.
     const at = (type: GameEvent['type']) => order.indexOf(type);
     expect(at('door.locked')).toBeGreaterThan(-1);
-    expect(at('secret.found')).toBeGreaterThan(at('door.locked'));
-    expect(at('chest.opened')).toBeGreaterThan(at('secret.found'));
+    expect(at('wall.broken')).toBeGreaterThan(at('door.locked'));
+    expect(at('chest.opened')).toBeGreaterThan(at('wall.broken'));
     expect(at('door.unlocked')).toBeGreaterThan(at('item.gained'));
     expect(order.filter((t) => t === 'encounter.started')).toHaveLength(2);
     expect(order.filter((t) => t === 'quest.completed')).toHaveLength(1);
@@ -223,7 +236,7 @@ describe('the whole adventure', () => {
     const state = createSession(world, 5);
     walkTo(state, world, 5, 9);
     face(state, world, E);
-    act(state, world, interact());
+    smash(state, world);
     walkTo(state, world, 8, 9);
     face(state, world, S);
     act(state, world, interact());
@@ -274,8 +287,37 @@ describe('progression checks in validation', () => {
 
   it('rejects a lock on anything but a door', () => {
     const data = minesData();
-    data.doors.find((d: any) => d.kind === 'secret').lock = { keyItemId: 'item_shaft_key' };
+    data.doors.find((d: any) => d.kind === 'breakable').lock = { keyItemId: 'item_shaft_key' };
     expect(codes(data)).toContain('connection');
+  });
+
+  it('rejects a toughness on anything but a breakable wall', () => {
+    const data = minesData();
+    data.doors.find((d: any) => d.kind === 'door').toughness = 2;
+    expect(codes(data)).toContain('connection');
+  });
+
+  it('a tougher wall takes more blows', () => {
+    const data = minesData();
+    data.doors.find((d: any) => d.kind === 'breakable').toughness = 5;
+    const result = validateWorld(data);
+    if (!result.ok) throw new Error('invalid');
+    const world = compileWorld(result.world);
+    const state = createSession(world);
+    walkTo(state, world, 5, 9);
+    face(state, world, E);
+    const blows = smash(state, world).filter((e) => e.type === 'wall.cracked' || e.type === 'wall.broken');
+    expect(blows.map((e) => e.type)).toEqual(['wall.cracked', 'wall.cracked', 'wall.cracked', 'wall.cracked', 'wall.broken']);
+  });
+
+  it('loads a session saved before walls could break', () => {
+    const world = loadMines();
+    const saved = JSON.parse(serializeSession(createSession(world, 3)));
+    saved.stateVersion = 7;
+    delete saved.wallDamage;
+    const restored = deserializeSession(JSON.stringify(saved));
+    expect(restored.stateVersion).toBe(8);
+    expect(restored.wallDamage).toEqual({});
   });
 
   it('rejects a chest or pickup with a missing item', () => {
@@ -316,7 +358,7 @@ describe('progression checks in validation', () => {
     // A 0.1.0 world has none of the 0.2.0 content.
     old.objects = old.objects.filter((o: any) => (o.type === 'torch' || o.type === 'prop') && o.roomId !== 'room_hidden_cache');
     old.items = old.items.filter((i: any) => i.category === 'weapon');
-    old.doors = old.doors.filter((d: any) => d.kind !== 'secret');
+    old.doors = old.doors.filter((d: any) => d.kind !== 'secret' && d.kind !== 'breakable');
     for (const d of old.doors) delete d.lock;
     old.rooms = old.rooms.filter((r: any) => r.id !== 'room_hidden_cache');
     old.regions[0].roomIds = old.regions[0].roomIds.filter((r: string) => r !== 'room_hidden_cache');

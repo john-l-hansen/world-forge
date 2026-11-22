@@ -159,7 +159,7 @@ export interface QuestProgress {
 }
 
 export interface SessionState {
-  stateVersion: 7;
+  stateVersion: 8;
   worldId: string;
   tick: number;
   rng: number;
@@ -172,6 +172,8 @@ export interface SessionState {
   doorsOpen: Record<string, boolean>;
   /** Locked doors the party has unlocked. */
   doorsUnlocked: Record<string, boolean>;
+  /** Heavy blows each breakable wall has taken. */
+  wallDamage: Record<string, number>;
   chestsOpened: Record<string, boolean>;
   pickupsTaken: Record<string, boolean>;
   /** Items the party carries, shared by all members: item ID to count. */
@@ -198,6 +200,13 @@ export type GameEvent =
   | { type: 'door.locked'; doorId: string }
   | { type: 'door.unlocked'; doorId: string; itemId: string }
   | { type: 'secret.found'; doorId: string }
+  /** A heavy blow chipped a breakable wall; `hitsLeft` more bring it down. */
+  | { type: 'wall.cracked'; doorId: string; actor: string; hitsLeft: number }
+  | { type: 'wall.broken'; doorId: string; actor: string }
+  /** A light blow on a breakable wall: it does nothing, and says so. */
+  | { type: 'wall.held'; doorId: string; actor: string }
+  /** Someone searched a breakable wall. */
+  | { type: 'wall.inspected'; doorId: string }
   | { type: 'chest.opened'; objectId: string }
   | { type: 'item.gained'; itemId: string; from: 'pickup' | 'chest' }
   | { type: 'item.equipped'; actor: string; itemId: string; slot: EquipSlot; auto: boolean }

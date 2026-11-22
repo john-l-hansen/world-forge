@@ -101,8 +101,11 @@ export const DoorSchema = z.object({
    * archway  always passable
    * door     starts closed, opens and closes on interact
    * secret   looks like wall until someone tries it, then stays open
+   * breakable cracked wall that heavy blows bring down, then stays open
    */
-  kind: z.enum(['archway', 'door', 'secret']),
+  kind: z.enum(['archway', 'door', 'secret', 'breakable']),
+  /** Heavy blows a breakable wall takes before it gives way. Breakable walls only; 3 if left out. */
+  toughness: z.number().int().min(1).max(10).optional(),
   /** The single wall cell this opening occupies, between the two rooms. */
   cell,
   /** A locked door needs the party to hold this key item. Doors only. */

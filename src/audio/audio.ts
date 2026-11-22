@@ -17,6 +17,7 @@ export class AudioEngine {
   private noise: AudioBuffer | null = null;
   private dripTimer: ReturnType<typeof setTimeout> | null = null;
   private stepToggle = false;
+  private draftGain: GainNode | null = null;
   /** Loudness of the sound being built: a companion's blows sit behind your own. */
   private level = 1;
   muted = false;
@@ -56,7 +57,38 @@ export class AudioEngine {
     if (this.master && this.ctx) this.master.gain.setTargetAtTime(muted ? 0 : 0.6, this.ctx.currentTime, 0.02);
   }
 
+  /**
+   * The draft from a hidden way, 0 (none) to 1 (right beside it): a low,
+   * breathing wind. The game sets this from how close the party stands.
+   */
+  setDraft(level: number) {
+    const ctx = this.ctx;
+    if (!ctx || !this.master || !this.noise) return;
+    if (!this.draftGain) {
+      const src = ctx.createBufferSource();
+      src.buffer = this.noise;
+      src.loop = true;
+      const band = ctx.createBiquadFilter();
+      band.type = 'bandpass';
+      band.frequency.value = 420;
+      band.Q.value = 1.1;
+      // A slow swell, so it breathes rather than hisses.
+      const lfo = ctx.createOscillator();
+      lfo.frequency.value = 0.35;
+      const lfoGain = ctx.createGain();
+      lfoGain.gain.value = 160;
+      lfo.connect(lfoGain).connect(band.frequency);
+      this.draftGain = ctx.createGain();
+      this.draftGain.gain.value = 0;
+      src.connect(band).connect(this.draftGain).connect(this.master);
+      src.start();
+      lfo.start();
+    }
+    this.draftGain.gain.setTargetAtTime(Math.max(0, Math.min(1, level)) * 0.2, ctx.currentTime, 0.25);
+  }
+
   stop() {
+    this.draftGain = null;
     if (this.dripTimer) clearTimeout(this.dripTimer);
     this.dripTimer = null;
     void this.ctx?.close();
@@ -232,6 +264,26 @@ export class AudioEngine {
         this.noiseHit({ dur: 0.03, freq: 3200, q: 4, gain: 0.3, type: 'bandpass' });
         this.tone({ wave: 'triangle', from: 880, to: 860, dur: 0.07, gain: 0.12, delay: 0.05 });
         this.tone({ wave: 'sine', from: 130, to: 60, dur: 0.16, gain: 0.5, delay: 0.14 });
+        break;
+      case 'wall.cracked':
+        // A crunch of stone, and grit pattering down after it.
+        this.noiseHit({ dur: 0.22, freq: 700, to: 250, q: 0.9, gain: 0.9, type: 'lowpass' });
+        this.tone({ wave: 'sine', from: 95, to: 45, dur: 0.25, gain: 0.55 });
+        for (let i = 0; i < 6; i++) this.noiseHit({ dur: 0.025, freq: 2400 + i * 300, q: 5, gain: 0.18, type: 'bandpass', delay: 0.18 + i * 0.07 });
+        break;
+      case 'wall.broken':
+        // The wall comes down: a long rumble, a crash, then rubble settling.
+        this.noiseHit({ dur: 1.3, freq: 160, to: 80, q: 0.8, gain: 1, type: 'lowpass', attack: 0.02 });
+        this.tone({ wave: 'sine', from: 70, to: 30, dur: 1, gain: 0.7 });
+        for (let i = 0; i < 14; i++) this.noiseHit({ dur: 0.04, freq: 900 + ((i * 431) % 1600), q: 3, gain: 0.25, type: 'bandpass', delay: 0.3 + i * 0.09 });
+        [392, 466, 587].forEach((f, i) => this.tone({ wave: 'triangle', from: f, to: f, dur: 0.35, gain: 0.1, delay: 1 + i * 0.16 }));
+        break;
+      case 'wall.held':
+        this.noiseHit({ dur: 0.06, freq: 1600, q: 1.5, gain: 0.35, type: 'bandpass' });
+        this.tone({ wave: 'triangle', from: 300, to: 220, dur: 0.07, gain: 0.15 });
+        break;
+      case 'wall.inspected':
+        for (let i = 0; i < 5; i++) this.noiseHit({ dur: 0.03, freq: 2600 + i * 250, q: 5, gain: 0.12, type: 'bandpass', delay: i * 0.09 });
         break;
       case 'secret.found':
         this.noiseHit({ dur: 0.9, freq: 110, to: 220, q: 1.4, gain: 0.8, type: 'lowpass', attack: 0.15 });

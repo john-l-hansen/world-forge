@@ -9,8 +9,8 @@ import { FEATURE_SHARE, TILESETS } from '../art/tilesets';
 import type { Environment } from '../schema/world';
 import { DIR_X, DIR_Y, TILE_DOORWAY, TILE_WALL, type CompiledWorld } from '../world/compile';
 
-export const TILE = { stoneA: 0, stoneB: 1, feature: 2, floor: 3, ceiling: 4, door: 5, frame: 6, floorB: 7, secret: 8, doorLocked: 9 } as const;
-const TILE_COUNT = 10;
+export const TILE = { stoneA: 0, stoneB: 1, feature: 2, floor: 3, ceiling: 4, door: 5, frame: 6, floorB: 7, secret: 8, doorLocked: 9, cracked0: 10, cracked1: 11, cracked2: 12 } as const;
+const TILE_COUNT = 13;
 export const DOOR_HEIGHT = 0.86;
 
 /** One row of ten tiles for each environment the world uses, in the world's order. */
@@ -172,17 +172,18 @@ export function buildDoorGeometry(axis: 'ns' | 'ew', light: number, locked: bool
  * of each room it joins, so from either side it reads as more wall.
  * `lightA` is the room on the north or west side, `lightB` the south or east.
  */
-export function buildSecretGeometry(axis: 'ns' | 'ew', lightA: number, lightB: number, row = 0, rows = 1): THREE.BufferGeometry {
+/** A slab that fills a doorway with wall: a secret door, or a breakable wall at one of its stages. */
+export function buildSecretGeometry(axis: 'ns' | 'ew', lightA: number, lightB: number, row = 0, rows = 1, tile: number = TILE.secret): THREE.BufferGeometry {
   const b = new QuadBuilder(rows);
   b.row = row;
   // Sit a hair proud of the cell edge so the slab covers the door's lintel.
   const edge = 0.505;
   if (axis === 'ew') {
-    b.quad([[-edge, 0, -0.5], [-edge, 0, 0.5], [-edge, 1, 0.5], [-edge, 1, -0.5]], TILE.secret, [lightA, lightA, lightA, lightA], WALL_SHADE[1]);
-    b.quad([[edge, 0, 0.5], [edge, 0, -0.5], [edge, 1, -0.5], [edge, 1, 0.5]], TILE.secret, [lightB, lightB, lightB, lightB], WALL_SHADE[3]);
+    b.quad([[-edge, 0, -0.5], [-edge, 0, 0.5], [-edge, 1, 0.5], [-edge, 1, -0.5]], tile, [lightA, lightA, lightA, lightA], WALL_SHADE[1]);
+    b.quad([[edge, 0, 0.5], [edge, 0, -0.5], [edge, 1, -0.5], [edge, 1, 0.5]], tile, [lightB, lightB, lightB, lightB], WALL_SHADE[3]);
   } else {
-    b.quad([[0.5, 0, -edge], [-0.5, 0, -edge], [-0.5, 1, -edge], [0.5, 1, -edge]], TILE.secret, [lightA, lightA, lightA, lightA], WALL_SHADE[2]);
-    b.quad([[-0.5, 0, edge], [0.5, 0, edge], [0.5, 1, edge], [-0.5, 1, edge]], TILE.secret, [lightB, lightB, lightB, lightB], WALL_SHADE[0]);
+    b.quad([[0.5, 0, -edge], [-0.5, 0, -edge], [-0.5, 1, -edge], [0.5, 1, -edge]], tile, [lightA, lightA, lightA, lightA], WALL_SHADE[2]);
+    b.quad([[-0.5, 0, edge], [0.5, 0, edge], [0.5, 1, edge], [-0.5, 1, edge]], tile, [lightB, lightB, lightB, lightB], WALL_SHADE[0]);
   }
   return b.build();
 }

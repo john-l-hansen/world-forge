@@ -228,8 +228,8 @@ export function AutoMap({ game }: { game: Game }) {
         const px = ox + x * cell;
         const py = oy + y * cell;
         const doorHere = tile === TILE_DOORWAY ? world.doorAt.get(i)! : null;
-        // A secret door is drawn as wall until it has been found.
-        const hidden = doorHere?.def.kind === 'secret' && !state.doorsOpen[doorHere.def.id];
+        // A secret door or a breakable wall is drawn as wall until it has been opened.
+        const hidden = (doorHere?.def.kind === 'secret' || doorHere?.def.kind === 'breakable') && !state.doorsOpen[doorHere.def.id];
         if (tile === TILE_WALL || hidden) {
           ctx.fillStyle = '#3a312a';
           ctx.fillRect(px, py, cell, cell);

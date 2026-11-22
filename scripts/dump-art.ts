@@ -78,3 +78,7 @@ console.log('wrote .art/*.png');
   writeFileSync('.art/warden.png', encodePng(sheet(GOBLIN_POSES.map((pose) => drawUndead(pose, 'warden')), 3, 0x3a3f48)));
   writeFileSync('.art/crypt-props.png', encodePng(sheet([drawProp('sarcophagus'), drawProp('urn'), drawProp('bones')], 5, 0x3a3f48)));
 }
+{
+  const { TILESETS } = await import('../src/art/tilesets');
+  writeFileSync('.art/mine-cracks.png', encodePng(sheet(TILESETS.mine().slice(10), 3, 0x3a312a)));
+}

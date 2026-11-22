@@ -39,6 +39,8 @@ export class Game {
   private partySignature = '';
   /** Items gained this step, announced together once the step's events are handled. */
   private gained: string[] = [];
+  /** Cracked walls whose draft the log has already mentioned. */
+  private drafted = new Set<string>();
   private pickupSerial = 0;
 
   /** The character the player is driving. */
@@ -81,6 +83,7 @@ export class Game {
     this.hurt = {};
     this.mended = {};
     this.gained = [];
+    this.drafted = new Set();
     this.acc = 0;
     this.resetHud('playing');
     this.announceStart();
@@ -273,6 +276,7 @@ export class Game {
     const events = step(this.state, this.world, commands);
     for (const event of events) this.handle(event);
     if (this.gained.length) this.announcePickup();
+    this.feelDraft();
     this.syncHud();
   }
 
@@ -377,6 +381,7 @@ export class Game {
         useHud.setState((s) => ({ mapVersion: s.mapVersion + 1 }));
         break;
       case 'secret.found':
+      case 'wall.broken':
       case 'door.unlocked':
       case 'chest.opened':
       case 'door.opened':
@@ -479,6 +484,25 @@ export class Game {
     ) {
       useHud.setState({ hp: member.hp, maxHp: member.maxHp, stamina: member.stamina, maxStamina: member.maxStamina, guarding, facing: s.party.facing, roomName, target });
     }
+  }
+
+  /**
+   * The draft from hidden ways still shut: louder the closer the party stands,
+   * and a line in the log the first time the party stands right by a cracked wall.
+   */
+  private feelDraft() {
+    const { x, y } = this.state.party;
+    let nearest = Infinity;
+    for (const door of this.world.doors) {
+      if ((door.def.kind !== 'secret' && door.def.kind !== 'breakable') || this.state.doorsOpen[door.def.id]) continue;
+      const d = Math.hypot(door.x - x, door.y - y);
+      nearest = Math.min(nearest, d);
+      if (door.def.kind === 'breakable' && d <= 1 && !this.drafted.has(door.def.id)) {
+        this.drafted.add(door.def.id);
+        pushLog('A cold draft breathes through cracks in the stone here.', 'lore');
+      }
+    }
+    this.audio.setDraft(nearest === Infinity ? 0 : 1 - (nearest - 1) / 4);
   }
 
   /**

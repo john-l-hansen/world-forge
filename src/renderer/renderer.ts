@@ -8,9 +8,10 @@ import { CHEST_H, CHEST_W, GOBLIN_H, GOBLIN_POSES, GOBLIN_W, PROP_SIZE, SHIELD_H
 import { Pix } from '../art/pixel';
 import { drawUndead } from '../art/undead';
 import { activeMember, isGuarding } from '../engine/sim';
+import { Dust } from './dust';
 import { BUMP_TICKS, ENEMY_ATTACK_POSE_TICKS, MOVE_TICKS, TURN_TICKS, type EnemyState, type GameEvent, type SessionState } from '../engine/types';
 import { DIR_X, DIR_Y, type CompiledWorld } from '../world/compile';
-import { DOOR_HEIGHT, buildAtlas, buildDoorGeometry, buildDungeonGeometry, buildSecretGeometry } from './dungeon';
+import { DOOR_HEIGHT, buildAtlas, buildDoorGeometry, buildDungeonGeometry, TILE, buildSecretGeometry } from './dungeon';
 import { makeDungeonMaterial, makeOverlayMaterial, makePresentMaterial, makeSharedUniforms, makeSpriteMaterial, pixTexture, type SharedUniforms } from './materials';
 
 export interface RendererOptions {
@@ -55,7 +56,9 @@ interface EnemyView {
 
 interface DoorView {
   id: string;
-  mesh: THREE.Mesh;
+  mesh: THREE.Object3D;
+  /** A breakable wall's three looks, one shown at a time as it takes blows. */
+  stages?: THREE.Mesh[];
   open: number;
   /** How far the leaf travels to be fully out of sight. */
   travel: number;
@@ -103,6 +106,12 @@ export class DungeonRenderer {
 
   private enemies = new Map<string, EnemyView>();
   private doors: DoorView[] = [];
+  private dust = new Dust();
+  /** Hidden ways the draft comes through: each wall face's centre and the way out into the open. */
+  private drafts: { id: string; x: number; y: number; axis: 'ns' | 'ew' }[] = [];
+  private draftClock = 0;
+  /** Where the party stood at the last frame, for aiming effects. */
+  private partyAt = { x: 0, y: 0 };
   private chests: LootView[] = [];
   private pickups: PickupView[] = [];
   private healFlash = 0;
@@ -164,12 +173,33 @@ export class DungeonRenderer {
     const dungeonMaterial = makeDungeonMaterial(atlas, this.shared);
     const dungeonGeometry = buildDungeonGeometry(world);
     this.scene.add(new THREE.Mesh(dungeonGeometry, dungeonMaterial));
+    this.scene.add(this.dust.points);
     this.disposables.push(atlas, dungeonMaterial, dungeonGeometry);
 
     const lightAt = (x: number, y: number) => world.light[y * world.width + x] ?? 0;
     for (const door of world.doors) {
       if (door.def.kind === 'archway') continue;
+      if (door.def.kind === 'breakable') {
+        // Three slabs, one per stage of damage, swapped as blows land; the whole wall sinks when it gives.
+        const group = new THREE.Group();
+        const lights: [number, number] =
+          door.axis === 'ew' ? [lightAt(door.x - 1, door.y), lightAt(door.x + 1, door.y)] : [lightAt(door.x, door.y - 1), lightAt(door.x, door.y + 1)];
+        const stages = [TILE.cracked0, TILE.cracked1, TILE.cracked2].map((tile, i) => {
+          const geo = buildSecretGeometry(door.axis, lights[0], lights[1], rowAt(door.x, door.y), rows, tile);
+          const mesh = new THREE.Mesh(geo, dungeonMaterial);
+          mesh.visible = i === 0;
+          group.add(mesh);
+          this.disposables.push(geo);
+          return mesh;
+        });
+        group.position.set(door.x, 0, door.y);
+        this.scene.add(group);
+        this.doors.push({ id: door.def.id, mesh: group, stages, open: 0, travel: -1 });
+        this.drafts.push({ id: door.def.id, x: door.x, y: door.y, axis: door.axis });
+        continue;
+      }
       const secret = door.def.kind === 'secret';
+      if (secret) this.drafts.push({ id: door.def.id, x: door.x, y: door.y, axis: door.axis });
       const geo = secret
         ? door.axis === 'ew'
           ? buildSecretGeometry('ew', lightAt(door.x - 1, door.y), lightAt(door.x + 1, door.y), rowAt(door.x, door.y), rows)
@@ -339,6 +369,16 @@ export class DungeonRenderer {
       case 'attack.clang':
         if (mine) this.hitKick = 0.6;
         break;
+      case 'wall.cracked':
+      case 'wall.broken':
+      case 'wall.held': {
+        const big = event.type === 'wall.broken';
+        if (mine) this.hitKick = Math.max(this.hitKick, event.type === 'wall.held' ? 0.4 : 1);
+        if (big) this.hurtKick = Math.max(this.hurtKick, 0.6);
+        const face = this.wallFace(event.doorId);
+        if (face) this.dust.burst(face.x, face.z, face.nx, face.nz, big ? 140 : event.type === 'wall.cracked' ? 45 : 6, big ? 1.6 : 1);
+        break;
+      }
       case 'attack.blocked':
         if (event.shieldId && (driven === undefined || event.target === driven)) this.shieldJolt = 1;
         break;
@@ -420,9 +460,16 @@ export class DungeonRenderer {
       door.open = goal > door.open ? Math.min(goal, door.open + stepSize) : Math.max(goal, door.open - stepSize);
       door.mesh.position.y = smooth(door.open) * door.travel;
       door.mesh.visible = door.open < 0.995;
+      if (door.stages) {
+        const stage = Math.min(2, state.wallDamage[door.id] ?? 0);
+        door.stages.forEach((m, i) => (m.visible = i === stage));
+      }
     }
     for (const chest of this.chests) chest.material.uniforms.uFrame.value = state.chestsOpened[chest.id] ? 1 : 0;
     for (const pickup of this.pickups) this.glint(pickup, state, timeSeconds);
+    this.partyAt = { x: state.party.x, y: state.party.y };
+    this.breathe(state, dt);
+    this.dust.update(dt);
 
     for (const enemy of state.enemies) this.placeEnemy(enemy, now);
     this.placeBolt(dt);
@@ -594,6 +641,31 @@ export class DungeonRenderer {
     this.boltLines.visible = true;
   }
 
+  /** The face of a hidden way that looks toward the party, and the direction out of it. */
+  private wallFace(doorId: string): { x: number; z: number; nx: number; nz: number } | null {
+    const d = this.drafts.find((w) => w.id === doorId);
+    if (!d) return null;
+    if (d.axis === 'ew') {
+      const nx = this.partyAt.x >= d.x ? 1 : -1;
+      return { x: d.x + nx * 0.5, z: d.y, nx, nz: 0 };
+    }
+    const nz = this.partyAt.y >= d.y ? 1 : -1;
+    return { x: d.x, z: d.y + nz * 0.5, nx: 0, nz };
+  }
+
+  /** A thin stream of dust out of every hidden way still shut near the party: the draft. */
+  private breathe(state: SessionState, dt: number) {
+    this.draftClock += dt;
+    if (this.draftClock < 0.14) return;
+    this.draftClock = 0;
+    for (const d of this.drafts) {
+      if (state.doorsOpen[d.id]) continue;
+      if (Math.hypot(d.x - state.party.x, d.y - state.party.y) > 4.5) continue;
+      const face = this.wallFace(d.id);
+      if (face) this.dust.breathe(face.x, face.z, face.nx, face.nz);
+    }
+  }
+
   /**
    * Floor items glint now and then from afar, more often close by, and at once
    * when the party comes close: a brightening of the item and a star above it.
@@ -695,6 +767,7 @@ export class DungeonRenderer {
   }
 
   dispose() {
+    this.dust.dispose();
     for (const d of this.disposables) d.dispose();
     this.gl.dispose();
   }

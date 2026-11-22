@@ -63,6 +63,7 @@ const state = () =>
       chests: s.chestsOpened,
       inventory: s.inventory,
       equipment: s.party.members[0].equipment,
+      wallDamage: s.wallDamage,
       members: s.party.members.map((m) => ({ id: m.id, hp: m.hp, maxHp: m.maxHp, mana: m.mana, controller: m.controller, row: m.row, xp: m.xp, level: m.level })),
       held: g.renderer.heldKind,
       quest: s.quests.quest_clear_mines,
@@ -257,16 +258,33 @@ check(s.doors.door_tunnel_shaft === false, 'the shaft door does not open without
 check(/locked/i.test((await hud()).text), 'the log says the door is locked');
 await shot('02-locked-door');
 
-// --- Secret room and chest -----------------------------------------------------
+// --- Cracked wall, hidden room and chest -------------------------------------------
 await turnTo(E);
-await shot('03-secret-wall');
+check(/cold draft breathes through cracks/i.test((await hud()).text), 'standing by the cracked wall, the log mentions a draft');
+const motes = await page
+  .waitForFunction(() => window.__worldForge.renderer.dust.motes.length > 0, null, { timeout: 2000 })
+  .then(() => true)
+  .catch(() => false);
+check(motes, 'dust drifts out of the cracked wall');
+await shot('03-cracked-wall');
 await key('KeyW');
 s = await state();
-check(s.x === 5 && s.y === 9, 'the secret door blocks like a wall');
-await use(E, 1000);
+check(s.x === 5 && s.y === 9, 'the cracked wall blocks like a wall');
+await use(E, 500);
+check(/heavy blow \(K\) might bring it down/i.test((await hud()).text), 'searching the cracked wall says a heavy blow might break it');
+await key('KeyJ', 900);
 s = await state();
-check(s.doors.door_tunnel_cache === true, 'searching the wall opens the secret door');
-await shot('04-secret-open');
+check(s.doors.door_tunnel_cache === false && /skitters off/i.test((await hud()).text), 'a light blow does not break it');
+await key('KeyK', 1300);
+s = await state();
+check(s.wallDamage.door_tunnel_cache === 1 && s.doors.door_tunnel_cache === false, 'a heavy blow cracks it further');
+check(await page.evaluate(() => window.__worldForge.renderer.doors.find((d) => d.id === 'door_tunnel_cache').stages[1].visible), 'the wall shows the damage');
+await shot('03b-cracked-wall-hit');
+await key('KeyK', 1300);
+await key('KeyK', 1400);
+s = await state();
+check(s.doors.door_tunnel_cache === true && /caves in/i.test((await hud()).text), 'the third heavy blow brings the wall down');
+await shot('04-wall-down');
 await walkTo(8, 9);
 s = await state();
 check(s.room === 'room_hidden_cache', `the hidden cache can be entered (in ${s.room})`);

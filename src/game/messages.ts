@@ -47,6 +47,16 @@ export function describeEvent(event: GameEvent, state: SessionState, world: Comp
     }
     case 'secret.found':
       return { text: 'The stonework shifts. A hidden way opens!', tone: 'quest' };
+    case 'wall.inspected':
+      return { text: 'The stone is cracked through, and cold air breathes out of it. A heavy blow (K) might bring it down.', tone: 'lore' };
+    case 'wall.held':
+      return event.actor === you ? { text: 'Your blow skitters off the cracked stone. Put your weight into it: a heavy blow (K).', tone: 'plain' } : null;
+    case 'wall.cracked':
+      return event.hitsLeft === 1
+        ? { text: 'The wall groans and sags. One more blow!', tone: 'warn' }
+        : { text: 'Chunks of stone break away from the cracked wall.', tone: 'plain' };
+    case 'wall.broken':
+      return { text: 'The wall caves in! A hidden way opens.', tone: 'quest' };
     case 'chest.opened': {
       const chest = def.objects.find((o) => o.id === event.objectId);
       return { text: `You lift the lid of the ${(chest?.name ?? 'chest').toLowerCase()}.`, tone: 'plain' };

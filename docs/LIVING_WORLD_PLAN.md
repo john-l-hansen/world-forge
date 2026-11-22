@@ -1,8 +1,8 @@
 # Living World — direction and implementation plan
 
-Draft, 2026-11-22. Written in response to John's first set of ideas. Nothing here is
-built yet; the open decisions in section 3 need answers before the first irreversible
-step.
+2026-11-22. Written in response to John's first set of ideas, then revised the same
+day with his answers to the decisions (section 3). Nothing here is built yet. Decision 4
+(how NPCs decide) has a recommendation awaiting his confirmation; the rest are settled.
 
 ## 1. The direction, as understood
 
@@ -70,33 +70,85 @@ This is an ongoing direction; more ideas will follow.
    Healing is generous (draughts, the cleric's mend), the goblins are faintly
    cartoonish, and there are floating damage numbers and friendly hints. The
    new direction changes art, rules and writing (section 5).
-6. **The creator screen.** VISUAL_STYLE_GUIDE section 12 says the creator should look
+6. **The creator screen.** VISUAL_STYLE_GUIDE section 12 said the creator should look
    like modern creative software, not a DOS application. The Phase 5 creator was built
-   in the game's retro style. One or the other should change (section 3).
+   in the game's retro style. Resolved: the creator stays retro and the guide has been
+   changed (decision 6).
 
-## 3. Decisions needed before building
+## 3. Decisions
 
-1. **One shared world, or a world per player or group?** A single shared world needs a
-   server that owns the state and runs the simulation for everyone. A world per save
-   can start single-player in the browser and grow into co-op later. Recommendation:
-   a world per save first, with the server-ready rules the engine already follows.
-2. **Does the world move while nobody plays?** It can advance only while played, or
-   catch up (simulate the elapsed time in coarse steps) when the player returns, or run
-   continuously on a server. Recommendation: catch up on return. It feels alive and
-   needs no always-on server.
-3. **What is the creator for now?** It could make starting worlds that then live on
-   their own, keep making one-shot adventures, or both. Recommendation: both. A world
-   has a starting definition (made by hand or by the creator) and a living state that
-   grows from there; dungeons become places within a world.
-4. **How does an NPC decide?** Recommendation: deterministic agents (needs, goals and
-   utility scoring) for every decision that changes the world, with AI for what NPCs
-   say, for summarising memories, and for proposing new world content. The alternative,
-   an AI deciding for each NPC, is expensive, slow, not repeatable, and breaks the
-   determinism rule.
-5. **Gore as a setting?** Recommendation: on by default at full strength, with a lower
-   setting for creators and players who want it.
-6. **The creator's look:** follow the style guide (modern creative software around a
-   retro game preview), or keep the retro creator and change the guide.
+| # | Question | Decision |
+|---|----------|----------|
+| 1 | One shared world, or a world per save? | **A world per save** to start. The engine keeps its server-ready rules so shared worlds (L9) stay possible. |
+| 2 | Does the world move while nobody plays? | **Catch up on return.** The world layer simulates the elapsed time in coarse steps when a save is loaded. No always-on server. |
+| 3 | What is the creator for? | **The Dungeon Master side.** The creator makes starting worlds and can force-generate content or weave stories into a living world. It is used through a separate player type, the Dungeon Master (a god mode). See section 3a. |
+| 4 | How does an NPC decide? | **Recommended: a tiered hybrid** (section 3b). Awaiting John's confirmation. |
+| 5 | Gore as a setting? | **Yes.** Full strength by default, with a lower setting. |
+| 6 | The creator's look? | **Keep it retro and change the guide.** The creator stays a DOS-style application; retro is key to the whole experience. VISUAL_STYLE_GUIDE sections 3 and 12 have been rewritten. |
+
+### 3a. The Dungeon Master player type
+
+The creator stops being a separate tool that hands a finished file to the game. It
+becomes the Dungeon Master's seat at the same table as the players.
+
+- **A controller and actor of its own.** A save can have player characters and one or
+  more Dungeon Masters. A Dungeon Master has no body in the world. Its commands go
+  through the same validated command pipeline as every player's, name the Dungeon
+  Master as the actor, and are recorded in the world's history. The simulation stays
+  deterministic: a replay of the same commands gives the same world.
+- **What a Dungeon Master can do.**
+  - See hidden state: every agent's location, goals, memories, wallet and faction plans,
+    and the event log.
+  - Force-generate: a new place, dungeon, NPC, faction, quest or event, made by the same
+    generator as the creator and validated before it enters the world.
+  - Weave a story: a thread of linked events, NPCs and quests that is placed into the
+    living world and then plays out through the agents, rather than as a fixed script.
+  - Adjust: faction attitudes, prices, weather, a single NPC's goal; pause, step and
+    skip time.
+- **What a Dungeon Master cannot do.** Execute code, write state directly, or bypass
+  validation. Every change is a typed operation the engine checks, exactly as AI
+  proposals are.
+- **The same screen language.** The Dungeon Master's screens are retro, like the
+  creator today: the map, the event log and the agent sheets look like parts of an old
+  DOS editor.
+- **Solo play.** One person can be both: create a world as Dungeon Master, then play it
+  as a character. A setting decides whether a player's save allows Dungeon Master
+  commands at all, so a world can also be played without god mode.
+
+### 3b. Recommendation: how NPCs decide
+
+A balanced split between deterministic rules and AI, in three tiers.
+
+1. **Every NPC: rules.** All decisions that change the world (where to go, whom to
+   trade with, whether to flee, report a crime, take a job, join a faction) come from
+   needs, goals and utility scoring. This is cheap enough to run for thousands of
+   agents, works offline, and is deterministic, so catch-up and replays are exact.
+2. **Notable NPCs: rules plus an AI voice.** Merchants, guards, innkeepers and anyone
+   the player talks to keep rule-based decisions, but AI writes what they say, limited
+   to what each one knows. Speech never changes state; any promise or threat in it must
+   map to an action the rules allow.
+3. **Key figures: AI deliberation at decision points.** Faction leaders, rivals,
+   hirelings and characters a Dungeon Master weaves in may consult the AI when a
+   significant choice comes up (declare a feud, betray an employer, accept a bribe). The
+   engine offers a menu of legal actions with their context; the AI chooses one and
+   returns a structured intent; the engine validates it.
+
+Rules that hold across all three tiers:
+
+- **The decision is recorded as a command.** Once chosen, by rules or by AI, the
+  decision enters the simulation as a command in the log, so saves and replays stay
+  deterministic without calling the AI again.
+- **Rules are always the fallback.** No key, a timeout, or invalid output means the
+  rule-based choice is used. The world never waits on the AI.
+- **A budget.** AI calls are limited per world tick and per catch-up, and spent on the
+  NPCs nearest the player first.
+- **Catch-up uses rules only.** Time that passed while nobody played is simulated by
+  rules; key figures' big choices during catch-up are queued for the AI when the player
+  next meets their consequences, or decided by rules if the budget is spent.
+
+Trade-off: this keeps the world cheap, fast and repeatable, at the cost of most NPCs
+being only as clever as their rules. The AI is spent where players notice it: in
+conversation and in the choices of the people who shape the world.
 
 ## 4. Architecture
 
@@ -131,7 +183,11 @@ presentation (exists)                renderer, audio, interface: read only
   draft-then-approve objects did. Proposals change the world only through validated
   operations.
 - **Persistence.** Save and load the whole world state, versioned and migrated like
-  world schemas, locally first. A server is the same state behind an API.
+  world schemas, locally first. Each save is its own world (decision 1). A server is
+  the same state behind an API.
+- **Dungeon Master commands.** A `dm` controller kind beside local, AI and remote. Its
+  commands (generate, weave, adjust, time control) are validated operations recorded in
+  world history, as described in section 3a.
 
 ## 5. Creative direction: grim, gory, merciless
 
@@ -144,7 +200,10 @@ presentation (exists)                renderer, audio, interface: read only
   pressures, enemies that flee, ambush and finish the wounded.
 - **Look.** Darker, dirtier palettes; goblins redrawn feral rather than comic; less
   light; grim portraits with scars and wear; an interface of iron, leather and old
-  parchment.
+  parchment. Everything, the creator and Dungeon Master screens included, stays a
+  low-resolution DOS-era application.
+- **Gore setting.** Full by default. A lower setting replaces severing, sprays and
+  pools with darker stains and plain deaths, and keeps lasting injuries as rules.
 - **Writing.** Terse and cold. No cheerful hints. Names and descriptions in the voice
   of an old module: matter-of-fact about horror.
 - **Feedback.** Keep clarity (telegraphs, readable hits), but let damage show on bodies
@@ -156,13 +215,16 @@ Each phase ends runnable, tested and pushed. The Mines regression test keeps pas
 and the dungeon game remains playable throughout.
 
 **Phase L0 — Direction reset** (small, first)
-Update PRODUCT_VISION, VISUAL_STYLE_GUIDE and GAMEPLAY_DESIGN for the new direction
-and decisions. Blood and gore system (splatter, decals, persistent corpses, gore deaths),
+PRODUCT_VISION and VISUAL_STYLE_GUIDE updated for the new direction and decisions (done
+with this revision); GAMEPLAY_DESIGN to follow with the rules changes. Blood and gore
+system (splatter, decals, persistent corpses, gore deaths) with the gore setting,
 darker palettes, feral goblins, grim writing pass, lasting injuries, slower healing.
 
 **Phase L1 — Persistent world foundation**
-World state separate from the world definition. Save and load, versioned. A world clock
-with day and night. The world event bus. The coarse world tick and catch-up on return.
+World state separate from the world definition. Save and load, versioned, one world per
+save. A world clock with day and night. The world event bus. The coarse world tick and
+catch-up on return. The `dm` controller kind with its first commands (view hidden state,
+pause and skip time).
 
 **Phase L2 — Places beyond the dungeon**
 Settlements and outdoor areas on the grid (streets, buildings with interiors, walls,
@@ -196,13 +258,15 @@ a manor, a keep, a castle; walls, workshops, stables. Construction takes materia
 money, hired labour and time. Buildings earn, defend, store and house followers; they
 can be raided, burned and taken.
 
-**Phase L8 — The world learns** (AI layer)
-The secure backend and AI provider. NPC speech within what each NPC knows. Memory
-summaries and rumour wording. A world director that tracks the player's habits and
-history (as cabbits-ai tracked interests) and proposes new content, validated and
-checked before it enters the world.
+**Phase L8 — The world learns** (AI layer and the Dungeon Master's tools)
+The secure backend and AI provider. NPC speech within what each NPC knows (tier 2) and
+key figures' deliberation (tier 3). Memory summaries and rumour wording. A world
+director that tracks the player's habits and history (as cabbits-ai tracked interests)
+and proposes new content, validated and checked before it enters the world. The
+Dungeon Master's force-generate and weave-a-story commands, using the same pipeline.
+(Simpler Dungeon Master commands arrive earlier, with the systems they touch.)
 
-**Phase L9 — Shared worlds** (if chosen in decision 1)
+**Phase L9 — Shared worlds** (later; decision 1 starts with a world per save)
 A server that owns the world, runs it continuously and lets several players live in it,
 building on the co-op groundwork.
 
@@ -215,9 +279,10 @@ building on the co-op groundwork.
 - Phase 7 (persistence) moves up to L1.
 - Phase 8 (cloud) becomes the backend in L8 and L9.
 
-## 7. First milestone, once the decisions are made
+## 7. First milestone
 
 L0 and the start of L1: the new creative direction applied to the existing Mines and
-Crypt (gore, palettes, injuries, writing), plus save and load of a world. That proves
-the tone and the persistence foundation on content that already works, before any
-large new system.
+Crypt (gore with its setting, palettes, injuries, writing), plus save and load of a
+world. That proves the tone and the persistence foundation on content that already
+works, before any large new system. Decision 4 does not block it: no NPC agents are
+built until L3.

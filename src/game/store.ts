@@ -120,8 +120,20 @@ export interface SheetView {
   injuries: string[];
 }
 
+/** What the Dungeon Master sees: the hidden state of the world. */
+export interface DmView {
+  clock: string;
+  creatures: { id: string; name: string; place: string; state: string; hp: number; maxHp: number }[];
+  /** The latest of the world's history, newest first. */
+  history: { id: number; when: string; text: string; seen: string }[];
+}
+
 export interface HudState {
-  screen: 'title' | 'playing' | 'journal' | 'sheet' | 'victory' | 'dead';
+  screen: 'title' | 'playing' | 'journal' | 'sheet' | 'victory' | 'dead' | 'dm';
+  /** World time, as read on the clock. */
+  clock: string;
+  /** Filled while the Dungeon Master's screen is open. */
+  dm: DmView | null;
   heroName: string;
   heroClass: string;
   weaponName: string;
@@ -160,6 +172,8 @@ let nextId = 1;
 
 export const useHud = create<HudState>(() => ({
   screen: 'title',
+  clock: '',
+  dm: null,
   heroName: '',
   heroClass: '',
   weaponName: '',

@@ -343,11 +343,12 @@ export function Belt({ game }: { game: Game }) {
 
 export function JournalOverlay() {
   const quests = useHud((s) => s.quests);
+  const clock = useHud((s) => s.clock);
   // One quest gets the whole page; several are set out more tightly.
   const many = quests.length > 1;
   return (
     <div className={`overlay journal${many ? ' many' : ''}`}>
-      <h2>Journal</h2>
+      <h2>Journal - {clock}</h2>
       {quests.length === 0 && <p>No quests yet.</p>}
       {quests.map((quest) => (
         <Fragment key={quest.id}>
@@ -712,8 +713,8 @@ export function TitleOverlay({
         <dd>Next character</dd>
         <dt>1 - 4</dt>
         <dd>Cast a spell</dd>
-        <dt>F5 / F9</dt>
-        <dd>Save, load</dd>
+        <dt>F5 / F9 / F2</dt>
+        <dd>Save, load, DM</dd>
       </dl>
       <div className="blink">{choices.length > 1 ? `Press 1 to ${choices.length} to choose - any other key to enter` : 'Press any key or click to enter'}</div>
     </div>

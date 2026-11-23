@@ -110,7 +110,7 @@ describe('generated worlds', () => {
         expect(compiled.def.settings.startingPartyIds).toHaveLength(over.party === 'fighter' ? 1 : over.party === 'pair' ? 2 : 4);
         // It plays: a session starts and survives a save and reload.
         const state = createSession(compiled, seed);
-        expect(JSON.parse(serializeSession(state)).stateVersion).toBe(9);
+        expect(JSON.parse(serializeSession(state)).stateVersion).toBe(10);
       }
     }
   });

@@ -13,6 +13,7 @@ import {
   type CompiledDoor,
   type CompiledWorld,
 } from '../world/compile';
+import { advanceWorld, recordStep, worldTick } from './worldlayer';
 import type { BoltSpellDef, EnemyAttackDef, EnemyDef, EquipSlot, HealSpellDef, ItemDef, SpellDef, WeaponAttackDef } from '../schema/world';
 import { CLASSES } from './classes';
 import { randomInt } from './rng';
@@ -48,7 +49,9 @@ import {
   type SessionState,
   type StainKind,
   type InjuryKind,
-  INJURY_TICKS,
+  INJURY_MINUTES,
+  TICKS_PER_WORLD_MINUTE,
+  START_MINUTE,
   ARM_INJURY_DAMAGE_SHARE,
   LEG_INJURY_MOVE_FACTOR,
   HEAD_INJURY_MANA_FACTOR,
@@ -117,6 +120,8 @@ export function createSession(world: CompiledWorld, seed = 1): SessionState {
       alerted: false,
       lastHitTick: NEVER,
       gore: false,
+      diedAt: null,
+      gone: false,
     };
   });
 
@@ -128,7 +133,7 @@ export function createSession(world: CompiledWorld, seed = 1): SessionState {
 
   const startRoom = roomAtCell(world, world.start.x, world.start.y);
   const state: SessionState = {
-    stateVersion: 9,
+    stateVersion: 10,
     worldId: def.world.id,
     tick: 0,
     rng: seed | 0,
@@ -164,6 +169,10 @@ export function createSession(world: CompiledWorld, seed = 1): SessionState {
     currentRoomId: startRoom ? startRoom.id : null,
     visitedRoomIds: startRoom ? [startRoom.id] : [],
     stains: [],
+    clock: { minute: START_MINUTE },
+    history: [],
+    nextEventId: 1,
+    rules: { dungeonMaster: true },
   };
   reveal(state, world);
   return state;
@@ -191,7 +200,31 @@ export function deserializeSession(json: string): SessionState {
       party: { ...old.party, members: old.party.members.map((m) => ({ ...m, injuries: [] })) },
     };
   }
-  if (state.stateVersion !== 9) throw new Error(`Unsupported session version ${String(state.stateVersion)}`);
+  if (state.stateVersion === 9) {
+    // Version 10 added world time and history. The world starts its clock now; injuries
+    // and blood are carried over in minutes, a second of play to a minute.
+    const old = state as unknown as Omit<SessionState, 'stateVersion'>;
+    type OldInjury = { kind: InjuryKind; until: number };
+    const minute = START_MINUTE;
+    state = {
+      ...state,
+      stateVersion: 10,
+      clock: { minute },
+      history: [],
+      nextEventId: 1,
+      rules: { dungeonMaster: true },
+      stains: old.stains.map((st) => ({ ...st, minute })),
+      enemies: old.enemies.map((e) => ({ ...e, diedAt: e.ai === 'dead' ? minute : null, gone: false })),
+      party: {
+        ...old.party,
+        members: old.party.members.map((m) => ({
+          ...m,
+          injuries: (m.injuries as unknown as OldInjury[]).map((i) => ({ kind: i.kind, healsAt: minute + Math.max(1, Math.ceil((i.until - old.tick) / TICKS_PER_WORLD_MINUTE)) })),
+        })),
+      },
+    };
+  }
+  if (state.stateVersion !== 10) throw new Error(`Unsupported session version ${String(state.stateVersion)}`);
   return state as unknown as SessionState;
 }
 
@@ -210,7 +243,7 @@ function bleed(state: SessionState, x: number, y: number, kind: StainKind, size:
     biggest.size = Math.min(3, Math.max(biggest.size, size) + (size >= 2 ? 1 : 0)) as 1 | 2 | 3;
     return;
   }
-  state.stains.push({ x, y, kind, size, v: hashOf(state.tick, x, y, state.stains.length) % 64, tick: state.tick });
+  state.stains.push({ x, y, kind, size, v: hashOf(state.tick, x, y, state.stains.length) % 64, tick: state.tick, minute: state.clock.minute });
   if (state.stains.length > MAX_STAINS) state.stains.shift();
 }
 
@@ -259,20 +292,9 @@ function maybeInjure(state: SessionState, member: PartyMember, damage: number, e
   }
   const existing = member.injuries.find((i) => i.kind === kind);
   // The same wound struck again takes longer to heal.
-  if (existing) existing.until = Math.max(existing.until, state.tick) + INJURY_TICKS / 2;
-  else member.injuries.push({ kind, until: state.tick + INJURY_TICKS });
+  if (existing) existing.healsAt = Math.max(existing.healsAt, state.clock.minute) + INJURY_MINUTES / 2;
+  else member.injuries.push({ kind, healsAt: state.clock.minute + INJURY_MINUTES });
   events.push({ type: 'member.injured', actor: member.id, kind });
-}
-
-/** Injuries whose time has come close up. */
-function healInjuries(state: SessionState, events: GameEvent[]) {
-  for (const member of state.party.members) {
-    if (!member.injuries.length) continue;
-    const healed = member.injuries.filter((i) => state.tick >= i.until);
-    if (!healed.length) continue;
-    member.injuries = member.injuries.filter((i) => state.tick < i.until);
-    for (const i of healed) if (member.hp > 0) events.push({ type: 'member.recovered', actor: member.id, kind: i.kind });
-  }
 }
 
 function bloodOf(def: EnemyDef): StainKind {
@@ -401,6 +423,15 @@ export function step(state: SessionState, world: CompiledWorld, commands: readon
   if (state.status !== 'playing') return events;
 
   for (const command of commands) {
+    if (command.type === 'time.pass') {
+      advanceWorld(state, world, command.minutes, 'world', events);
+      continue;
+    }
+    if (command.type === 'dm.skip') {
+      if (state.rules.dungeonMaster) advanceWorld(state, world, command.minutes, 'dm', events);
+      else events.push({ type: 'dm.refused', reason: 'not_allowed' });
+      continue;
+    }
     const member = state.party.members.find((m) => m.id === command.actor && m.hp > 0);
     if (!member) continue;
     if (command.type === 'control') {
@@ -444,8 +475,10 @@ export function step(state: SessionState, world: CompiledWorld, commands: readon
   updatePartyAi(state, world, events);
   for (const enemy of state.enemies) updateEnemy(state, world, enemy, events);
   restoreStamina(state);
-  healInjuries(state, events);
   trackQuests(state, world, events);
+  // The world layer moves a minute at a time.
+  if (state.tick % TICKS_PER_WORLD_MINUTE === 0) worldTick(state, world, 1, events);
+  recordStep(state, world, events);
 
   return events;
 }
@@ -990,8 +1023,8 @@ function resolveHeal(state: SessionState, member: PartyMember, spell: HealSpellD
   target.hp += healed;
   events.push({ type: 'spell.healed', actor: member.id, spellId: spell.id, target: target.id, healed });
   // Healing magic eases the worst injury: it heals in half the time it had left.
-  const worst = target.injuries.reduce<(typeof target.injuries)[number] | null>((a, b) => (!a || b.until > a.until ? b : a), null);
-  if (worst) worst.until = state.tick + Math.floor((worst.until - state.tick) / 2);
+  const worst = target.injuries.reduce<(typeof target.injuries)[number] | null>((a, b) => (!a || b.healsAt > a.healsAt ? b : a), null);
+  if (worst) worst.healsAt = state.clock.minute + Math.floor((worst.healsAt - state.clock.minute) / 2);
 }
 
 // ---------------------------------------------------------------------------

@@ -51,6 +51,8 @@ export interface Stain {
   /** Which of the drawn shapes, and where in the cell. From a hash, never from the dice. */
   v: number;
   tick: number;
+  /** The world minute it was spilled; old blood dries black and in time is gone. */
+  minute: number;
 }
 
 /** The floor keeps this many stains; the oldest dry away first. */
@@ -59,8 +61,21 @@ export const MAX_STAINS = 160;
 /** Lasting harm to one part of the body. */
 export type InjuryKind = 'arm' | 'leg' | 'head' | 'ribs';
 
-/** How long an injury takes to heal: two minutes of play. */
-export const INJURY_TICKS = 7200;
+// ---------------------------------------------------------------------------
+// World time
+// ---------------------------------------------------------------------------
+
+/** One minute of world time passes for every second of play. A day is 24 minutes at the table. */
+export const TICKS_PER_WORLD_MINUTE = 60;
+export const MINUTES_PER_HOUR = 60;
+export const MINUTES_PER_DAY = 1440;
+/** Every world begins on the first day at eight in the morning. */
+export const START_MINUTE = 8 * 60;
+/** Time away from a save counts at the same pace as play, up to this much. */
+export const MAX_CATCH_UP_MINUTES = 30 * MINUTES_PER_DAY;
+
+/** How long an injury takes to heal: two hours of world time, two minutes of play. */
+export const INJURY_MINUTES = 120;
 /** An arm injury leaves this share of a weapon blow. */
 export const ARM_INJURY_DAMAGE_SHARE = 0.75;
 /** A leg injury makes each step take this much longer, for the whole party. */
@@ -70,8 +85,8 @@ export const HEAD_INJURY_MANA_FACTOR = 1.5;
 
 export interface Injury {
   kind: InjuryKind;
-  /** The tick it heals by. */
-  until: number;
+  /** The world minute it heals at. */
+  healsAt: number;
 }
 
 export type MoveDir = 'forward' | 'back' | 'left' | 'right';
@@ -99,7 +114,11 @@ export type Command =
   /** The player takes this character over. Whoever they played before goes to the party AI. */
   | { type: 'control'; actor: string }
   /** Move a character to the front or back row. */
-  | { type: 'row'; actor: string; row: Row };
+  | { type: 'row'; actor: string; row: Row }
+  /** Time passed outside play, such as while the save sat unopened. The world is the actor. */
+  | { type: 'time.pass'; actor: 'world'; minutes: number }
+  /** The Dungeon Master moves time on. Refused unless the save allows a Dungeon Master. */
+  | { type: 'dm.skip'; actor: 'dm'; minutes: number };
 
 export type Row = 'front' | 'back';
 
@@ -190,6 +209,10 @@ export interface EnemyState {
   lastHitTick: number;
   /** Killed by a blow that tore it apart, not merely felled. */
   gore: boolean;
+  /** The world minute it died, so its remains can be taken in time. */
+  diedAt: number | null;
+  /** Its body has been dragged away. */
+  gone: boolean;
 }
 
 export interface QuestProgress {
@@ -199,7 +222,7 @@ export interface QuestProgress {
 }
 
 export interface SessionState {
-  stateVersion: 9;
+  stateVersion: 10;
   worldId: string;
   tick: number;
   rng: number;
@@ -228,6 +251,12 @@ export interface SessionState {
   visitedRoomIds: string[];
   /** Blood on the floor, oldest first. */
   stains: Stain[];
+  /** World time, in minutes since the first day began. */
+  clock: { minute: number };
+  /** What has happened, oldest first. */
+  history: WorldEvent[];
+  nextEventId: number;
+  rules: SessionRules;
 }
 
 export type BumpReason = 'wall' | 'door' | 'enemy' | 'object';
@@ -290,4 +319,63 @@ export type GameEvent =
   | { type: 'enemy.attack.miss'; enemyId: string }
   | { type: 'enemy.died'; enemyId: string }
   | { type: 'encounter.cleared'; encounterId: string }
-  | { type: 'party.died' };
+  | { type: 'party.died' }
+  | { type: 'time.passed'; minutes: number; by: 'world' | 'dm' }
+  | { type: 'dm.refused'; reason: 'not_allowed' }
+  /** Something the world did on its own, for the log. */
+  | { type: 'world.changed'; event: WorldEvent };
+
+// ---------------------------------------------------------------------------
+// World history: the event bus's record
+// ---------------------------------------------------------------------------
+
+export type WorldEventType =
+  | 'enemy.slain'
+  | 'member.fell'
+  | 'member.injured'
+  | 'member.recovered'
+  | 'item.taken'
+  | 'chest.opened'
+  | 'door.unlocked'
+  | 'wall.broken'
+  | 'secret.found'
+  | 'quest.completed'
+  | 'place.discovered'
+  | 'time.passed'
+  | 'blood.dried'
+  | 'bodies.taken'
+  | 'creatures.returned'
+  | 'wounds.tended';
+
+/**
+ * Something that happened in the world, kept in its history: when, where,
+ * who did it, to what, and who saw it. This is what agents will come to know
+ * the world by; nobody will read the whole state directly.
+ */
+export interface WorldEvent {
+  id: number;
+  minute: number;
+  type: WorldEventType;
+  /** A party member, an enemy instance, 'world' or 'dm'. */
+  actor: string | null;
+  /** What it was done to: an enemy, item, object, door, quest or room ID. */
+  target: string | null;
+  x: number;
+  y: number;
+  roomId: string | null;
+  /** Enemy instances that saw it happen. */
+  witnesses: string[];
+  /** A count or a number of minutes, where the type has one. */
+  amount?: number;
+  /** A short qualifier, such as which injury. */
+  note?: string;
+}
+
+/** The history keeps this many events; older ones are dropped. */
+export const MAX_HISTORY = 400;
+
+/** What a save allows. */
+export interface SessionRules {
+  /** Dungeon Master commands are accepted. */
+  dungeonMaster: boolean;
+}

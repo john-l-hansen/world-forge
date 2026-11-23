@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { STAIN_LOOKS, STAIN_SHAPES, drawStainSheet, type StainLook } from '../art/blood';
 import type { Stain } from '../engine/types';
 import type { CompiledWorld } from '../world/compile';
+import { BLOOD_DRIES_AFTER } from '../engine/worldlayer';
 import { makeDecalMaterial, pixTexture, type SharedUniforms } from './materials';
 
 export type GoreLevel = 'full' | 'low';
@@ -29,9 +30,11 @@ export class StainLayer {
     this.mesh.renderOrder = 1;
   }
 
-  update(stains: readonly Stain[], gore: GoreLevel) {
+  update(stains: readonly Stain[], gore: GoreLevel, minute: number) {
     const last = stains[stains.length - 1];
-    const signature = `${gore}:${stains.length}:${last ? `${last.tick},${last.x},${last.y}` : ''}:${stains.reduce((n, s) => n + s.size, 0)}`;
+    const isDry = (s: Stain) => minute - s.minute >= BLOOD_DRIES_AFTER;
+    const dry = stains.reduce((n, s) => n + (isDry(s) ? 1 : 0), 0);
+    const signature = `${gore}:${stains.length}:${dry}:${last ? `${last.tick},${last.x},${last.y}` : ''}:${stains.reduce((n, s) => n + s.size, 0)}`;
     if (signature === this.signature) return;
     this.signature = signature;
 
@@ -43,7 +46,8 @@ export class StainLayer {
     const rows = STAIN_LOOKS.length;
     stains.forEach((stain, i) => {
       // With gore turned down, every stain is old, dark and no bigger than a spatter.
-      const look: StainLook = gore === 'low' ? (stain.kind === 'bone' ? 'bone' : 'dry') : stain.kind;
+      // Old blood has dried black; with gore turned down, all of it looks old.
+      const look: StainLook = stain.kind === 'bone' ? 'bone' : gore === 'low' || isDry(stain) ? 'dry' : stain.kind;
       const size = gore === 'low' ? (Math.min(2, stain.size) as 1 | 2) : stain.size;
       const w = WIDTH[size];
       const shape = stain.v % STAIN_SHAPES;

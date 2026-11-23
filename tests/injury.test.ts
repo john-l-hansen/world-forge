@@ -4,11 +4,11 @@
  */
 import { describe, expect, it } from 'vitest';
 import { createSession, hasInjury, manaCostFor, partyMoveTicks, step } from '../src/engine/sim';
-import { INJURY_TICKS, MOVE_TICKS, type GameEvent, type InjuryKind, type SessionState } from '../src/engine/types';
+import { INJURY_MINUTES, MOVE_TICKS, type GameEvent, type InjuryKind, type SessionState } from '../src/engine/types';
 import { HERO, act, explore, loadCrypt, loadMines, loadPartyMines } from './helpers';
 
 const N = 0;
-const injure = (state: SessionState, kind: InjuryKind, memberIndex = 0) => state.party.members[memberIndex].injuries.push({ kind, until: state.tick + INJURY_TICKS });
+const injure = (state: SessionState, kind: InjuryKind, memberIndex = 0) => state.party.members[memberIndex].injuries.push({ kind, healsAt: state.clock.minute + INJURY_MINUTES });
 
 /** Put the first goblin, unaware and tough, in front of the party. */
 function dummy(state: SessionState) {
@@ -72,7 +72,7 @@ describe('injury effects', () => {
     const caster = state.party.members.find((m) => m.spells.length)!;
     const spell = world.def.spells.find((sp) => sp.id === caster.spells[0])!;
     expect(manaCostFor(caster, spell)).toBe(spell.manaCost);
-    caster.injuries.push({ kind: 'head', until: 99999 });
+    caster.injuries.push({ kind: 'head', healsAt: 99999 });
     expect(manaCostFor(caster, spell)).toBe(Math.ceil(spell.manaCost * 1.5));
 
     const mines = loadMines();
@@ -92,9 +92,10 @@ describe('healing', () => {
   it('an injury heals on its own when its time is up, and says so', () => {
     const world = loadMines();
     const state = createSession(world, 1);
-    state.party.members[0].injuries.push({ kind: 'arm', until: 30 });
+    state.party.members[0].injuries.push({ kind: 'arm', healsAt: state.clock.minute + 1 });
     const events: GameEvent[] = [];
-    for (let i = 0; i < 40; i++) events.push(...step(state, world, []));
+    // One world minute is sixty ticks.
+    for (let i = 0; i < 70; i++) events.push(...step(state, world, []));
     expect(hasInjury(state.party.members[0], 'arm')).toBe(false);
     expect(events).toContainEqual({ type: 'member.recovered', actor: HERO, kind: 'arm' });
   });
@@ -105,11 +106,12 @@ describe('healing', () => {
     const cleric = state.party.members.find((m) => m.classId === 'cleric')!;
     const hero = state.party.members[0];
     hero.hp = 5;
-    hero.injuries.push({ kind: 'ribs', until: 6000 });
-    for (let i = 0; i < 400 && hero.injuries[0].until === 6000; i++) step(state, world, []);
+    const healsAt = state.clock.minute + 100;
+    hero.injuries.push({ kind: 'ribs', healsAt });
+    for (let i = 0; i < 400 && hero.injuries[0].healsAt === healsAt; i++) step(state, world, []);
     expect(cleric).toBeDefined();
-    expect(hero.injuries[0].until).toBeLessThan(6000);
-    expect(hero.injuries[0].until).toBeGreaterThan(2800);
+    expect(hero.injuries[0].healsAt).toBeLessThan(healsAt);
+    expect(hero.injuries[0].healsAt).toBeGreaterThan(healsAt - 60);
   });
 });
 

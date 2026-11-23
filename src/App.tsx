@@ -25,11 +25,12 @@ interface OpenedFile {
   /** Opened from a save: the game resumes from this state. */
   session?: SessionState;
   seed?: number;
+  savedAt?: number;
 }
 
 /** A save that passed its checks, as an opened world. */
 function fromSave(name: string, serial: number, read: Extract<ReadSaveResult, { ok: true }>): OpenedFile {
-  return { name, serial, result: { ok: true, world: read.world }, created: read.save.created, session: read.session, seed: read.save.seed };
+  return { name, serial, result: { ok: true, world: read.world }, created: read.save.created, session: read.session, seed: read.save.seed, savedAt: read.save.savedAt };
 }
 
 /** Whether the text is a save rather than a world file. Text that is not JSON is neither; the world loader reports it. */
@@ -172,6 +173,7 @@ export function App() {
         autoBegin={opened ? Boolean(opened.session) || !opened.created : selection.chosen}
         resume={opened?.session}
         seed={opened?.seed}
+        savedAt={opened?.savedAt}
         onLoadSave={loadSlot}
         created={Boolean(opened?.created)}
         onChoose={choose}

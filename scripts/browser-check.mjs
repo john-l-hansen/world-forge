@@ -929,6 +929,49 @@ await page.keyboard.press('Escape');
 await page.waitForTimeout(400);
 check(/WORLD FORGE PRESENTS/i.test((await hud()).overlay ?? ''), 'Escape leaves the creator for the title screen');
 
+// --- The Dungeon Master and time away ------------------------------------------------
+await key('Digit1', 600);
+check((await hud()).overlay === null, 'the Mines start again from the title screen');
+await key('F2', 300);
+h = await hud();
+check(/DUNGEON\s+MASTER/i.test(h.overlay ?? '') && /DAY 1, 08:0\d, MORNING/i.test(h.overlay ?? '') && /GOBLIN CHIEF/i.test(h.overlay ?? '') && /AT REST/i.test(h.overlay ?? ''), 'F2 opens the Dungeon Master\'s screen: the clock and every creature, where it is and what it is doing');
+await shot('40-dungeon-master');
+const before = await page.evaluate(() => window.__worldForge.state.clock.minute);
+await key('Digit3', 300);
+h = await hud();
+const after = await page.evaluate(() => window.__worldForge.state.clock.minute);
+check(after - before === 1440 && /DAY 2/i.test(h.overlay ?? '') && /moves time on:\s*1 day/i.test(h.text), `passing a day as the Dungeon Master moves the world clock on a day and says so (${before} to ${after})`);
+check(/THE DUNGEON MASTER: 1 DAY PASSED/i.test(h.overlay ?? ''), 'the day passed is written into the world\'s history');
+await key('F2', 300);
+check((await hud()).overlay === null, 'F2 closes it');
+
+await key('F5', 300);
+const minuteAtSave = await page.evaluate(() => window.__worldForge.state.clock.minute);
+// Make it look as if the game was closed three minutes ago, before the page's own code runs.
+// A second away is a minute of world time, so that is three hours in the world.
+await page.addInitScript(() => {
+  if (sessionStorage.getItem('aged')) return;
+  sessionStorage.setItem('aged', '1');
+  const then = Date.now() - 3 * 60 * 1000;
+  localStorage.setItem('worldforge.lastSeen', String(then));
+  for (const slot of ['quick', 'auto']) {
+    const text = localStorage.getItem('worldforge.save.' + slot);
+    if (!text) continue;
+    const save = JSON.parse(text);
+    save.savedAt = then;
+    localStorage.setItem('worldforge.save.' + slot, JSON.stringify(save));
+  }
+});
+// The address still carries #create from the creator checks; load the game itself.
+await page.goto(URL);
+await page.waitForFunction(() => window.__worldForge);
+await page.waitForTimeout(400);
+await key('KeyC', 700);
+h = await hud();
+const away = await page.evaluate(() => window.__worldForge.state.clock.minute) - minuteAtSave;
+check(/You were away\.\s*3 hours/i.test(h.text) && away >= 180 && away < 190, `coming back after three minutes away, the world has moved on three hours and says so (${away} minutes)`);
+await shot('41-time-away');
+
 check(problems.length === 0, `no console errors or failed requests${problems.length ? `: ${problems.join(' | ')}` : ''}`);
 await browser.close();
 console.log(failed ? `\n${failed} check(s) failed` : '\nAll browser checks passed');

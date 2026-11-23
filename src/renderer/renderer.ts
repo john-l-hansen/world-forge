@@ -498,7 +498,7 @@ export class DungeonRenderer {
     this.partyAt = { x: state.party.x, y: state.party.y };
     if (this.partyOrder.length !== state.party.members.length) this.partyOrder = state.party.members.map((m) => m.id);
     this.dust.update(dt);
-    this.stainLayer.update(state.stains, this.gore);
+    this.stainLayer.update(state.stains, this.gore, state.clock.minute);
 
     for (const enemy of state.enemies) this.placeEnemy(enemy, now);
     this.placeBolt(dt);
@@ -571,6 +571,9 @@ export class DungeonRenderer {
   private placeEnemy(enemy: EnemyState, now: number) {
     const view = this.enemies.get(enemy.id);
     if (!view) return;
+    // Its body has been dragged away.
+    view.mesh.visible = !enemy.gone;
+    if (enemy.gone) return;
     const def = this.world.def.enemies.find((e) => e.id === enemy.defId)!;
     const mt = clamp01((now - enemy.moveStart) / def.moveTicks);
     let x = enemy.prevX + (enemy.x - enemy.prevX) * mt;

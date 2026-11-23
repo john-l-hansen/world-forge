@@ -14,7 +14,8 @@ import { describeEvent } from './messages';
 import { CLASSES, ATTRIBUTES } from '../engine/classes';
 import { criticalChance, damageBonus, experienceForLevel, modifier } from '../engine/stats';
 import { makeSave } from '../engine/save';
-import { writeSlot, type SlotId } from './saves';
+import { takeAwayMinutes, touchLastSeen, writeSlot, type SlotId } from './saves';
+import { formatClock, formatDuration } from '../engine/worldlayer';
 import { getSettings, updateSettings } from './settings';
 import { pushFloater, pushLog, useHud, type BeltItem, type PartyView, type QuestView, type SheetView, type SpellView } from './store';
 
@@ -66,14 +67,117 @@ export class Game {
   /** Set when the game began from a save rather than from the world's start. */
   private resumed: boolean;
 
-  constructor(canvas: HTMLCanvasElement, readonly world: CompiledWorld, private seed = 1, opts: { resume?: SessionState; created?: boolean } = {}) {
+  /** What happened in the world while the save sat unopened, told once play begins. */
+  private awayEvents: GameEvent[] = [];
+  /** The player has left the title screen, so there is a game worth keeping. */
+  private begun = false;
+  private lastSeenMs = 0;
+  private lastClock = -1;
+
+  constructor(
+    canvas: HTMLCanvasElement,
+    readonly world: CompiledWorld,
+    private seed = 1,
+    opts: { resume?: SessionState; created?: boolean; savedAt?: number } = {},
+  ) {
     this.renderer = new DungeonRenderer(canvas, world);
     this.created = opts.created ?? false;
     this.resumed = Boolean(opts.resume);
     this.state = opts.resume ?? createSession(world, seed);
+    // The world went on while nobody played. It catches up now, through the simulation's own command.
+    if (opts.resume && opts.savedAt !== undefined) {
+      const minutes = takeAwayMinutes(opts.savedAt);
+      if (minutes > 0) this.awayEvents = step(this.state, world, [{ type: 'time.pass', actor: 'world', minutes }]);
+    }
     this.renderer.gore = getSettings().gore;
     this.resetHud('title');
+    window.addEventListener('pagehide', this.onPageHide);
     this.raf = requestAnimationFrame(this.frame);
+  }
+
+  /** Closing the page keeps the game, so the world can catch up from that moment when it is opened again. */
+  private onPageHide = () => {
+    if (this.begun) this.save('auto', true);
+    touchLastSeen();
+  };
+
+  /** Open or close the Dungeon Master's screen, where the world's hidden state can be seen. The game waits. */
+  toggleDm() {
+    const screen = useHud.getState().screen;
+    if (screen === 'dm') {
+      useHud.setState({ screen: 'playing', dm: null });
+      return;
+    }
+    if (screen !== 'playing') return;
+    if (!this.state.rules.dungeonMaster) {
+      pushLog('This world allows no Dungeon Master.', 'plain');
+      return;
+    }
+    this.input.clear();
+    this.pending.push({ type: 'block', actor: this.driven.id, held: false });
+    useHud.setState({ screen: 'dm' });
+    this.syncDm();
+  }
+
+  /** The Dungeon Master moves time on. It goes through the simulation as a command, like any other. */
+  dmSkip(minutes: number) {
+    if (useHud.getState().screen !== 'dm') return;
+    const events = step(this.state, this.world, [{ type: 'dm.skip', actor: 'dm', minutes }]);
+    for (const event of events) this.handle(event);
+    this.syncHud();
+    this.syncDm();
+  }
+
+  private syncDm() {
+    const s = this.state;
+    const name = (id: string | null) => {
+      if (!id) return '';
+      if (id === 'world') return 'The world';
+      if (id === 'dm') return 'The Dungeon Master';
+      const member = this.world.def.characters.find((c) => c.id === id);
+      if (member) return member.name;
+      const enemy = s.enemies.find((e) => e.id === id);
+      return enemy ? (this.world.def.enemies.find((d) => d.id === enemy.defId)?.name ?? id) : id;
+    };
+    const thing = (id: string | null) =>
+      (id &&
+        (this.world.def.items.find((i) => i.id === id)?.name ??
+          this.world.def.rooms.find((r) => r.id === id)?.name ??
+          this.world.def.quests.find((q) => q.id === id)?.title ??
+          this.world.def.objects.find((o) => o.id === id)?.name)) ||
+      name(id);
+    const creatures = s.enemies.map((e) => {
+      const def = this.world.def.enemies.find((d) => d.id === e.defId);
+      const state = e.gone ? 'body taken' : e.ai === 'dead' ? 'dead' : e.alerted ? 'hunting' : 'at rest';
+      return { id: e.id, name: def?.name ?? e.defId, place: roomAtCell(this.world, e.x, e.y)?.name ?? '-', state, hp: e.hp, maxHp: e.maxHp };
+    });
+    const history = s.history
+      .slice(-9)
+      .reverse()
+      .map((e) => {
+        const c = formatClock(e.minute).split(', ');
+        const amount = e.amount ?? 0;
+        const verb: Record<string, string> = {
+          'enemy.slain': `${name(e.actor)} killed ${name(e.target)}`,
+          'member.fell': `${name(e.actor)} fell`,
+          'member.injured': `${name(e.actor)}: ${e.note} injured`,
+          'member.recovered': `${name(e.actor)}: ${e.note} healed`,
+          'item.taken': `${name(e.actor)} took ${thing(e.target)}`,
+          'chest.opened': `${name(e.actor)} opened ${thing(e.target)}`,
+          'door.unlocked': `${name(e.actor)} unlocked a door`,
+          'wall.broken': `${name(e.actor)} broke through a wall`,
+          'secret.found': `${name(e.actor)} found a hidden way`,
+          'quest.completed': `Quest done: ${thing(e.target)}`,
+          'place.discovered': `Reached ${thing(e.target)}`,
+          'time.passed': `${name(e.actor)}: ${formatDuration(amount)} passed`,
+          'blood.dried': `Blood dried (${amount})`,
+          'bodies.taken': `Bodies dragged away (${amount})`,
+          'creatures.returned': `Creatures went back (${amount})`,
+          'wounds.tended': `Creatures healed (${amount})`,
+        };
+        return { id: e.id, when: `D${c[0].slice(4)} ${c[1]}`, text: verb[e.type] ?? e.type, seen: e.witnesses.length ? `seen by ${e.witnesses.length}` : '' };
+      });
+    useHud.setState({ dm: { clock: formatClock(s.clock.minute), creatures, history } });
   }
 
   /** Switch between full gore and the lower setting. A display choice: the world is unchanged. */
@@ -117,7 +221,11 @@ export class Game {
     this.audio.start(this.world.environments[this.world.envAt[y * this.world.width + x]]);
     this.input.clear();
     useHud.setState({ screen: 'playing' });
+    this.begun = true;
     this.announceStart();
+    // Tell what the world did while it was left alone.
+    for (const event of this.awayEvents) this.handle(event);
+    this.awayEvents = [];
   }
 
   restart() {
@@ -273,6 +381,7 @@ export class Game {
 
   dispose() {
     this.disposed = true;
+    window.removeEventListener('pagehide', this.onPageHide);
     cancelAnimationFrame(this.raf);
     this.audio.stop();
     this.renderer.dispose();
@@ -280,8 +389,11 @@ export class Game {
 
   private resetHud(screen: 'title' | 'playing') {
     this.partySignature = '';
+    this.lastClock = this.state.clock.minute;
     useHud.setState({
       screen,
+      clock: formatClock(this.state.clock.minute),
+      dm: null,
       log: [],
       floaters: [],
       target: null,
@@ -311,6 +423,11 @@ export class Game {
       }
     }
     this.renderer.render(this.state, this.acc / TICK_MS, ms / 1000);
+    // Mark the game as open every few seconds, so time away is measured from when it closed.
+    if (this.begun && ms - this.lastSeenMs > 5000) {
+      this.lastSeenMs = ms;
+      touchLastSeen();
+    }
   };
 
   /** Advance the simulation by exactly one tick. */
@@ -518,6 +635,10 @@ export class Game {
   /** Copy the few values the interface shows, only when they have changed. */
   private syncHud() {
     const s = this.state;
+    if (s.clock.minute !== this.lastClock) {
+      this.lastClock = s.clock.minute;
+      useHud.setState({ clock: formatClock(s.clock.minute) });
+    }
     const hud = useHud.getState();
     const member = this.driven;
     this.syncParty();
@@ -681,8 +802,9 @@ export class Game {
       })(),
       equipment,
       injuries: member.injuries.map((i) => {
-        const seconds = Math.max(0, Math.ceil((i.until - this.state.tick) / TICKS_PER_SECOND));
-        return `${INJURY_NAMES[i.kind]}: ${INJURY_EFFECTS[i.kind]} (${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')})`;
+        // Time left in world time: an hour of the world is a minute of play.
+        const left = Math.max(0, i.healsAt - this.state.clock.minute);
+        return `${INJURY_NAMES[i.kind]}: ${INJURY_EFFECTS[i.kind]} (${Math.floor(left / 60)}h ${String(left % 60).padStart(2, '0')}m)`;
       }),
     };
     const xpProgress = Math.max(0, Math.min(1, (member.xp - levelStart) / Math.max(1, nextLevel - levelStart)));

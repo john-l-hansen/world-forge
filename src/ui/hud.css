@@ -297,3 +297,20 @@ html, body, #root {
 .fatal h1 { font-size: 20px; }
 .fatal li { margin: 4px 0; }
 .fatal code { color: #f0b070; }
+
+/* The Dungeon Master's ledger. */
+.overlay.dm { justify-content: flex-start; align-items: stretch; gap: 2px; padding: 6px 8px; text-align: left; background: rgba(8, 5, 4, 0.94); }
+.overlay.dm header { display: flex; justify-content: space-between; border-bottom: 1px solid var(--gold-lo); padding-bottom: 2px; }
+.overlay.dm header .title { color: #d0473a; text-transform: uppercase; letter-spacing: 1px; }
+.overlay.dm header .clock { color: var(--gold-hi); }
+.overlay.dm h4 { margin: 3px 0 0; font-size: 8px; font-weight: 400; color: var(--gold); text-transform: uppercase; }
+.overlay.dm .ledger { border-collapse: collapse; width: 100%; }
+.overlay.dm .ledger td { padding: 0 4px 0 0; line-height: 10px; white-space: nowrap; overflow: hidden; max-width: 120px; text-overflow: ellipsis; }
+.overlay.dm .ledger td.num { text-align: right; color: var(--dim); }
+.overlay.dm .ledger tr.hunting td { color: #e0a040; }
+.overlay.dm .ledger tr.dead td, .overlay.dm .ledger tr.body-taken td { color: var(--dim); }
+.overlay.dm .history td.when { color: var(--dim); width: 52px; }
+.overlay.dm .history td.seen { color: #d0473a; text-align: right; }
+.overlay.dm footer { margin-top: auto; display: flex; align-items: center; gap: 3px; }
+.overlay.dm footer .btn { padding: 1px 3px; }
+.overlay.dm footer .close { margin-left: auto; color: var(--dim); }

@@ -1,6 +1,7 @@
 /**
  * Turns simulation events into lines for the message log.
  */
+import { formatClock, formatDuration } from '../engine/worldlayer';
 import { activeMember } from '../engine/sim';
 import type { GameEvent, SessionState } from '../engine/types';
 import type { CompiledWorld } from '../world/compile';
@@ -212,6 +213,27 @@ export function describeEvent(event: GameEvent, state: SessionState, world: Comp
       return { text: `The ${enemyName(event.enemyId)} cuts only air.`, tone: 'good' };
     case 'encounter.cleared':
       return null;
+    case 'time.passed':
+      return event.by === 'dm'
+        ? { text: `The Dungeon Master moves time on: ${formatDuration(event.minutes)}. It is ${formatClock(state.clock.minute)}.`, tone: 'lore' }
+        : { text: `You were away. ${formatDuration(event.minutes)} passed in the dark. It is ${formatClock(state.clock.minute)}.`, tone: 'lore' };
+    case 'dm.refused':
+      return { text: 'This world allows no Dungeon Master.', tone: 'plain' };
+    case 'world.changed': {
+      const n = event.event.amount ?? 1;
+      switch (event.event.type) {
+        case 'blood.dried':
+          return { text: 'The blood spilled here has dried black.', tone: 'plain' };
+        case 'bodies.taken':
+          return { text: n === 1 ? 'Something has dragged a body away in the dark.' : 'Something has dragged the dead away in the dark.', tone: 'warn' };
+        case 'creatures.returned':
+          return { text: n === 1 ? 'What you roused has gone back to its place.' : 'What you roused has gone back to their places.', tone: 'warn' };
+        case 'wounds.tended':
+          return { text: 'Whatever you left wounded has licked its wounds.', tone: 'warn' };
+        default:
+          return null;
+      }
+    }
     case 'party.died':
       return { text: alone ? 'The dark closes in. No one will come looking.' : 'The last of you falls. No one will come looking.', tone: 'bad' };
     default:

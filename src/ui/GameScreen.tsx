@@ -5,6 +5,7 @@ import { useHud } from '../game/store';
 import type { CompiledWorld } from '../world/compile';
 import type { SessionState } from '../engine/types';
 import { latestSlot, type SlotId } from '../game/saves';
+import { DM_SKIPS, DmOverlay } from './DmScreen';
 import { uiArt } from './art';
 import { ActionButtons, AutoMap, Belt, PickupBanner, DeathOverlay, Floaters, JournalOverlay, MessageLog, MovePad, ObjectivePlate, PartyPanel, SheetOverlay, SpellBar, TargetBar, TitleOverlay, VictoryOverlay, type TitleChoice } from './Hud';
 
@@ -40,11 +41,13 @@ export interface GameScreenProps {
   resume?: SessionState;
   /** The seed the saved session began with. */
   seed?: number;
+  /** When the save was made, so the world can catch up on the time since. */
+  savedAt?: number;
   /** Load a save slot, or the latest save when no slot is named. */
   onLoadSave: (slot?: SlotId) => void;
 }
 
-export function GameScreen({ world, choices, current, autoBegin, onChoose, onOpenFile, onCreate, created, resume, seed: savedSeed, onLoadSave }: GameScreenProps) {
+export function GameScreen({ world, choices, current, autoBegin, onChoose, onOpenFile, onCreate, created, resume, seed: savedSeed, savedAt, onLoadSave }: GameScreenProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [game, setGame] = useState<Game | null>(null);
   const scale = useWholeNumberScale();
@@ -56,7 +59,7 @@ export function GameScreen({ world, choices, current, autoBegin, onChoose, onOpe
 
   useEffect(() => {
     const seed = savedSeed ?? (Number(new URLSearchParams(window.location.search).get('seed')) || 1);
-    const instance = new Game(canvasRef.current!, world, seed, { resume, created });
+    const instance = new Game(canvasRef.current!, world, seed, { resume, created, savedAt });
     setGame(instance);
     // A handle for browser tests and debugging. Not used by the game itself.
     (window as unknown as { __worldForge?: Game }).__worldForge = instance;
@@ -133,6 +136,17 @@ export function GameScreen({ world, choices, current, autoBegin, onChoose, onOpe
         return;
       }
       if (current === 'journal') return;
+      // F2: the Dungeon Master's screen, where the save allows one.
+      if (e.code === 'F2' || (current === 'dm' && e.code === 'Escape')) {
+        e.preventDefault();
+        if (!e.repeat) game.toggleDm();
+        return;
+      }
+      if (current === 'dm') {
+        const skip = DM_SKIPS.find((s) => e.code === `Digit${s.key}` || e.code === `Numpad${s.key}`);
+        if (skip && !e.repeat) game.dmSkip(skip.minutes);
+        return;
+      }
       if (e.code === 'KeyC' || (current === 'sheet' && e.code === 'Escape')) {
         game.toggleSheet();
         return;
@@ -211,6 +225,7 @@ export function GameScreen({ world, choices, current, autoBegin, onChoose, onOpe
           {screen === 'title' && <TitleOverlay title={world.def.world.name} choices={choices} current={current} onChoose={choose} onOpenFile={onOpenFile} onCreate={onCreate} created={created} saved={latestSlot()} onContinue={() => onLoadSave()} />}
           {screen === 'dead' && <DeathOverlay name={heroName} created={created} canLoad={Boolean(latestSlot())} />}
           {screen === 'journal' && <JournalOverlay />}
+          {screen === 'dm' && <DmOverlay onSkip={(minutes) => game?.dmSkip(minutes)} />}
           {screen === 'sheet' && game && <SheetOverlay game={game} />}
           {screen === 'victory' && <VictoryOverlay world={world.def.world.name} created={created} />}
         </div>

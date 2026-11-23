@@ -318,9 +318,21 @@ describe('progression checks in validation', () => {
     delete saved.stains;
     for (const e of saved.enemies) delete e.gore;
     for (const m of saved.party.members) delete m.injuries;
+    for (const e of saved.enemies) {
+      delete e.diedAt;
+      delete e.gone;
+    }
+    delete saved.clock;
+    delete saved.history;
+    delete saved.nextEventId;
+    delete saved.rules;
     const restored = deserializeSession(JSON.stringify(saved));
-    // Carried through every version since: walls, then blood and injuries.
-    expect(restored.stateVersion).toBe(9);
+    // Carried through every version since: walls, then blood and injuries, then world time.
+    expect(restored.stateVersion).toBe(10);
+    expect(restored.clock.minute).toBeGreaterThan(0);
+    expect(restored.history).toEqual([]);
+    expect(restored.rules.dungeonMaster).toBe(true);
+    expect(restored.enemies.every((e) => e.diedAt === null && e.gone === false)).toBe(true);
     expect(restored.wallDamage).toEqual({});
     expect(restored.stains).toEqual([]);
     expect(restored.enemies.every((e) => e.gore === false)).toBe(true);

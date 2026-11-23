@@ -4,11 +4,11 @@
 day with his answers to the decisions (section 3). All six decisions are settled;
 decision 4 (the tiered hybrid) was taken as confirmed when John said to begin.
 
-**Status.** The first milestone (section 7) is built: L0's rules, art and writing on the
-Mines and the Crypt, and L1's save and load (development log, milestone 11). Still to
-come in L0: GAMEPLAY_DESIGN revised for injuries and scarcer healing, the skeletons and
-the chief redrawn. Still to come in L1: the world clock, the event bus, the coarse world
-tick, catch-up on return and the first Dungeon Master commands.
+**Status.** L1 is built: save and load (milestone 11), and world time, the world's
+history with witnesses, the coarse world tick, catch-up on return and the Dungeon
+Master's screen with time skips (milestone 12). L0's rules, art and writing are built
+(milestone 11); still to come in L0: GAMEPLAY_DESIGN revised for injuries and scarcer
+healing, and the skeletons and the chief redrawn. Next: L2.
 
 ## 1. The direction, as understood
 

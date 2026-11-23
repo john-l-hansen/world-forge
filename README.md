@@ -37,6 +37,7 @@ npm run art            # write the generated art to .art/ for review
 | G | Gore: full (the default) or low |
 | V | Floating damage numbers on or off (off by default) |
 | F5 / F9 | Save the game / load the last save |
+| F2 | The Dungeon Master's screen: the clock, every creature's hidden state, the world's history; 1, 2 and 3 pass an hour, eight hours or a day |
 | C (title screen) | Continue the last saved game |
 | R | Begin again after a defeat or a victory (L loads the last save after a defeat) |
 
@@ -54,6 +55,11 @@ injury (a broken arm, a torn leg, broken ribs or a cracked skull) that heals onl
 time, and healing is scarce. A save holds the whole world, its definition and the state
 it reached; the game also saves quietly each time you reach a new room. A save file can
 be opened with O like a world file.
+
+The world keeps time, a minute for every second of play, and goes on while you are
+away: when you come back to a save, the time since you left has passed (up to 30 days).
+Blood dries, the dead are dragged away, and whatever you roused goes back to its place
+and licks its wounds.
 
 ## The world creator
 

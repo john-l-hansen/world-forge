@@ -1,5 +1,92 @@
 # Development log — World Forge
 
+## Milestone 12 — Living world L1: world time, history, catch-up, the Dungeon Master (2026-11-22)
+
+The rest of L1. The world now has a clock and a memory, changes slowly on its own,
+moves on while a save sits unopened, and can be watched and moved on by a Dungeon
+Master.
+
+### What was implemented
+
+- **World time.** A clock in the session, a world minute for every second of play,
+  starting on day 1 at 08:00 (a day is 24 minutes at the table). Shown in the journal
+  and on the Dungeon Master's screen; injuries now count in world minutes.
+- **World history, the event bus** (`src/engine/worldlayer.ts`). Notable outcomes of each
+  step are published as world events: when, where (cell and room), who, to what, and
+  which creatures witnessed it (alive, in sight range, with a clear line). The latest
+  400 are kept in the session and saved with it. Each event is handed to the world
+  systems that listen for it. The witness lists are the groundwork for L3's knowledge
+  spheres.
+- **The world tick.** A coarse step of the world layer: one minute in play, up to an hour
+  at a time when time is skipped or caught up. Three systems:
+  - *remains*: blood dries black after six hours and is gone after three days; bodies
+    are dragged away after two days.
+  - *recovery*: injuries heal at their world minute; flesh heals one point an hour; an
+    hour or more of rest restores stamina and mana.
+  - *wariness*: creatures that lost the party go back to their posts and heal a tenth of
+    their health an hour, in ticks of an hour or more.
+- **Catch-up on return.** When a save loads, the time since the game was last open is
+  passed to the simulation as a `time.pass` command, a second away to a world minute,
+  up to 30 days, counted once per visit. The game now also saves as the page closes,
+  and marks itself open every few seconds, so the measure is from when you left. The
+  log says how long you were away, what time it is, and what changed ("Something has
+  dragged the dead away in the dark.").
+- **The Dungeon Master's screen** (F2, `src/ui/DmScreen.tsx`), where the save allows it
+  (`rules.dungeonMaster`, on by default). A retro ledger: the clock, every creature
+  with its place, state and health, and the latest history with who saw what. Keys 1,
+  2 and 3 pass an hour, eight hours or a day through `dm.skip` commands, which the
+  simulation refuses when the save allows no Dungeon Master. The game waits while it
+  is open.
+- Session version 10, migrated from 9 (injury ticks become world minutes) and earlier.
+
+### Decisions made
+
+- **One clock, one pace.** Time away runs at the same pace as play, so three hours away
+  is seven and a half days in the world. Simple to reason about and merciless; the
+  30-day limit is reached after twelve hours away. This pace is a first guess and the
+  easiest thing here to change.
+- **Catch-up is measured from when the game was last open**, not from when the save was
+  made, so dying and loading a save from earlier in the same sitting passes no time.
+- **The party is out of harm's way while time passes.** Nothing attacks it during
+  catch-up or a skip; the world goes on around it.
+- **Coarse changes happen only in coarse ticks.** A creature never teleports home in
+  front of the player; it goes home while time passes in hours.
+
+### Tests executed
+
+- `npm run typecheck` and `npm run build` — pass.
+- `npm test` — 259 unit tests pass in 16 files. New: 13 in `tests/worldlayer.test.ts`:
+  the clock and its wording; a kill recorded with actor, place and a witness; a whole
+  Mines run recorded in order; history saved; blood drying and clearing and bodies
+  taken; creatures going home and healing; injuries and flesh healing by world time;
+  the 30-day limit; identical results from the same start; the Dungeon Master's skip
+  allowed and refused; and a version 9 session migrated. The session migration test now
+  runs from version 7 to 10.
+- `npm run test:browser` — 171 checks pass in headless Chrome. New: F2 opens the
+  Dungeon Master's screen with the clock and both creatures; passing a day moves the
+  clock a day, says so in the log and is written in the history; F2 closes it; and a
+  save aged three minutes comes back three world hours later, with the log saying so.
+
+### Known limitations
+
+- Nobody has played this yet. The pace of time, the decay times and how fast creatures
+  heal are first guesses.
+- Underground there is no day or night to see; the clock matters for later places.
+- Only three world systems exist. Creatures do not yet move between rooms, remember the
+  party, or react to what they witnessed; that is L3.
+- Dungeon Master commands are only "pass time". Force-generate and weave a story wait
+  for L8, and the screen shows six creatures and six history lines at most.
+- The pagehide save happens when a tab closes or reloads; a browser that is killed
+  outright may lose the time since the last autosave.
+- Still open from L0: the skeletons and the chief redrawn for the new tone, and
+  GAMEPLAY_DESIGN revised for injuries and scarcer healing.
+
+### Recommended next milestone
+
+John plays milestones 11 and 12. Then L2, places beyond the dungeon: a first small
+settlement with streets and buildings, outdoor tiles and sky (where the clock's day and
+night will show), travel between places, and NPCs as entities you can approach.
+
 ## Milestone 11 — Living world L0 and the start of L1: the grim direction, saves (2026-11-22)
 
 The first milestone of LIVING_WORLD_PLAN.md. The existing Mines and Crypt now carry the
